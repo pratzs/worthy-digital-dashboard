@@ -42,7 +42,7 @@ export async function GET(request) {
   // ShopifyQL: staff sales report (same data as Shopify Admin → Reports → Sales by staff)
   const staffAnalyticsQuery = `
     {
-      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, net_sales SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY net_sales DESC") {
+      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, net_sales, orders_count SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY net_sales DESC") {
         tableData { columns { name } rows }
         parseErrors
       }
@@ -110,9 +110,8 @@ export async function GET(request) {
           .filter(r => r.staff_member_name && r.staff_member_name !== "N/A" && r.staff_member_name !== "")
           .map(r => ({
             name:    r.staff_member_name,
-            revenue: parseFloat(r.net_sales || r.revenue || 0),
-            orders:  parseInt(r.orders_count || r.orders || 0),
-            monthly: Array(12).fill(0),
+            revenue: parseFloat(r.net_sales || 0),
+            orders:  parseInt(r.orders_count || 0),
           }));
         console.log(`Staff ShopifyQL: found ${salespeopleFromAnalytics.length} staff members`);
       }
