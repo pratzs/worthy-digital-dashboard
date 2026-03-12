@@ -62,7 +62,7 @@ export async function GET(request) {
     let hasNextPage = true;
     let cursor = null;
     
-    // BUSINESS FIX: Fetch data from Jan 1st of the PREVIOUS year to Dec 31st of the CURRENT year
+    // Fetch 2 years for accurate historical churn and dead stock
     const dateQuery = `created_at:>=${year - 1}-01-01 AND created_at:<=${year}-12-31`;
 
     while (hasNextPage) {
@@ -75,18 +75,20 @@ export async function GET(request) {
         })
       });
 
-      const { data, errors } = await response.json();
+      const json = await response.json();
       
-      if (errors) {
-        console.error("GraphQL Error:", errors);
-        throw new Error(errors[0].message);
+      if (json.errors) {
+        console.error("Shopify GraphQL Error:", json.errors);
+        throw new Error(json.errors[0].message);
       }
 
+      const data = json.data;
       allOrders = allOrders.concat(data.orders.edges.map(e => e.node));
       hasNextPage = data.orders.pageInfo.hasNextPage;
       cursor = data.orders.pageInfo.endCursor;
       
-      if (hasNextPage) await new Promise(res => setTimeout(res, 50)); 
+      // Restored the 500ms breather. Fetching 24 months of data will hit Shopify's rate limit without this.
+      if (hasNextPage) await new Promise(res => setTimeout(res, 500)); 
     }
 
     const products = {};
@@ -97,19 +99,16 @@ export async function GET(request) {
 
     allOrders.forEach(order => {
       const orderDate = new Date(order.createdAt);
-      // Determine if the order belongs to the actively selected year on the dashboard
       const isCurrentYear = orderDate.getFullYear() === year;
       
       const orderRevenue = parseFloat(order.totalPriceSet?.shopMoney?.amount || 0);
       const orderDiscount = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
 
-      // Only add to the dashboard's top-level metrics if it happened in the selected year
       if (isCurrentYear) {
         totalYearlyRevenue += orderRevenue;
         totalYearlyDiscounts += orderDiscount;
       }
 
-      // 1. CHURN LOGIC: Track customers across the ENTIRE 24-month period
       if (order.customer) {
         const cId = order.customer.id;
         if (!customers[cId]) {
@@ -117,20 +116,17 @@ export async function GET(request) {
             name: order.customer.displayName || "Unknown Customer",
             email: order.customer.email,
             lastOrderDate: orderDate,
-            revenue: 0, // Total lifetime spend in the 2-year window
+            revenue: 0, 
             orderCount: 0
           };
         }
         customers[cId].revenue += orderRevenue;
         customers[cId].orderCount += 1;
-        
-        // Keep updating the date so we know their absolute final order
         if (orderDate > customers[cId].lastOrderDate) {
           customers[cId].lastOrderDate = orderDate;
         }
       }
 
-      // 2. PRODUCT & INVENTORY LOGIC
       order.lineItems.edges.forEach(({ node: item }) => {
         const title = item.title || "Unknown Item";
         const catName = item.product?.productType || "Uncategorized";
@@ -145,7 +141,7 @@ export async function GET(request) {
           products[title] = { 
             name: title, 
             revenue: 0, 
-            qtySoldThisYear: 0, 
+            qtySold: 0, // Restored original key for frontend compatibility
             historicalQtySold: 0,
             currentStock: stock, 
             unitCost: cost, 
@@ -153,14 +149,12 @@ export async function GET(request) {
           };
         }
         
-        // Always track historical volume for accurate slow-moving calculations
         products[title].historicalQtySold += qty;
         products[title].lockedCapital = products[title].currentStock * products[title].unitCost;
 
-        // Only attribute revenue and current sales if it's the selected year
         if (isCurrentYear) {
           products[title].revenue += (price * qty);
-          products[title].qtySoldThisYear += qty;
+          products[title].qtySold += qty;
 
           if (!categories[catName]) {
             categories[catName] = { name: catName, revenue: 0, qty: 0 };
@@ -178,14 +172,12 @@ export async function GET(request) {
       lockedCapital: obj.lockedCapital ? parseFloat(obj.lockedCapital.toFixed(2)) : 0
     });
 
-    // TRUE SLOW MOVING: Stock > 5, but sold less than 10 units across the ENTIRE 2-year history
     const slowMoving = Object.values(products)
       .filter(p => p.currentStock > 5 && p.historicalQtySold < 10)
       .map(formatDecimals)
       .sort((a, b) => b.lockedCapital - a.lockedCapital)
       .slice(0, 15);
 
-    // TRUE CHURN: Customers from the last 2 years who haven't ordered in 90+ days
     const churned = Object.values(customers)
       .filter(c => (today - new Date(c.lastOrderDate)) / (1000 * 60 * 60 * 24) > 90)
       .map(formatDecimals)
@@ -193,7 +185,6 @@ export async function GET(request) {
       .slice(0, 15);
 
     return NextResponse.json({
-      // Sort Top Products/Categories strictly by the selected year's revenue
       topProducts: Object.values(products).filter(p => p.revenue > 0).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
       topCustomers: Object.values(customers).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
       topCategories: Object.values(categories).map(formatDecimals).sort((a, b) => b.revenue - a.revenue),
@@ -207,6 +198,15 @@ export async function GET(request) {
 
   } catch (error) {
     console.error("🚨 Advanced API Crash:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // CRITICAL FIX: Always return valid empty arrays to prevent frontend .filter() crashes
+    return NextResponse.json({ 
+      topProducts: [], 
+      topCustomers: [], 
+      topCategories: [], 
+      slowMoving: [], 
+      churned: [],
+      metrics: { discountImpactRatio: 0, totalDiscounts: 0 },
+      error: error.message 
+    }, { status: 500 });
   }
 }
