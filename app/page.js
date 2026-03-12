@@ -301,6 +301,9 @@ export default function EcommerceDashboard() {
   const displayProducts   = (advancedData.curr?.topProducts   || []).slice(0, 20);
   const displayCustomers  = (advancedData.curr?.topCustomers  || []).map(c => ({ ...c, status: c.orderCount > 1 ? "Active" : "New" })).slice(0, 20);
   const displayCategories = (advancedData.curr?.topCategories || []).slice(0, 10);
+  const displayAtRisk     = (advancedData.curr?.atRisk        || []).slice(0, 50);
+  const displayCLV        = (advancedData.curr?.clv           || []).slice(0, 50);
+  const displayDeclining  = (advancedData.curr?.declining     || []).slice(0, 30);
 
   const productColumns  = [
     { key: "name",    label: "Product",  color: "#d8c8a8" },
@@ -330,6 +333,28 @@ export default function EcommerceDashboard() {
     { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "—" },
     { key: "revenue",       label: "Spend",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
     { key: "status",        label: "Risk",       align: "center", format: () => <span style={{ color: "#f87171", fontWeight: 700 }}>LAPSED</span> },
+  ];
+  const atRiskColumns = [
+    { key: "name",          label: "Customer",    color: "#d8c8a8" },
+    { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? "#f87171" : "#C9A84C", fontWeight: 700 }}>{v}d</span> },
+    { key: "lastOrderDate", label: "Last Order",  align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
+    { key: "revenue",       label: "Lifetime $",  align: "right",  color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "orderCount",    label: "Orders",      align: "center", color: "#7C9EC9" },
+  ];
+  const clvColumns = [
+    { key: "name",            label: "Customer",    color: "#d8c8a8" },
+    { key: "lifetimeRevenue", label: "Lifetime $",  align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "totalOrders",     label: "Orders",      align: "center", color: "#7C9EC9" },
+    { key: "avgOrderValue",   label: "Avg Order",   align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+    { key: "firstOrderDate",  label: "First Order", align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
+  ];
+  const decliningColumns = [
+    { key: "name",        label: "Product",    color: "#d8c8a8" },
+    { key: "revenue",     label: "This Period", align: "right", color: "#f87171",  format: (v, c) => fmtK(v, c) },
+    { key: "prevRevenue", label: "Prior Year",  align: "right", color: "#8a9aaa",  format: (v, c) => fmtK(v, c) },
+    { key: "change",      label: "Change",      align: "center", format: v => v !== null ? <span style={{ color: "#f87171", fontWeight: 700 }}>▼ {Math.abs(v)}%</span> : "—" },
+    { key: "qtySold",     label: "Units Now",   align: "right", color: "#aa8a8a" },
+    { key: "prevQtySold", label: "Units Prev",  align: "right", color: "#6a7a8a" },
   ];
 
   // FIX 4: was [activeStore, selectedYear] — object reference caused potential infinite loop
@@ -615,6 +640,12 @@ export default function EcommerceDashboard() {
                 ]} />
               <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} />
               <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+              <AdvancedTable title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} />
+              <AdvancedTable title="📉 Declining Products" subtitle="Down >20% vs same period last year" loading={advLoading} currency={activeStore.currency} data={displayDeclining} columns={decliningColumns} />
+              <AdvancedTable title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} />
             </div>
           </>
         )}

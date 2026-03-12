@@ -87,6 +87,10 @@ export async function GET(request) {
     const startD = new Date(startParam + 'T00:00:00');
     const endD   = new Date(endParam   + 'T23:59:59');
 
+    // Prior year same period (for declining products)
+    const startPrev = new Date(startD); startPrev.setFullYear(startPrev.getFullYear() - 1);
+    const endPrev   = new Date(endD);   endPrev.setFullYear(endPrev.getFullYear() - 1);
+
     const products   = {};
     const customers  = {};
     const categories = {};
@@ -112,17 +116,19 @@ export async function GET(request) {
           customers[cId] = {
             name: order.customer.displayName || "Unknown",
             email: order.customer.email || "",
+            firstOrderDate: orderDate,
             lastOrderDate: orderDate,
             revenue: 0,          // current period spend (for topCustomers)
-            lifetimeRevenue: 0,  // full fetched range spend (for churned)
-            orderCount: 0,
+            lifetimeRevenue: 0,  // full fetched range spend (for churned/CLV)
+            orderCount: 0,       // current period orders
+            totalOrderCount: 0,  // all-time orders across full fetched range
           };
         }
-        if (orderDate > customers[cId].lastOrderDate) {
-          customers[cId].lastOrderDate = orderDate;
-        }
+        if (orderDate > customers[cId].lastOrderDate) customers[cId].lastOrderDate = orderDate;
+        if (orderDate < customers[cId].firstOrderDate) customers[cId].firstOrderDate = orderDate;
         // Always accumulate lifetime revenue across full fetched range
-        customers[cId].lifetimeRevenue += orderRevenue;
+        customers[cId].lifetimeRevenue  += orderRevenue;
+        customers[cId].totalOrderCount  += 1;
         if (inPeriod) {
           customers[cId].revenue    += orderRevenue;
           customers[cId].orderCount += 1;
@@ -146,6 +152,8 @@ export async function GET(request) {
       }
 
       // ── Line items → products & categories ─────────────────────────────────
+      const inPrevPeriod = orderDate >= startPrev && orderDate <= endPrev;
+
       order.lineItems.edges.forEach(({ node: item }) => {
         const title   = item.title || "Unknown Item";
         const catName = item.product?.productType || "Uncategorized";
@@ -159,21 +167,31 @@ export async function GET(request) {
         if (!products[title]) {
           products[title] = {
             name: title, revenue: 0, qtySold: 0,
+            prevRevenue: 0, prevQtySold: 0,   // prior year same period
             historicalQtySold: 0, currentStock: stock,
             unitCost: cost, lockedCapital: 0,
           };
         }
-        products[title].revenue           += price * qty;
-        products[title].qtySold           += qty;
         products[title].historicalQtySold += qty;
         products[title].lockedCapital      = products[title].currentStock * products[title].unitCost;
 
-        // Categories
-        if (!categories[catName]) {
-          categories[catName] = { name: catName, revenue: 0, qty: 0 };
+        if (inPeriod) {
+          products[title].revenue  += price * qty;
+          products[title].qtySold  += qty;
         }
-        categories[catName].revenue += price * qty;
-        categories[catName].qty     += qty;
+        if (inPrevPeriod) {
+          products[title].prevRevenue  += price * qty;
+          products[title].prevQtySold  += qty;
+        }
+
+        // Categories (current period only)
+        if (inPeriod) {
+          if (!categories[catName]) {
+            categories[catName] = { name: catName, revenue: 0, qty: 0 };
+          }
+          categories[catName].revenue += price * qty;
+          categories[catName].qty     += qty;
+        }
       });
     });
 
@@ -259,6 +277,50 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 50);
 
+    // ── At-Risk: 45–90 days since last order ─────────────────────────────────
+    const atRisk = Object.values(customers)
+      .filter(c => {
+        const daysSince = (todayMs - new Date(c.lastOrderDate).getTime()) / 86400000;
+        return daysSince >= 45 && daysSince < 90;
+      })
+      .map(c => ({
+        name: c.name,
+        lastOrderDate: c.lastOrderDate,
+        daysSince: Math.floor((todayMs - new Date(c.lastOrderDate).getTime()) / 86400000),
+        revenue: round2(c.lifetimeRevenue),
+        orderCount: c.totalOrderCount,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 50);
+
+    // ── Customer Lifetime Value ───────────────────────────────────────────────
+    const clv = Object.values(customers)
+      .filter(c => c.lifetimeRevenue > 0)
+      .map(c => ({
+        name: c.name,
+        firstOrderDate: c.firstOrderDate,
+        lastOrderDate: c.lastOrderDate,
+        totalOrders: c.totalOrderCount,
+        lifetimeRevenue: round2(c.lifetimeRevenue),
+        avgOrderValue: c.totalOrderCount > 0 ? round2(c.lifetimeRevenue / c.totalOrderCount) : 0,
+      }))
+      .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue)
+      .slice(0, 50);
+
+    // ── Declining Products: had prev year revenue, down >20% this period ─────
+    const declining = Object.values(products)
+      .filter(p => p.prevRevenue > 50 && p.revenue < p.prevRevenue * 0.8)
+      .map(p => ({
+        name: p.name,
+        revenue: round2(p.revenue),
+        prevRevenue: round2(p.prevRevenue),
+        change: p.prevRevenue > 0 ? Math.round(((p.revenue - p.prevRevenue) / p.prevRevenue) * 100) : null,
+        qtySold: p.qtySold,
+        prevQtySold: p.prevQtySold,
+      }))
+      .sort((a, b) => a.change - b.change) // worst decline first
+      .slice(0, 30);
+
     const channelData = [
       { channel: "Online Sales", orders: channels.online.orders, revenue: round2(channels.online.revenue), aov: channels.online.orders > 0 ? round2(channels.online.revenue / channels.online.orders) : 0 },
       { channel: "POS Sales",    orders: channels.pos.orders,    revenue: round2(channels.pos.revenue),    aov: channels.pos.orders    > 0 ? round2(channels.pos.revenue    / channels.pos.orders)    : 0 },
@@ -271,6 +333,9 @@ export async function GET(request) {
       topCategories,
       slowMoving,
       churned,
+      atRisk,
+      clv,
+      declining,
       metrics: {
         discountImpactRatio: totalRevenue > 0 ? (totalDiscount / totalRevenue).toFixed(4) : 0,
         totalDiscounts: totalDiscount.toFixed(2),
@@ -287,6 +352,7 @@ export async function GET(request) {
     return NextResponse.json({
       topProducts: [], topCustomers: [], topCategories: [],
       slowMoving: [], churned: [], channels: [],
+      atRisk: [], clv: [], declining: [],
       metrics: { discountImpactRatio: 0, totalDiscounts: 0 },
       error: error.message,
     }, { status: 500 });
