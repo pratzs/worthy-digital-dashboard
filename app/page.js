@@ -358,19 +358,22 @@ export default function EcommerceDashboard() {
   if (view === "monthly") {
     displayProducts = advancedData.curr?.topProducts?.map(p => {
       if (tableMonth === "all") return { ...p, margin: p.revenue ? Math.round(((p.revenue - p.cost)/p.revenue)*100) : 0 };
-      const mData = p.monthly[parseInt(tableMonth)] || { revenue: 0, cost: 0, qty: 0 };
+      // ADD THE QUESTION MARK HERE: p.monthly?.[...]
+      const mData = p.monthly?.[parseInt(tableMonth)] || { revenue: 0, cost: 0, qty: 0 };
       return { ...p, ...mData, margin: mData.revenue ? Math.round(((mData.revenue - mData.cost)/mData.revenue)*100) : 0 };
     }).filter(p => p.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
 
     displayCustomers = advancedData.curr?.topCustomers?.map(c => {
       if (tableMonth === "all") return c;
-      const mData = c.monthly[parseInt(tableMonth)] || { revenue: 0, cost: 0 };
+      // ADD THE QUESTION MARK HERE: c.monthly?.[...]
+      const mData = c.monthly?.[parseInt(tableMonth)] || { revenue: 0, cost: 0 };
       return { ...c, ...mData };
     }).filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
 
     displayCategories = advancedData.curr?.topCategories?.map(c => {
       if (tableMonth === "all") return c;
-      const mData = c.monthly[parseInt(tableMonth)] || { revenue: 0, qty: 0 };
+      // ADD THE QUESTION MARK HERE: c.monthly?.[...]
+      const mData = c.monthly?.[parseInt(tableMonth)] || { revenue: 0, qty: 0 };
       return { ...c, ...mData };
     }).filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
 

@@ -100,6 +100,7 @@ export async function GET(request) {
     allOrders.forEach(order => {
       const orderDate = new Date(order.createdAt);
       const isCurrentYear = orderDate.getFullYear() === year;
+      const monthIndex = orderDate.getMonth(); // Extract the exact month
       
       const orderRevenue = parseFloat(order.totalPriceSet?.shopMoney?.amount || 0);
       const orderDiscount = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
@@ -109,6 +110,7 @@ export async function GET(request) {
         totalYearlyDiscounts += orderDiscount;
       }
 
+      // 1. Customer Monthly Tracking
       if (order.customer) {
         const cId = order.customer.id;
         if (!customers[cId]) {
@@ -117,7 +119,9 @@ export async function GET(request) {
             email: order.customer.email,
             lastOrderDate: orderDate,
             revenue: 0, 
-            orderCount: 0
+            orderCount: 0,
+            // Generate empty 12-month array
+            monthly: Array(12).fill(null).map(() => ({ revenue: 0, cost: 0 })) 
           };
         }
         customers[cId].revenue += orderRevenue;
@@ -125,8 +129,14 @@ export async function GET(request) {
         if (orderDate > customers[cId].lastOrderDate) {
           customers[cId].lastOrderDate = orderDate;
         }
+        
+        // Add revenue to the specific month
+        if (isCurrentYear) {
+          customers[cId].monthly[monthIndex].revenue += orderRevenue;
+        }
       }
 
+      // 2. Product & Category Monthly Tracking
       order.lineItems.edges.forEach(({ node: item }) => {
         const title = item.title || "Unknown Item";
         const catName = item.product?.productType || "Uncategorized";
@@ -141,11 +151,13 @@ export async function GET(request) {
           products[title] = { 
             name: title, 
             revenue: 0, 
-            qtySold: 0, // Restored original key for frontend compatibility
+            qtySold: 0, 
             historicalQtySold: 0,
             currentStock: stock, 
             unitCost: cost, 
-            lockedCapital: 0 
+            lockedCapital: 0,
+            // Generate empty 12-month array
+            monthly: Array(12).fill(null).map(() => ({ revenue: 0, cost: 0, qty: 0 }))
           };
         }
         
@@ -155,12 +167,25 @@ export async function GET(request) {
         if (isCurrentYear) {
           products[title].revenue += (price * qty);
           products[title].qtySold += qty;
+          
+          // Populate the specific month for the product
+          products[title].monthly[monthIndex].revenue += (price * qty);
+          products[title].monthly[monthIndex].qty += qty;
+          products[title].monthly[monthIndex].cost += (cost * qty);
 
           if (!categories[catName]) {
-            categories[catName] = { name: catName, revenue: 0, qty: 0 };
+            categories[catName] = { 
+              name: catName, revenue: 0, qty: 0,
+              // Generate empty 12-month array
+              monthly: Array(12).fill(null).map(() => ({ revenue: 0, qty: 0 }))
+            };
           }
           categories[catName].revenue += (price * qty);
           categories[catName].qty += qty;
+          
+          // Populate the specific month for the category
+          categories[catName].monthly[monthIndex].revenue += (price * qty);
+          categories[catName].monthly[monthIndex].qty += qty;
         }
       });
     });
