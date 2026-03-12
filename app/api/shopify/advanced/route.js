@@ -27,6 +27,8 @@ export async function GET(request) {
             totalPriceSet { shopMoney { amount } }
             totalDiscountsSet { shopMoney { amount } }
             customer { id displayName email numberOfOrders createdAt }
+            app { name }
+            staffMember { name }
             lineItems(first: 20) {
               edges {
                 node {
@@ -77,8 +79,14 @@ export async function GET(request) {
     const products = {};
     const customers = {};
     const categories = {};
+    
+    // --- NEW: CHANNEL TRACKER ---
+    const channels = { pos: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } };
+    
     let totalYearlyRevenue = 0;
     let totalYearlyDiscounts = 0;
+
+    // Define strict boundaries for the user's selected date range
 
     // Define strict boundaries for the user's selected date range
     const startD = new Date(startParam + 'T00:00:00Z'); 
@@ -97,7 +105,25 @@ export async function GET(request) {
       if (isCurrentYear) {
         totalYearlyRevenue += orderRevenue;
         totalYearlyDiscounts += orderDiscount;
-      }
+
+        // --- NEW: CHANNEL CATEGORIZATION ---
+        const appName = order.app?.name || "";
+        const staffName = order.staffMember?.name || "";
+        
+        let isPos = appName.toLowerCase().includes("point of sale") || appName.toLowerCase() === "pos" || appName.toLowerCase().includes("shopify pos");
+        
+        // Force your sales to Online, regardless of app
+        if (staffName.toLowerCase().includes("pram jani") || staffName.toLowerCase().includes("pratham jani")) {
+          isPos = false; 
+        }
+        
+        if (isPos) {
+          channels.pos.orders += 1;
+          channels.pos.revenue += orderRevenue;
+        } else {
+          channels.online.orders += 1;
+          channels.online.revenue += orderRevenue;
+        }
 
       if (order.customer) {
         const cId = order.customer.id;
@@ -212,7 +238,14 @@ export async function GET(request) {
     const churned = Object.values(customers).filter(c => (todayDate - new Date(c.lastOrderDate)) / (1000 * 60 * 60 * 24) > 90)
       .map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 15);
 
+    // --- NEW: FORMAT CHANNELS ---
+    const channelData = [
+      { channel: "Online Sales", orders: channels.online.orders, revenue: parseFloat(channels.online.revenue.toFixed(2)), aov: channels.online.orders > 0 ? parseFloat((channels.online.revenue / channels.online.orders).toFixed(2)) : 0 },
+      { channel: "POS Sales", orders: channels.pos.orders, revenue: parseFloat(channels.pos.revenue.toFixed(2)), aov: channels.pos.orders > 0 ? parseFloat((channels.pos.revenue / channels.pos.orders).toFixed(2)) : 0 }
+    ].sort((a, b) => b.revenue - a.revenue);
+
     return NextResponse.json({
+      channels: channelData,
       // Critical: Remove items that had $0 revenue during the selected timeframe
       topProducts: Object.values(products).filter(p => p.revenue > 0).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
       topCustomers: Object.values(customers).filter(c => c.revenue > 0).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
