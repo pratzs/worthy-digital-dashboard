@@ -39,22 +39,12 @@ export async function GET(request) {
     }
   `;
 
-  // Query POS orders to find where staff name is stored
-  const staffOrdersQuery = `
-    query getStaffOrders($query: String!, $cursor: String) {
-      orders(first: 250, query: $query, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        edges {
-          node {
-            createdAt
-            totalPriceSet { shopMoney { amount } }
-            app            { name }
-            tags
-            note
-            customAttributes { key value }
-            location       { name }
-          }
-        }
+  // ShopifyQL: staff sales report (same data as Shopify Admin → Reports → Sales by staff)
+  const staffAnalyticsQuery = `
+    {
+      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, SUM(net_sales) as revenue, COUNT(orders) as orders SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY revenue DESC") {
+        tableData { columns { name } rows }
+        parseErrors
       }
     }
   `;
@@ -103,44 +93,26 @@ export async function GET(request) {
       cursor      = data.orders.pageInfo.endCursor;
     }
 
-    // ── Separate POS location/staff fetch ───────────────────────────────────
-    const staffByCreatedAt = {};
-    let posOrdersDebugLogged = false;
+    // ── Staff sales via ShopifyQL (same as Admin → Reports → Sales by staff) ─
+    let salespeopleFromAnalytics = [];
     try {
-      let staffPage = true, staffCursor = null;
-      while (staffPage) {
-        const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffOrdersQuery, variables: { query: dateQuery, cursor: staffCursor } }) });
-        const { data, errors } = await res.json();
-        if (errors) { console.warn("POS detail fetch error:", JSON.stringify(errors)); break; }
-        data.orders.edges.forEach(({ node: o }) => {
-          const appName = (o.app?.name || "").toLowerCase();
-          if (!isPosFn(appName)) return;
-
-          // Log first 3 POS orders so we can see what fields contain staff info
-          if (!posOrdersDebugLogged) {
-            console.log("POS ORDER SAMPLE:", JSON.stringify({
-              tags: o.tags,
-              note: o.note,
-              customAttributes: o.customAttributes,
-              location: o.location,
-            }));
-            posOrdersDebugLogged = true;
-          }
-
-          // Try to extract staff name from known locations
-          const tagStaff  = (o.tags || []).find(t => /staff|rep|salesperson|driver|agent/i.test(t));
-          const attrStaff = (o.customAttributes || []).find(a => /staff|rep|salesperson|driver|agent|name/i.test(a.key));
-          const name = tagStaff
-            ? tagStaff.split(":")[1]?.trim() || tagStaff
-            : attrStaff
-            ? attrStaff.value
-            : o.note?.split("\n")[0]?.trim() || "Unassigned";
-          staffByCreatedAt[o.createdAt] = name;
-        });
-        staffPage   = data.orders.pageInfo.hasNextPage;
-        staffCursor = data.orders.pageInfo.endCursor;
+      const sRes  = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffAnalyticsQuery }) });
+      const sJson = await sRes.json();
+      const rows  = sJson?.data?.shopifyqlQuery?.tableData?.rows;
+      const errs  = sJson?.data?.shopifyqlQuery?.parseErrors;
+      if (errs?.length) console.warn("Staff ShopifyQL error:", errs);
+      if (rows) {
+        salespeopleFromAnalytics = rows
+          .filter(r => r.staff_member_name && r.staff_member_name !== "N/A" && r.staff_member_name !== "")
+          .map(r => ({
+            name:    r.staff_member_name,
+            revenue: parseFloat(r.revenue || 0),
+            orders:  parseInt(r.orders    || 0),
+            monthly: Array(12).fill(0), // ShopifyQL gives totals, not monthly breakdown
+          }));
+        console.log(`Staff ShopifyQL: found ${salespeopleFromAnalytics.length} staff members`);
       }
-    } catch (e) { console.warn("POS detail fetch failed:", e.message); }
+    } catch (e) { console.warn("Staff ShopifyQL failed:", e.message); }
 
     // ── Per-channel monthly buckets ──────────────────────────────────────────
     const mkB = () => Array(12).fill(null).map(() => ({
@@ -215,7 +187,10 @@ export async function GET(request) {
       monthly:      toMonthly(allB,    true),   // all orders + web sessions
       monthlyPos:   toMonthly(posB,    false),  // POS only, no web sessions
       monthlyOnline:toMonthly(onlineB, true),   // online only + web sessions
-      salespeople:  Object.values(salespeople).sort((a, b) => b.revenue - a.revenue),
+      // Prefer ShopifyQL staff data (real names from admin report); fallback to order-derived
+      salespeople: salespeopleFromAnalytics.length > 0
+        ? salespeopleFromAnalytics
+        : Object.values(salespeople).sort((a, b) => b.revenue - a.revenue),
     });
 
   } catch (error) {
