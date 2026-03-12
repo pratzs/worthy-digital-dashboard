@@ -167,8 +167,9 @@ export async function GET(request) {
     // Distribute order counts proportionally across staff by revenue share
     salespeopleFromAnalytics = salespeopleFromAnalytics.map(s => ({
       ...s,
-      orders: totalPosRevenue > 0 ? Math.round((s.revenue / totalPosRevenue) * totalPosOrders) : 0,
-      aov: 0, // calculated in page.js
+      orders: s.revenue > 0
+        ? Math.max(1, Math.round((s.revenue / totalPosRevenue) * totalPosOrders))
+        : 0,
     }));
     const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const toMonthly = (buckets, withAnalytics = false) =>
