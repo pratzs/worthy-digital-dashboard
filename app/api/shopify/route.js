@@ -54,7 +54,7 @@ export async function GET(request) {
           columns { name dataType displayName }
           rows
         }
-        parseErrors { code message }
+        parseErrors
       }
     }
   `;
@@ -84,8 +84,8 @@ export async function GET(request) {
             convRate: parseFloat(row.conversion_rate || 0),
           };
         });
-      } else if (analyticsJson?.data?.shopifyqlQuery?.parseErrors?.length) {
-        console.warn("ShopifyQL parse error:", JSON.stringify(analyticsJson.data.shopifyqlQuery.parseErrors));
+      } else if (analyticsJson?.data?.shopifyqlQuery?.parseErrors) {
+        console.warn("ShopifyQL parse error:", analyticsJson.data.shopifyqlQuery.parseErrors);
       }
     } catch (e) {
       console.error("Analytics fetch/parse error:", e.message);
