@@ -174,7 +174,7 @@ export default function EcommerceDashboard() {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading,   setAdvLoading]   = useState(false);
-  const [channelTab,   setChannelTab]   = useState("pos"); // "pos" | "online"
+  const [channelTab,   setChannelTab]   = useState("online"); // "pos" | "online"
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef   = useRef({});
@@ -442,8 +442,8 @@ export default function EcommerceDashboard() {
       {activeStore.id === "worthy" && (
         <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 32px", background: "rgba(255,255,255,0.01)", display: "flex", alignItems: "center", gap: 4 }}>
           {[
-            { id: "pos",    label: "🏪  POS Sales" },
             { id: "online", label: "🌐  Online Sales" },
+            { id: "pos",    label: "🏪  POS Sales" },
           ].map(tab => (
             <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
               padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",

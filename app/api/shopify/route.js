@@ -22,7 +22,6 @@ export async function GET(request) {
             totalDiscountsSet  { shopMoney { amount } }
             customer           { createdAt }
             app                { name }
-            staffMember        { name }
             lineItems(first: 50) {
               edges {
                 node {
@@ -34,6 +33,23 @@ export async function GET(request) {
                 }
               }
             }
+          }
+        }
+      }
+    }
+  `;
+
+  // Separate query for POS staff — only runs if read_staff scope available
+  const staffOrdersQuery = `
+    query getStaffOrders($query: String!, $cursor: String) {
+      orders(first: 250, query: $query, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node {
+            createdAt
+            totalPriceSet { shopMoney { amount } }
+            app            { name }
+            staffMember    { name }
           }
         }
       }
@@ -84,6 +100,22 @@ export async function GET(request) {
       cursor      = data.orders.pageInfo.endCursor;
     }
 
+    // ── Separate staff fetch (non-fatal, needs read_staff scope) ────────────
+    const staffByCreatedAt = {}; // ISO createdAt string → staff name
+    try {
+      let staffPage = true, staffCursor = null;
+      while (staffPage) {
+        const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffOrdersQuery, variables: { query: dateQuery, cursor: staffCursor } }) });
+        const { data, errors } = await res.json();
+        if (errors) { console.warn("staffMember not available:", errors[0].message); break; }
+        data.orders.edges.forEach(({ node: o }) => {
+          if (o.staffMember?.name) staffByCreatedAt[o.createdAt] = o.staffMember.name;
+        });
+        staffPage   = data.orders.pageInfo.hasNextPage;
+        staffCursor = data.orders.pageInfo.endCursor;
+      }
+    } catch (e) { console.warn("Staff fetch failed:", e.message); }
+
     // ── Per-channel monthly buckets ──────────────────────────────────────────
     const mkB = () => Array(12).fill(null).map(() => ({
       revenue: 0, marginableRevenue: 0, totalCost: 0, totalDiscounts: 0,
@@ -98,7 +130,7 @@ export async function GET(request) {
       const disc    = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
       const appName = (order.app?.name || "").toLowerCase();
       const isPos   = isPosFn(appName);
-      const staff   = order.staffMember?.name || (isPos ? "Unknown Staff" : null);
+      const staff   = staffByCreatedAt[order.createdAt] || (isPos ? "Unknown Staff" : null);
 
       let lineCost = 0, lineMargRev = 0, hasCD = false;
       order.lineItems.edges.forEach(({ node: li }) => {
