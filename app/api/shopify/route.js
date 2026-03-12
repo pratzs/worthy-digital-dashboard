@@ -45,21 +45,16 @@ export async function GET(request) {
     }
   `;
 
-  // ShopifyQL: sessions + conversion rate by month (requires read_reports scope)
-  // Available in API 2025-04+ only. rows are objects, not JSON strings.
+  // ShopifyQL: sessions + conversion rate by month (requires read_reports scope, API 2026-01)
+  // No union types - tableData and parseErrors are direct fields per Shopify docs
   const analyticsQuery = `
     {
       shopifyqlQuery(query: "FROM sessions SHOW sessions, orders_placed, conversion_rate SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY month ORDER BY month ASC") {
-        __typename
-        ... on TableResponse {
-          tableData {
-            columns { name dataType displayName }
-            rows
-          }
+        tableData {
+          columns { name dataType displayName }
+          rows
         }
-        ... on ParseErrorResponse {
-          parseErrors { code message }
-        }
+        parseErrors { code message }
       }
     }
   `;
@@ -80,19 +75,13 @@ export async function GET(request) {
       const tableData = analyticsJson?.data?.shopifyqlQuery?.tableData;
 
       if (tableData?.rows && tableData?.columns) {
-        const cols    = tableData.columns.map(c => c.name);
-        const mIdx    = cols.indexOf("month");
-        const sIdx    = cols.indexOf("sessions");
-        const convIdx = cols.indexOf("conversion_rate");
-
         tableData.rows.forEach(row => {
-          // rows is array of arrays (values parallel to columns order)
-          const vals = Array.isArray(row) ? row : cols.map(c => row[c]);
-          if (mIdx === -1 || !vals[mIdx]) return;
-          const monthNum = parseInt(String(vals[mIdx]).slice(5, 7)) - 1;
+          // Each row is an object like { "month": "2026-01-01", "sessions": "123", ... }
+          if (!row.month) return;
+          const monthNum = parseInt(String(row.month).slice(5, 7)) - 1;
           analyticsMonthly[monthNum] = {
-            sessions: parseInt(vals[sIdx]  || 0),
-            convRate: parseFloat(vals[convIdx] || 0),
+            sessions: parseInt(row.sessions  || 0),
+            convRate: parseFloat(row.conversion_rate || 0),
           };
         });
       } else if (analyticsJson?.data?.shopifyqlQuery?.parseErrors?.length) {
