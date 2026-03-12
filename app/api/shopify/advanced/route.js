@@ -190,6 +190,81 @@ export async function GET(request) {
       });
     });
 
+    // --- NEW: ABSOLUTE DEAD STOCK FETCH ---
+    // Fetch products with high inventory directly to catch items with ZERO sales in the last 2 years
+    const deadStockQuery = `
+      query getHighInventory {
+        products(first: 100, query: "inventory_total:>10") {
+          edges {
+            node {
+              title
+              variants(first: 10) {
+                edges {
+                  node {
+                    inventoryItem {
+                      unitCost { amount }
+                      inventoryLevels(first: 1) {
+                        nodes { quantities(names: ["available"]) { quantity } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const inventoryResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: deadStockQuery })
+      });
+      
+      const inventoryJson = await inventoryResponse.json();
+      
+      if (!inventoryJson.errors) {
+        inventoryJson.data.products.edges.forEach(({ node: prod }) => {
+          const title = prod.title;
+          
+          // If it is NOT in our 'products' object, it means it hasn't sold a single unit in 24 months.
+          if (!products[title]) {
+            let totalStock = 0;
+            let highestCost = 0;
+            
+            prod.variants.edges.forEach(({ node: variant }) => {
+              const stockNode = variant.inventoryItem?.inventoryLevels?.nodes?.[0];
+              const stock = stockNode?.quantities?.[0]?.quantity || 0;
+              const cost = parseFloat(variant.inventoryItem?.unitCost?.amount || 0);
+              
+              totalStock += stock;
+              if (cost > highestCost) highestCost = cost; // Grab the highest variant cost for the estimate
+            });
+
+            // If we have more than 10 units of this absolute dead item, add it to the tracking object
+            if (totalStock > 10) {
+              products[title] = {
+                name: title,
+                revenue: 0,
+                qtySold: 0,
+                historicalQtySold: 0,
+                currentStock: totalStock,
+                unitCost: highestCost,
+                lockedCapital: totalStock * highestCost,
+                monthly: Array(12).fill(null).map(() => ({ revenue: 0, cost: 0, qty: 0 }))
+              };
+            }
+          }
+        });
+      }
+    } catch (invError) {
+      console.error("Non-fatal error fetching absolute dead stock:", invError);
+      // We don't throw here so the main dashboard doesn't crash if this secondary fetch fails
+    }
+    // --- END DEAD STOCK FETCH ---
+
     const today = new Date();
     const formatDecimals = (obj) => ({
       ...obj,
