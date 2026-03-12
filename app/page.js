@@ -7,10 +7,17 @@ import {
   ComposedChart, ReferenceLine
 } from "recharts";
 
+// Brand palettes
+const BRAND = {
+  products: { primary: "#2256c2", mid: "#3f7bdd", light: "#7daffe" },   // Worthy Products North & South
+  oceania:  { primary: "#b13924", mid: "#f48120", light: "#fcb614",      // Worthy Oceania / Fabrics
+              dark: "#66270f" },
+};
+
 const STORES = [
-  { id: "worthy", name: "Worthy Products North", color: "#C9A84C", icon: "✦", currency: "NZD" },
-  { id: "luxe",   name: "Worthy Products South (Coming Soon)",  color: "#7C9EC9", icon: "◈", currency: "NZD" },
-  { id: "nova",   name: "Worthy Oceania / Fabrics (Coming Soon)",  color: "#C97C9E", icon: "⬡", currency: "NZD" },
+  { id: "worthy", name: "Worthy Products North", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
+  { id: "luxe",   name: "Worthy Products South (Coming Soon)", color: BRAND.products.mid, accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
+  { id: "nova",   name: "Worthy Oceania (Coming Soon)", color: BRAND.oceania.mid, accent2: BRAND.oceania.light, dark: BRAND.oceania.primary, logo: "oceania", currency: "NZD" },
 ];
 
 const ALL_YEARS = [2022, 2023, 2024, 2025, 2026];
@@ -58,9 +65,9 @@ const GrowthBadge = ({ value }) => {
   return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}>{pos ? "▲" : "▼"} {Math.abs(value)}%</span>;
 };
 
-const MarginBar = ({ value }) => {
+const MarginBar = ({ value, accent = "#3f7bdd" }) => {
   if (value === null || value === undefined) return <span style={{ color: "#3a3020" }}>—</span>;
-  const color = value > 40 ? "#4ade80" : value > 20 ? "#C9A84C" : "#f87171";
+  const color = value > 40 ? "#4ade80" : value > 20 ? accent : "#f87171";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
       <div style={{ width: 30, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.07)" }}>
@@ -71,11 +78,11 @@ const MarginBar = ({ value }) => {
   );
 };
 
-const CustomTooltip = ({ active, payload, label, currency = "NZD" }) => {
+const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f7bdd" }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "rgba(10,12,18,0.97)", border: "1px solid rgba(201,168,76,0.3)", borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "#e8e0d0", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>
-      <div style={{ fontFamily: "'Cinzel',serif", color: "#C9A84C", marginBottom: 8, fontSize: 13 }}>{label}</div>
+    <div style={{ background: "rgba(10,12,18,0.97)", border: `1px solid ${accent}50`, borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "#e8e0d0", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>
+      <div style={{ fontFamily: "'Cinzel',serif", color: accent, marginBottom: 8, fontSize: 13 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, display: "inline-block" }} />
@@ -122,8 +129,9 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
 
 const StorePill = ({ store, active, onClick }) => (
   <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 40, border: active ? `1px solid ${store.color}` : "1px solid rgba(255,255,255,0.1)", background: active ? `${store.color}18` : "transparent", color: active ? store.color : "#6b6050", cursor: "pointer", fontSize: 12, fontWeight: 600, letterSpacing: "0.05em", transition: "all 0.2s", whiteSpace: "nowrap" }}>
-    <span style={{ fontSize: 14 }}>{store.icon}</span>{store.name}
-    {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: store.color }} />}
+    <span style={{ width: 8, height: 8, borderRadius: "50%", background: store.color, display: "inline-block", flexShrink: 0 }} />
+    {store.name}
+    {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: store.color, opacity: 0.6 }} />}
   </button>
 );
 
@@ -182,7 +190,7 @@ When analysing data, always:
 `;
 
 // ── AI Insights Panel ─────────────────────────────────────────────────────────
-const AIInsights = ({ data, context, currency, extraContext }) => {
+const AIInsights = ({ data, context, currency, extraContext, accent = "#3f7bdd" }) => {
   const [insight, setInsight]   = useState(null);
   const [loading, setLoading]   = useState(false);
   const [open,    setOpen]      = useState(false);
@@ -219,16 +227,16 @@ No generic advice. Every point must reference something specific in the data.`;
 
   return (
     <div style={{ marginTop: 12 }}>
-      <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.06)", color: "#C9A84C", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
+      <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.06)", color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
         <span>✦</span>{loading ? "Analysing…" : open ? "Hide AI Insights" : "✦ AI Insights"}
       </button>
       {open && !loading && insight && (
-        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#c0a870", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#c0a870", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
           {insight}
         </div>
       )}
       {open && loading && (
-        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#6a5a40" }}>
+        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#6a5a40" }}>
           ✦ Analysing Worthy Products data…
         </div>
       )}
@@ -237,7 +245,7 @@ No generic advice. Every point must reference something specific in the data.`;
 };
 
 // ── Category Drill-Down Modal ─────────────────────────────────────────────────
-const CategoryModal = ({ category, products, currency, onClose }) => {
+const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bdd" }) => {
   if (!category) return null;
   const top      = (products || []).filter(p => p.revenue > 0).slice(0, 10);
   const declining = (products || []).filter(p => p.yoyChange !== null && p.yoyChange < -10).slice(0, 10);
@@ -248,7 +256,7 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
       <div style={{ background: "#0d0f18", border: "1px solid rgba(201,168,76,0.3)", borderRadius: 20, padding: 28, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <div style={{ fontFamily: "'Cinzel',serif", fontSize: 16, color: "#C9A84C", fontWeight: 700 }}>{category}</div>
+            <div style={{ fontFamily: "'Cinzel',serif", fontSize: 16, color: accent, fontWeight: 700 }}>{category}</div>
             <div style={{ fontSize: 11, color: "#5a4030", marginTop: 4 }}>{(products||[]).length} products · click outside to close</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a4030", fontSize: 20, cursor: "pointer" }}>✕</button>
@@ -261,7 +269,7 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 <div style={{ fontSize: 12, color: "#d8c8a8", flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
-                  <span style={{ color: "#C9A84C" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "—"}</span>
+                  <span style={{ color: accent }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "—"}</span>
                   <span style={{ color: "#7C9EC9" }}>{p.qtySold} units</span>
                   {p.yoyChange !== null && <span style={{ color: p.yoyChange >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>{p.yoyChange >= 0 ? "▲" : "▼"}{Math.abs(p.yoyChange)}% YoY</span>}
                 </div>
@@ -272,7 +280,7 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
 
         {rising.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📈 Growing Fast</div>
+            <div style={{ fontSize: 11, color: accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📈 Growing Fast</div>
             {rising.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 <div style={{ fontSize: 12, color: "#d8c8a8" }}>{p.name}</div>
@@ -313,13 +321,14 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
     border: "rgba(255,255,255,0.07)", bgTableHead: "#0a0c12",
     borderFaint: "rgba(255,255,255,0.05)", textHead: "#f0e8d8",
     textMuted: "#5a4030", textSub: "#5a4030", textRow: "#8a7860", textLabel: "#3a3020",
+    accent: "#3f7bdd",
   };
   return (
   <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
-          {title} {loading && <span style={{ fontSize: 10, color: "#C9A84C", marginLeft: 8 }}>Loading...</span>}
+          {title} {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading...</span>}
         </div>
         {headerExtra}
       </div>
@@ -354,7 +363,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
       </table>
     </div>
     {aiContext && !loading && data?.length > 0 && (
-      <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} />
+      <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} accent={theme?.accent || "#3f7bdd"} />
     )}
   </div>
   );
@@ -497,13 +506,17 @@ export default function EcommerceDashboard() {
                  : null;
   const gpMargin = trueMargin !== null ? Math.round(trueMargin * 100) : null;
 
-  const accent = activeStore.color;
+  const accent  = activeStore.color;
+  const accent2 = activeStore.accent2 || activeStore.color;
+  const accentDark = activeStore.dark || activeStore.color;
 
   // ── Theme ────────────────────────────────────────────────────────────────
+  // Products stores use blue palette; Oceania uses warm orange/red palette
+  const isOceania = activeStore.id === "nova";
   const T = darkMode ? {
     bg:          "#080A10",
     bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
-    bgHeader:    "rgba(255,255,255,0.015)",
+    bgHeader:    "rgba(8,10,16,0.92)",
     bgInput:     "#0a0c12",
     bgTableHead: "#0a0c12",
     bgModal:     "#0d0f18",
@@ -511,34 +524,36 @@ export default function EcommerceDashboard() {
     borderFaint: "rgba(255,255,255,0.05)",
     borderAccent:"rgba(255,255,255,0.06)",
     text:        "#e8e0d0",
-    textHead:    "#f0e8d8",
-    textMuted:   "#5a4030",
-    textSub:     "#4a4030",
-    textRow:     "#8a7860",
-    textLabel:   "#3a3020",
+    textHead:    "#f0f4ff",
+    textMuted:   isOceania ? "#5a3020" : "#3a4060",
+    textSub:     isOceania ? "#4a3020" : "#384060",
+    textRow:     isOceania ? "#8a6850" : "#607098",
+    textLabel:   isOceania ? "#3a2818" : "#2a3858",
     scrollTrack: "#0d0f18",
-    scrollThumb: "#2a2416",
+    scrollThumb: isOceania ? "#3a1a08" : "#1a2448",
     shadow:      "0 4px 24px rgba(0,0,0,0.4)",
   } : {
-    bg:          "#F4F1EC",
-    bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.9),rgba(255,255,255,0.7))",
-    bgHeader:    "rgba(255,255,255,0.9)",
+    bg:          isOceania ? "#FDF8F4" : "#F4F7FF",
+    bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.95),rgba(255,255,255,0.75))",
+    bgHeader:    "rgba(255,255,255,0.95)",
     bgInput:     "#ffffff",
-    bgTableHead: "#f8f5f0",
+    bgTableHead: isOceania ? "#fdf4ee" : "#f0f4ff",
     bgModal:     "#ffffff",
-    border:      "rgba(0,0,0,0.1)",
-    borderFaint: "rgba(0,0,0,0.06)",
-    borderAccent:"rgba(0,0,0,0.08)",
-    text:        "#2a1f0f",
-    textHead:    "#1a120a",
-    textMuted:   "#8a7060",
-    textSub:     "#7a6050",
-    textRow:     "#4a3828",
-    textLabel:   "#9a8070",
-    scrollTrack: "#e8e0d0",
-    scrollThumb: "#c0a870",
-    shadow:      "0 4px 24px rgba(0,0,0,0.12)",
+    border:      isOceania ? "rgba(177,57,36,0.15)" : "rgba(34,86,194,0.15)",
+    borderFaint: isOceania ? "rgba(177,57,36,0.08)" : "rgba(34,86,194,0.08)",
+    borderAccent:isOceania ? "rgba(177,57,36,0.12)" : "rgba(34,86,194,0.1)",
+    text:        isOceania ? "#2a1005" : "#0a1a3a",
+    textHead:    isOceania ? "#1a0a02" : "#081228",
+    textMuted:   isOceania ? "#9a6040" : "#6080b0",
+    textSub:     isOceania ? "#8a5030" : "#4870a8",
+    textRow:     isOceania ? "#5a3820" : "#2a5090",
+    textLabel:   isOceania ? "#b07050" : "#8090c0",
+    scrollTrack: isOceania ? "#f0e4d8" : "#e4ecff",
+    scrollThumb: isOceania ? "#e08060" : "#7daffe",
+    shadow:      "0 4px 24px rgba(0,0,0,0.1)",
   };
+  // Inject accent into T so sub-components can access it
+  T.accent = accent;
   const revG   = prevLoaded ? calcGrowth(totalRev, prevRev) : null;
   const ordG   = prevLoaded ? calcGrowth(totalOrd, prevOrd) : null;
   const aovG   = prevLoaded ? calcGrowth(avgAOV,   prevAOV) : null;
@@ -566,7 +581,7 @@ export default function EcommerceDashboard() {
   ];
 
   const renderStatus = (s) => {
-    const c = { "New": "#9EC97C", "Active": "#C9A84C", "At Risk": "#f87171" }[s] || "#8a9aaa";
+    const c = { "New": "#9EC97C", "Active": accent, "At Risk": "#f87171" }[s] || "#8a9aaa";
     return <span style={{ color: c, fontWeight: 600 }}>{s}</span>;
   };
 
@@ -586,36 +601,36 @@ export default function EcommerceDashboard() {
   const customerColumns = [
     { key: "name",       label: "Customer", color: "#d8c8a8" },
     { key: "orderCount", label: "Orders",   align: "center", color: "#7C9EC9" },
-    { key: "revenue",    label: "Spend",    align: "right",  color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "revenue",    label: "Spend",    align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
     { key: "status",     label: "Status",   align: "center", format: v => renderStatus(v) },
   ];
   const categoryColumns = [
     { key: "name",    label: "Category",   color: "#d8c8a8" },
     { key: "qty",     label: "Units Sold", align: "right" },
-    { key: "revenue", label: "Revenue",    align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "revenue", label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
   ];
   const slowMovingColumns = [
     { key: "name",          label: "Product",      color: "#d8c8a8" },
-    { key: "currentStock",  label: "Stock",        align: "right", color: "#C9A84C" },
+    { key: "currentStock",  label: "Stock",        align: "right", color: accent },
     { key: "qtySold",       label: "Sold",         align: "right", color: "#9EC97C" },
     { key: "lockedCapital", label: "Value Locked", align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
   ];
   const churnedColumns = [
     { key: "name",          label: "Customer",   color: "#d8c8a8" },
     { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "—" },
-    { key: "revenue",       label: "Spend",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "revenue",       label: "Spend",      align: "right", color: accent, format: (v, c) => fmtK(v, c) },
     { key: "status",        label: "Risk",       align: "center", format: () => <span style={{ color: "#f87171", fontWeight: 700 }}>LAPSED</span> },
   ];
   const atRiskColumns = [
     { key: "name",          label: "Customer",    color: "#d8c8a8" },
-    { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? "#f87171" : "#C9A84C", fontWeight: 700 }}>{v}d</span> },
+    { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? "#f87171" : accent, fontWeight: 700 }}>{v}d</span> },
     { key: "lastOrderDate", label: "Last Order",  align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
-    { key: "revenue",       label: "Lifetime $",  align: "right",  color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "revenue",       label: "Lifetime $",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
     { key: "orderCount",    label: "Orders",      align: "center", color: "#7C9EC9" },
   ];
   const clvColumns = [
     { key: "name",            label: "Customer",    color: "#d8c8a8" },
-    { key: "lifetimeRevenue", label: "Lifetime $",  align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "lifetimeRevenue", label: "Lifetime $",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
     { key: "totalOrders",     label: "Orders",      align: "center", color: "#7C9EC9" },
     { key: "avgOrderValue",   label: "Avg Order",   align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
     { key: "firstOrderDate",  label: "First Order", align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
@@ -631,7 +646,7 @@ export default function EcommerceDashboard() {
   const salespersonColumns = [
     { key: "name",    label: "Sales Rep",    color: "#d8c8a8" },
     { key: "orders",  label: "Orders",       align: "right", color: "#7C9EC9" },
-    { key: "revenue", label: "Revenue",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(Math.round(v), c) },
+    { key: "revenue", label: "Revenue",      align: "right", color: accent, format: (v, c) => fmtK(Math.round(v), c) },
     { key: "aov",     label: "Avg Order",    align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
   ];
   const salespeople = salespeopleData.map(s => ({
@@ -662,7 +677,12 @@ export default function EcommerceDashboard() {
       {/* HEADER */}
       <div style={{ borderBottom: `1px solid ${T.borderAccent}`, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, background: T.bgHeader, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg,${accent},${accent}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, boxShadow: `0 4px 16px ${accent}40` }}>{activeStore.icon}</div>
+          {/* Logo — white on dark, black on light */}
+          <img
+            src={darkMode ? "/logo-white.png" : "/logo-black.png"}
+            alt="Worthy Logo"
+            style={{ height: 40, width: "auto", objectFit: "contain", filter: darkMode ? "none" : "none" }}
+          />
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontFamily: "'Cinzel',serif", fontSize: 15, fontWeight: 600, color: T.textHead, letterSpacing: "0.05em" }}>{activeStore.name}</div>
@@ -767,7 +787,7 @@ export default function EcommerceDashboard() {
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#4a4030" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "aov" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "convRate" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
-                  <Tooltip content={<CustomTooltip currency={activeStore.currency} />} />
+                  <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                   <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
                   <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric} name={`${selectedYear - 1}`} stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
                 </ComposedChart>
@@ -784,7 +804,7 @@ export default function EcommerceDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#4a4030" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip accent={accent} />} />
                     <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
                     <Bar dataKey="momGrowth" name="Growth" radius={[4, 4, 0, 0]} fill={accent} />
                   </BarChart>
@@ -818,7 +838,7 @@ export default function EcommerceDashboard() {
                             <td style={{ padding: "8px", color: "#d8c8a8", fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? fmtK(row.totalCost, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} /> : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: "#2a2416" }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: "#2a2416" }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: "#2a2416" }}>—</span>}</td>
@@ -834,7 +854,7 @@ export default function EcommerceDashboard() {
                         <td style={{ padding: "10px 8px", color: "#f0e8d8", fontWeight: 700 }}>{fmtK(totalRev, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? fmtK(totalCost, activeStore.currency) : "—"}</td>
                         <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? fmtK(gp, activeStore.currency) : "—"}</td>
-                        <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} /></td>
+                        <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
                         <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
                         <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{fmtK(avgAOV, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "—"}</td>
@@ -860,7 +880,7 @@ export default function EcommerceDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="year" tick={{ fontSize: 12, fill: "#6a5a40", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-                    <Tooltip content={<CustomTooltip currency={activeStore.currency} />} />
+                    <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                     <Bar dataKey="revenue" name="Revenue" fill="url(#bg)" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -874,7 +894,7 @@ export default function EcommerceDashboard() {
                     <XAxis dataKey="year" tick={{ fontSize: 12, fill: "#6a5a40", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
                     <YAxis yAxisId="l" tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
                     <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
-                    <Tooltip content={<CustomTooltip currency={activeStore.currency} />} />
+                    <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                     <Bar yAxisId="l" dataKey="orders" name="Orders" fill="#7C9EC960" radius={[6, 6, 0, 0]} />
                     <Line yAxisId="r" type="monotone" dataKey="aov" name="AOV" stroke="#9EC97C" strokeWidth={3} dot={{ fill: "#9EC97C", r: 6, stroke: "#080A10", strokeWidth: 2 }} />
                   </ComposedChart>
@@ -932,6 +952,7 @@ export default function EcommerceDashboard() {
               products={categoryModal?.products}
               currency={activeStore.currency}
               onClose={() => setCategoryModal(null)}
+              accent={accent}
             />
 
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16 }}>
@@ -985,7 +1006,7 @@ export default function EcommerceDashboard() {
                 headerExtra={
                   <div style={{ display: "flex", gap: 4 }}>
                     {[["yoy","YoY"],["mom","MoM"]].map(([m, lbl]) => (
-                      <button key={m} onClick={() => setDecliningMode(m)} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${decliningMode === m ? "#C9A84C" : "rgba(255,255,255,0.1)"}`, background: decliningMode === m ? "rgba(201,168,76,0.15)" : "transparent", color: decliningMode === m ? "#C9A84C" : "#4a4030", cursor: "pointer" }}>{lbl}</button>
+                      <button key={m} onClick={() => setDecliningMode(m)} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${decliningMode === m ? accent : "rgba(255,255,255,0.1)"}`, background: decliningMode === m ? "rgba(201,168,76,0.15)" : "transparent", color: decliningMode === m ? accent : "#4a4030", cursor: "pointer" }}>{lbl}</button>
                     ))}
                   </div>
                 }
@@ -1000,7 +1021,7 @@ export default function EcommerceDashboard() {
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
               ["New Customers",   totalNewC || "—",                                                                                                     "#8aaa8a"],
-              ["Total Discounts", fmtK(totalDisc, activeStore.currency),                                                                                "#C9A84C"],
+              ["Total Discounts", fmtK(totalDisc, activeStore.currency),                                                                                accent],
               ["Discount Impact", advancedData.curr?.metrics?.discountImpactRatio ? `${(advancedData.curr.metrics.discountImpactRatio * 100).toFixed(1)}%` : "—", "#f87171"],
               ["Gross Profit",    gp !== null ? fmtK(gp, activeStore.currency) : "—",                                                                   "#C97C9E"],
             ].map(([lbl, val, clr]) => (
