@@ -188,7 +188,14 @@ export default function EcommerceDashboard() {
     try {
       const r    = await fetch("/api/shopify?year=" + year);
       const json = await r.json();
-      cacheRef.current[key] = (json.monthly?.length > 0) ? json.monthly : generateEmptyYear();
+      const monthly = json.monthly?.length > 0
+        ? json.monthly.map(m => ({
+            ...m,
+            // API returns convRate as decimal (0.0346), convert to percentage (3.46)
+            convRate: m.convRate ? +((m.convRate * 100).toFixed(2)) : 0,
+          }))
+        : generateEmptyYear();
+      cacheRef.current[key] = monthly;
     } catch {
       cacheRef.current[key] = generateEmptyYear();
     }

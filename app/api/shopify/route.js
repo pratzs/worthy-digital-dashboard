@@ -173,9 +173,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       year,
-      totalOrders:    allOrders.length,
-      hasAnalytics:   Object.keys(analyticsMonthly).length > 0,
-      analyticsDebug, // remove this once working
+      totalOrders:  allOrders.length,
+      hasAnalytics: Object.keys(analyticsMonthly).length > 0,
       monthly,
     });
 
