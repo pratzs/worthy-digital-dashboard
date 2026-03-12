@@ -42,7 +42,7 @@ export async function GET(request) {
   // ShopifyQL: staff sales report (same data as Shopify Admin → Reports → Sales by staff)
   const staffAnalyticsQuery = `
     {
-      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, SUM(net_sales) as revenue, COUNT(orders) as orders SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY revenue DESC") {
+      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, net_sales SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY net_sales DESC") {
         tableData { columns { name } rows }
         parseErrors
       }
@@ -98,17 +98,21 @@ export async function GET(request) {
     try {
       const sRes  = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffAnalyticsQuery }) });
       const sJson = await sRes.json();
-      const rows  = sJson?.data?.shopifyqlQuery?.tableData?.rows;
-      const errs  = sJson?.data?.shopifyqlQuery?.parseErrors;
-      if (errs?.length) console.warn("Staff ShopifyQL error:", errs);
-      if (rows) {
+      const tableData = sJson?.data?.shopifyqlQuery?.tableData;
+      const errs      = sJson?.data?.shopifyqlQuery?.parseErrors;
+      if (errs?.length) console.warn("Staff ShopifyQL parseErrors:", JSON.stringify(errs));
+      if (sJson?.errors) console.warn("Staff ShopifyQL GraphQL errors:", JSON.stringify(sJson.errors));
+      if (tableData) {
+        console.log("Staff columns:", JSON.stringify(tableData.columns?.map(c => c.name)));
+        console.log("Staff rows sample:", JSON.stringify(tableData.rows?.slice(0, 3)));
+        const rows = tableData.rows || [];
         salespeopleFromAnalytics = rows
           .filter(r => r.staff_member_name && r.staff_member_name !== "N/A" && r.staff_member_name !== "")
           .map(r => ({
             name:    r.staff_member_name,
-            revenue: parseFloat(r.revenue || 0),
-            orders:  parseInt(r.orders    || 0),
-            monthly: Array(12).fill(0), // ShopifyQL gives totals, not monthly breakdown
+            revenue: parseFloat(r.net_sales || r.revenue || 0),
+            orders:  parseInt(r.orders_count || r.orders || 0),
+            monthly: Array(12).fill(0),
           }));
         console.log(`Staff ShopifyQL: found ${salespeopleFromAnalytics.length} staff members`);
       }
