@@ -123,11 +123,143 @@ const StorePill = ({ store, active, onClick }) => (
   </button>
 );
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD" }) => (
+// ── AI Insights Panel ─────────────────────────────────────────────────────────
+const AIInsights = ({ data, context, currency }) => {
+  const [insight, setInsight]   = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [open,    setOpen]      = useState(false);
+
+  const getInsights = async () => {
+    if (insight) { setOpen(o => !o); return; }
+    setLoading(true); setOpen(true);
+    try {
+      const prompt = `You are a wholesale trade business analyst for Worthy Products NZ, a FMCG/grocery distribution company.
+
+Analyse this ${context} data and provide 3-4 specific, actionable insights. Be direct and concise. Focus on:
+- What's working and why
+- What needs attention
+- Specific actions the sales/ops team should take
+
+Data (${currency}):
+${JSON.stringify(data?.slice?.(0,20) ?? data, null, 2)}
+
+Format: Brief title + 1-2 sentence explanation for each insight. No fluff.`;
+
+      const res  = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const json = await res.json();
+      setInsight(json.content?.[0]?.text || "No insights available.");
+    } catch (e) {
+      setInsight("Failed to load insights. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.06)", color: "#C9A84C", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
+        <span>✦</span>{loading ? "Analysing…" : open ? "Hide AI Insights" : "AI Insights"}
+      </button>
+      {open && !loading && insight && (
+        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#c0a870", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+          {insight}
+        </div>
+      )}
+      {open && loading && (
+        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#6a5a40" }}>
+          ✦ Analysing data…
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Category Drill-Down Modal ─────────────────────────────────────────────────
+const CategoryModal = ({ category, products, currency, onClose }) => {
+  if (!category) return null;
+  const top      = (products || []).filter(p => p.revenue > 0).slice(0, 10);
+  const declining = (products || []).filter(p => p.yoyChange !== null && p.yoyChange < -10).slice(0, 10);
+  const rising    = (products || []).filter(p => p.yoyChange !== null && p.yoyChange > 10 && p.revenue > 0).slice(0, 5);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
+      <div style={{ background: "#0d0f18", border: "1px solid rgba(201,168,76,0.3)", borderRadius: 20, padding: 28, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontFamily: "'Cinzel',serif", fontSize: 16, color: "#C9A84C", fontWeight: 700 }}>{category}</div>
+            <div style={{ fontSize: 11, color: "#5a4030", marginTop: 4 }}>{(products||[]).length} products · click outside to close</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a4030", fontSize: 20, cursor: "pointer" }}>✕</button>
+        </div>
+
+        {top.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▲ Top Performers</div>
+            {top.map((p, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ fontSize: 12, color: "#d8c8a8", flex: 1 }}>{p.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
+                  <span style={{ color: "#C9A84C" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "—"}</span>
+                  <span style={{ color: "#7C9EC9" }}>{p.qtySold} units</span>
+                  {p.yoyChange !== null && <span style={{ color: p.yoyChange >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>{p.yoyChange >= 0 ? "▲" : "▼"}{Math.abs(p.yoyChange)}% YoY</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {rising.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📈 Growing Fast</div>
+            {rising.map((p, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ fontSize: 12, color: "#d8c8a8" }}>{p.name}</div>
+                <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 11 }}>▲{p.yoyChange}% YoY</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {declining.length > 0 && (
+          <div>
+            <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▼ Declining in This Category</div>
+            {declining.map((p, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ fontSize: 12, color: "#d8c8a8", flex: 1 }}>{p.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
+                  <span style={{ color: "#8a7860" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
+                  <span style={{ color: "#f87171", fontWeight: 700 }}>▼{Math.abs(p.yoyChange)}% YoY</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {top.length === 0 && declining.length === 0 && (
+          <div style={{ textAlign: "center", color: "#5a4030", padding: 20 }}>No product data for this category in the selected period.</div>
+        )}
+
+        <AIInsights data={products} context={`${category} category products`} currency={currency} />
+      </div>
+    </div>
+  );
+};
+
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, headerExtra }) => (
   <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>
-        {title} {loading && <span style={{ fontSize: 10, color: "#C9A84C", marginLeft: 8 }}>Loading...</span>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>
+          {title} {loading && <span style={{ fontSize: 10, color: "#C9A84C", marginLeft: 8 }}>Loading...</span>}
+        </div>
+        {headerExtra}
       </div>
       {subtitle && <div style={{ fontSize: 10, color: "#5a4030", marginTop: 4 }}>{subtitle}</div>}
     </div>
@@ -142,7 +274,10 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
         </thead>
         <tbody>
           {!loading && data?.map((row, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+            <tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined}
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
+              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = "rgba(201,168,76,0.05)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
               {columns.map((col, j) => (
                 <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || "#8a7860" }}>
                   {col.format ? col.format(row[col.key], currency) : row[col.key]}
@@ -156,6 +291,9 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
         </tbody>
       </table>
     </div>
+    {aiContext && !loading && data?.length > 0 && (
+      <AIInsights data={data} context={aiContext} currency={currency} />
+    )}
   </div>
 );
 
@@ -174,7 +312,9 @@ export default function EcommerceDashboard() {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading,   setAdvLoading]   = useState(false);
-  const [channelTab,   setChannelTab]   = useState("online"); // "pos" | "online"
+  const [channelTab,     setChannelTab]     = useState("online");
+  const [categoryModal,  setCategoryModal]  = useState(null); // { name, products }
+  const [decliningMode,  setDecliningMode]  = useState("yoy"); // "yoy" | "mom"
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef   = useRef({});
@@ -668,6 +808,14 @@ export default function EcommerceDashboard() {
         {/* ADVANCED ANALYTICS */}
         {activeStore.id === "worthy" && (
           <>
+            {/* Category drill-down modal */}
+            <CategoryModal
+              category={categoryModal?.name}
+              products={categoryModal?.products}
+              currency={activeStore.currency}
+              onClose={() => setCategoryModal(null)}
+            />
+
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16 }}>
               <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: "#f0e8d8", fontWeight: 600 }}>Advanced Table Date Filter:</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -681,27 +829,44 @@ export default function EcommerceDashboard() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="Top Categories"  subtitle="By Revenue"      loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns} />
-              <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns} />
-              <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} />
+              <AdvancedTable title="Top Categories" subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
+                onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
+                aiContext="top revenue categories" />
+              <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products" />
+              <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend" />
             </div>
 
             {/* Salesperson table — POS only */}
             {channelTab === "pos" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                <AdvancedTable title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} />
+                <AdvancedTable title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance" />
               </div>
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} />
-              <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} />
+              <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory" />
+              <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers" />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} />
-              <AdvancedTable title="📉 Declining Products" subtitle="Down >20% vs same period last year" loading={advLoading} currency={activeStore.currency} data={displayDeclining} columns={decliningColumns} />
-              <AdvancedTable title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} />
+              <AdvancedTable title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
+              <AdvancedTable
+                title="📉 Declining Products"
+                subtitle={decliningMode === "yoy" ? "Down >20% vs same period last year" : "Down >20% vs prior period"}
+                loading={advLoading}
+                currency={activeStore.currency}
+                data={decliningMode === "yoy" ? displayDeclining : (advancedData.curr?.decliningMoM || []).slice(0, 30)}
+                columns={decliningColumns}
+                aiContext="declining products"
+                headerExtra={
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[["yoy","YoY"],["mom","MoM"]].map(([m, lbl]) => (
+                      <button key={m} onClick={() => setDecliningMode(m)} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${decliningMode === m ? "#C9A84C" : "rgba(255,255,255,0.1)"}`, background: decliningMode === m ? "rgba(201,168,76,0.15)" : "transparent", color: decliningMode === m ? "#C9A84C" : "#4a4030", cursor: "pointer" }}>{lbl}</button>
+                    ))}
+                  </div>
+                }
+              />
+              <AdvancedTable title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
             </div>
           </>
         )}

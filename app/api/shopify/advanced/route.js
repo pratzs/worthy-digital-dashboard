@@ -62,9 +62,12 @@ export async function GET(request) {
     let hasNextPage = true;
     let cursor      = null;
 
-    // Fetch from prior year so churn detection has history
+    // Fetch from earlier so prevMonth comparison has data
     const endYear   = new Date(endParam).getFullYear();
-    const dateQuery = `created_at:>=${endYear - 1}-01-01 AND created_at:<=${endParam}T23:59:59`;
+    const fetchFrom = startPrevMo < new Date(`${endYear - 1}-01-01`) 
+      ? `${endYear - 1}-01-01` 
+      : startPrevMo.toISOString().split('T')[0];
+    const dateQuery = `created_at:>=${fetchFrom} AND created_at:<=${endParam}T23:59:59`;
 
     while (hasNextPage) {
       const res  = await fetch(endpoint, {
@@ -92,9 +95,14 @@ export async function GET(request) {
     const startD = new Date(startParam + 'T00:00:00');
     const endD   = new Date(endParam   + 'T23:59:59');
 
-    // Prior year same period (for declining products)
+    // Prior year same period (for YoY declining)
     const startPrev = new Date(startD); startPrev.setFullYear(startPrev.getFullYear() - 1);
     const endPrev   = new Date(endD);   endPrev.setFullYear(endPrev.getFullYear() - 1);
+
+    // Prior calendar month (for monthly declining)
+    const periodMs    = endD - startD;
+    const startPrevMo = new Date(startD.getTime() - periodMs - 86400000);
+    const endPrevMo   = new Date(startD.getTime() - 86400000);
 
     const products   = {};
     const customers  = {};
@@ -160,7 +168,8 @@ export async function GET(request) {
       }
 
       // ── Line items → products & categories ─────────────────────────────────
-      const inPrevPeriod = orderDate >= startPrev && orderDate <= endPrev;
+      const inPrevPeriod = orderDate >= startPrev  && orderDate <= endPrev;
+      const inPrevMonth  = orderDate >= startPrevMo && orderDate <= endPrevMo;
 
       order.lineItems.edges.forEach(({ node: item }) => {
         const title   = item.title || "Unknown Item";
@@ -174,8 +183,10 @@ export async function GET(request) {
         // Products
         if (!products[title]) {
           products[title] = {
-            name: title, revenue: 0, qtySold: 0,
-            prevRevenue: 0, prevQtySold: 0,   // prior year same period
+            name: title, category: catName,
+            revenue: 0, qtySold: 0,
+            prevRevenue: 0, prevQtySold: 0,
+            prevMonthRevenue: 0, prevMonthQty: 0, // prior calendar month
             historicalQtySold: 0, currentStock: stock,
             unitCost: cost, lockedCapital: 0,
           };
@@ -190,6 +201,10 @@ export async function GET(request) {
         if (inPrevPeriod) {
           products[title].prevRevenue  += price * qty;
           products[title].prevQtySold  += qty;
+        }
+        if (inPrevMonth) {
+          products[title].prevMonthRevenue += price * qty;
+          products[title].prevMonthQty     += qty;
         }
 
         // Categories (current period only)
@@ -262,6 +277,27 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 50);
 
+    // ── Category → Products map for drill-down ───────────────────────────────
+    const categoryProducts = {};
+    Object.values(products).forEach(p => {
+      const cat = p.category || "Uncategorized";
+      if (!categoryProducts[cat]) categoryProducts[cat] = [];
+      categoryProducts[cat].push({
+        name:        p.name,
+        revenue:     round2(p.revenue),
+        prevRevenue: round2(p.prevRevenue),
+        prevMonthRevenue: round2(p.prevMonthRevenue),
+        qtySold:     p.qtySold,
+        margin:      p.revenue > 0 ? Math.round(((p.revenue - p.unitCost * p.qtySold) / p.revenue) * 100) : 0,
+        yoyChange:   p.prevRevenue > 0 ? Math.round(((p.revenue - p.prevRevenue) / p.prevRevenue) * 100) : null,
+        momChange:   p.prevMonthRevenue > 0 ? Math.round(((p.revenue - p.prevMonthRevenue) / p.prevMonthRevenue) * 100) : null,
+      });
+    });
+    // Sort each category's products by revenue desc
+    Object.keys(categoryProducts).forEach(cat => {
+      categoryProducts[cat].sort((a, b) => b.revenue - a.revenue);
+    });
+
     const topCustomers = Object.values(customers)
       .filter(c => c.revenue > 0)
       .map(c => ({ ...c, revenue: round2(c.revenue) }))
@@ -315,18 +351,30 @@ export async function GET(request) {
       .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue)
       .slice(0, 50);
 
-    // ── Declining Products: had prev year revenue, down >20% this period ─────
+    // ── Declining Products: YoY ───────────────────────────────────────────────
     const declining = Object.values(products)
       .filter(p => p.prevRevenue > 50 && p.revenue < p.prevRevenue * 0.8)
       .map(p => ({
-        name: p.name,
-        revenue: round2(p.revenue),
-        prevRevenue: round2(p.prevRevenue),
+        name: p.name, category: p.category,
+        revenue: round2(p.revenue), prevRevenue: round2(p.prevRevenue),
         change: p.prevRevenue > 0 ? Math.round(((p.revenue - p.prevRevenue) / p.prevRevenue) * 100) : null,
-        qtySold: p.qtySold,
-        prevQtySold: p.prevQtySold,
+        qtySold: p.qtySold, prevQtySold: p.prevQtySold,
+        comparisonType: "yoy",
       }))
-      .sort((a, b) => a.change - b.change) // worst decline first
+      .sort((a, b) => a.change - b.change)
+      .slice(0, 30);
+
+    // ── Declining Products: Month-over-Month ─────────────────────────────────
+    const decliningMoM = Object.values(products)
+      .filter(p => p.prevMonthRevenue > 20 && p.revenue < p.prevMonthRevenue * 0.8)
+      .map(p => ({
+        name: p.name, category: p.category,
+        revenue: round2(p.revenue), prevRevenue: round2(p.prevMonthRevenue),
+        change: p.prevMonthRevenue > 0 ? Math.round(((p.revenue - p.prevMonthRevenue) / p.prevMonthRevenue) * 100) : null,
+        qtySold: p.qtySold, prevQtySold: p.prevMonthQty,
+        comparisonType: "mom",
+      }))
+      .sort((a, b) => a.change - b.change)
       .slice(0, 30);
 
     const channelData = [
@@ -335,15 +383,17 @@ export async function GET(request) {
     ].sort((a, b) => b.revenue - a.revenue);
 
     return NextResponse.json({
-      channels:       channelData,
+      channels:         channelData,
       topProducts,
       topCustomers,
       topCategories,
+      categoryProducts,
       slowMoving,
       churned,
       atRisk,
       clv,
       declining,
+      decliningMoM,
       metrics: {
         discountImpactRatio: totalRevenue > 0 ? (totalDiscount / totalRevenue).toFixed(4) : 0,
         totalDiscounts: totalDiscount.toFixed(2),
@@ -358,9 +408,9 @@ export async function GET(request) {
   } catch (error) {
     console.error("Advanced API error:", error.message);
     return NextResponse.json({
-      topProducts: [], topCustomers: [], topCategories: [],
+      topProducts: [], topCustomers: [], topCategories: [], categoryProducts: {},
       slowMoving: [], churned: [], channels: [],
-      atRisk: [], clv: [], declining: [],
+      atRisk: [], clv: [], declining: [], decliningMoM: [],
       metrics: { discountImpactRatio: 0, totalDiscounts: 0 },
       error: error.message,
     }, { status: 500 });
