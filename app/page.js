@@ -36,17 +36,16 @@ const generateMonthlyData = (storeId, year) => {
   });
 };
 
-const generateEmptyYear = () => {
-  return MONTH_NAMES.map(m => ({
+const generateEmptyYear = () =>
+  MONTH_NAMES.map(m => ({
     month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null,
     orders: 0, returns: 0, sessions: 0, totalDiscounts: 0, aov: 0,
     convRate: 0, newCustomers: 0, hasCostData: true, marginableRevenue: 0
   }));
-};
 
 const calcGrowth = (c, p) => (!p || p === 0) ? null : +((( c - p) / p) * 100).toFixed(1);
 const fmt   = (n, cur = "NZD") => new Intl.NumberFormat("en-NZ", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n || 0);
-const fmtK = (n, cur = "NZD") => {
+const fmtK  = (n, cur = "NZD") => {
   if (n === null || n === undefined) return "—";
   const s = cur === "NZD" ? "NZ$" : "$";
   return Math.abs(n) >= 1000 ? `${s}${(n / 1000).toFixed(1)}k` : `${s}${n}`;
@@ -124,16 +123,13 @@ const StorePill = ({ store, active, onClick }) => (
   </button>
 );
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", topRightElement }) => (
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD" }) => (
   <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-      <div>
-        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>
-          {title} {loading && <span style={{ fontSize: 10, color: "#C9A84C", marginLeft: 8 }}>Loading...</span>}
-        </div>
-        {subtitle && <div style={{ fontSize: 10, color: "#5a4030", marginTop: 4 }}>{subtitle}</div>}
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>
+        {title} {loading && <span style={{ fontSize: 10, color: "#C9A84C", marginLeft: 8 }}>Loading...</span>}
       </div>
-      {topRightElement}
+      {subtitle && <div style={{ fontSize: 10, color: "#5a4030", marginTop: 4 }}>{subtitle}</div>}
     </div>
     <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -146,7 +142,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
         </thead>
         <tbody>
           {!loading && data?.map((row, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", transition: "background 0.15s" }}>
+            <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
               {columns.map((col, j) => (
                 <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || "#8a7860" }}>
                   {col.format ? col.format(row[col.key], currency) : row[col.key]}
@@ -164,21 +160,20 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
 );
 
 export default function EcommerceDashboard() {
-  const [activeStore, setActiveStore]   = useState(STORES[0]);
+  const [activeStore,  setActiveStore]  = useState(STORES[0]);
   const [selectedYear, setSelectedYear] = useState(2026);
-  
-  const todayStr = new Date().toISOString().split('T')[0];
+
+  const todayStr    = new Date().toISOString().split('T')[0];
   const firstOfYear = `${new Date().getFullYear()}-01-01`;
   const [startDate, setStartDate] = useState(firstOfYear);
-  const [endDate, setEndDate] = useState(todayStr);
+  const [endDate,   setEndDate]   = useState(todayStr);
 
-  const [view, setView]                 = useState("monthly");
-  const [animated, setAnimated]         = useState(true);
+  const [view,         setView]         = useState("monthly");
+  const [animated,     setAnimated]     = useState(true);
   const [activeMetric, setActiveMetric] = useState("revenue");
   const [hoveredMonth, setHoveredMonth] = useState(null);
-  
   const [advancedData, setAdvancedData] = useState({});
-  const [advLoading, setAdvLoading] = useState(false);
+  const [advLoading,   setAdvLoading]   = useState(false);
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef   = useRef({});
@@ -188,115 +183,93 @@ export default function EcommerceDashboard() {
     if (storeId !== "worthy") return;
     const key = storeId + ":" + year;
     if (cacheRef.current[key] || loadingRef.current[key]) return;
-
     loadingRef.current[key] = true;
     forceUpdate();
-
     try {
-      const r = await fetch("/api/shopify?year=" + year);
+      const r    = await fetch("/api/shopify?year=" + year);
       const json = await r.json();
-      if (json.monthly && json.monthly.length > 0) {
-        cacheRef.current[key] = json.monthly;
-      } else {
-        cacheRef.current[key] = generateEmptyYear();
-      }
-    } catch (err) {
+      cacheRef.current[key] = (json.monthly?.length > 0) ? json.monthly : generateEmptyYear();
+    } catch {
       cacheRef.current[key] = generateEmptyYear();
     }
-    
     loadingRef.current[key] = false;
-    forceUpdate(); 
+    forceUpdate();
   };
 
+  // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
     if (activeStore.id !== "worthy") return;
-
-    const loadDashboardData = async () => {
-      await fetchYear(activeStore.id, selectedYear);
-      await fetchYear(activeStore.id, selectedYear - 1);
-
+    const load = async () => {
+      await Promise.all([
+        fetchYear(activeStore.id, selectedYear),
+        fetchYear(activeStore.id, selectedYear - 1),
+      ]);
       setAdvLoading(true);
       try {
-        const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });        
-        const curr = await currResponse.json();
-        
-        setAdvancedData({ 
-          curr: {
-            ...curr,
-            slowMoving: curr.slowMoving || [],
-            churned: curr.churned || []
-          }, 
-          prev: {} 
-        });
-      } catch(e) {
-        console.error("Advanced fetch failed", e);
-      }
+        const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
+        const data = await res.json();
+        setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
+      } catch (e) { console.error("Advanced fetch failed", e); }
       setAdvLoading(false);
     };
+    load();
+  }, [activeStore.id, selectedYear, startDate, endDate]); // eslint-disable-line
 
-    loadDashboardData();
-  }, [activeStore.id, selectedYear, startDate, endDate]);
-
+  // FIX 2: YoY — parallel load all years
   useEffect(() => {
     if (view === "yoy" && activeStore.id === "worthy") {
-      const loadAllYears = async () => {
-        for (const yr of ALL_YEARS) {
-          await fetchYear(activeStore.id, yr);
-        }
-      };
-      loadAllYears();
+      Promise.all(ALL_YEARS.map(yr => fetchYear(activeStore.id, yr)));
     }
-  }, [activeStore.id, view]); 
+  }, [activeStore.id, view]); // eslint-disable-line
 
-  const getMonthly = (year) => {
-    const key = activeStore.id + ":" + year;
-    return cacheRef.current[key] || generateMonthlyData(activeStore.id, year);
-  };
-  const isLoading = (year) => !!loadingRef.current[activeStore.id + ":" + year];
-  const hasData   = (year) => activeStore.id !== "worthy" || !!cacheRef.current[activeStore.id + ":" + year];
+  const getMonthly = (year) => cacheRef.current[activeStore.id + ":" + year] || generateMonthlyData(activeStore.id, year);
+  const isLoading  = (year) => !!loadingRef.current[activeStore.id + ":" + year];
+  const hasData    = (year) => activeStore.id !== "worthy" || !!cacheRef.current[activeStore.id + ":" + year];
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
 
-  const curr = getMonthly(selectedYear);
-  const prev = getMonthly(selectedYear - 1);
+  const curr       = getMonthly(selectedYear);
+  const prev       = getMonthly(selectedYear - 1);
   const prevLoaded = hasData(selectedYear - 1);
   const hasCost    = curr.some(d => d.hasCostData);
 
   const momData = curr.map((d, i) => {
-    const rev = d.revenue || 0;
-    const cst = d.totalCost || 0;
-    const dynamicGp = d.hasCostData ? rev - cst : null;
-    const dynamicMargin = (d.hasCostData && rev > 0) ? Math.round((dynamicGp / rev) * 100) : null;
-
+    const rev       = d.revenue   || 0;
+    const cst       = d.totalCost || 0;
+    const dynGp     = d.hasCostData ? rev - cst : null;
+    const dynMargin = (d.hasCostData && rev > 0) ? Math.round((dynGp / rev) * 100) : null;
     return {
       ...d,
-      grossProfit: d.grossProfit !== undefined ? d.grossProfit : dynamicGp,
-      marginPct: d.marginPct !== undefined ? d.marginPct : dynamicMargin,
+      grossProfit: d.grossProfit !== undefined ? d.grossProfit : dynGp,
+      marginPct:   d.marginPct   !== undefined ? d.marginPct   : dynMargin,
       prevRevenue: prev[i]?.revenue || 0,
       prevOrders:  prev[i]?.orders  || 0,
       momGrowth:   prevLoaded ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
     };
   });
 
-  const totalRev  = curr.reduce((s, d) => s + (d.revenue         || 0), 0);
-  const prevRev   = prev.reduce((s, d) => s + (d.revenue         || 0), 0);
-  const totalOrd  = curr.reduce((s, d) => s + (d.orders          || 0), 0);
-  const prevOrd   = prev.reduce((s, d) => s + (d.orders          || 0), 0);
+  const totalRev  = curr.reduce((s, d) => s + (d.revenue        || 0), 0);
+  const prevRev   = prev.reduce((s, d) => s + (d.revenue        || 0), 0);
+  const totalOrd  = curr.reduce((s, d) => s + (d.orders         || 0), 0);
+  const prevOrd   = prev.reduce((s, d) => s + (d.orders         || 0), 0);
   const totalCost = curr.reduce((s, d) => s + (d.totalCost      || 0), 0);
   const totalNewC = curr.reduce((s, d) => s + (d.newCustomers   || 0), 0);
   const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
   const totalRet  = curr.reduce((s, d) => s + (d.returns        || 0), 0);
   const avgAOV    = totalOrd ? Math.round(totalRev / totalOrd) : 0;
-  const prevAOV   = prevOrd  ? Math.round(prevRev  / prevOrd)   : 0;
-  
-  const totalMarginableRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
-  const trueOverallMargin  = (totalMarginableRev > 0) ? ((totalMarginableRev - totalCost) / totalMarginableRev) : null;
-  const gp         = trueOverallMargin !== null ? Math.round(totalRev * trueOverallMargin) : null;
-  const gpMargin = trueOverallMargin !== null ? Math.round(trueOverallMargin * 100) : null;
-  const accent   = activeStore.color;
+  const prevAOV   = prevOrd  ? Math.round(prevRev  / prevOrd)  : 0;
 
-  const revG = prevLoaded ? calcGrowth(totalRev, prevRev) : null;
-  const ordG = prevLoaded ? calcGrowth(totalOrd, prevOrd) : null;
-  const aovG = prevLoaded ? calcGrowth(avgAOV,   prevAOV) : null;
+  const totalMargRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
+  const trueMargin   = totalMargRev > 0 ? (totalMargRev - totalCost) / totalMargRev : null;
+  // FIX 3: Fall back to simple rev-cost GP when marginableRevenue is 0
+  const gp       = trueMargin !== null ? Math.round(totalRev * trueMargin)
+                 : hasCost    ? totalRev - totalCost
+                 : null;
+  const gpMargin = trueMargin !== null ? Math.round(trueMargin * 100) : null;
+
+  const accent = activeStore.color;
+  const revG   = prevLoaded ? calcGrowth(totalRev, prevRev) : null;
+  const ordG   = prevLoaded ? calcGrowth(totalOrd, prevOrd) : null;
+  const aovG   = prevLoaded ? calcGrowth(avgAOV,   prevAOV) : null;
 
   const yoyData = ALL_YEARS.map(yr => {
     const d   = getMonthly(yr);
@@ -306,7 +279,7 @@ export default function EcommerceDashboard() {
     const gpY = d.some(x => x.hasCostData) ? rev - cst : null;
     return {
       year: String(yr), revenue: rev, orders: ord,
-      aov:  ord ? Math.round(rev / ord) : 0,
+      aov: ord ? Math.round(rev / ord) : 0,
       grossProfit: gpY,
       margin: (gpY !== null && rev > 0) ? Math.round((gpY / rev) * 100) : null,
       loaded: hasData(yr),
@@ -320,58 +293,50 @@ export default function EcommerceDashboard() {
     { id: "convRate", label: "Conv. Rate" },
   ];
 
-  const renderStatus = (status) => {
-    const colors = { "New": "#9EC97C", "Active": "#C9A84C", "At Risk": "#f87171" };
-    return <span style={{ color: colors[status] || "#8a9aaa", fontWeight: 600 }}>{status}</span>;
+  const renderStatus = (s) => {
+    const c = { "New": "#9EC97C", "Active": "#C9A84C", "At Risk": "#f87171" }[s] || "#8a9aaa";
+    return <span style={{ color: c, fontWeight: 600 }}>{s}</span>;
   };
 
-  // --- Process data from API with fallbacks ---
-  const displayProducts = (advancedData.curr?.topProducts || []).map(p => ({
-    ...p,
-    qty: p.qtySold,
-    margin: p.revenue ? Math.round(((p.revenue - (p.unitCost * p.qtySold)) / p.revenue) * 100) : 0
-  })).slice(0, 20);
-
-  const displayCustomers = (advancedData.curr?.topCustomers || []).map(c => ({
-    ...c,
-    status: c.orderCount > 1 ? "Active" : "New"
-  })).slice(0, 20);
-
+  const displayProducts   = (advancedData.curr?.topProducts   || []).slice(0, 20);
+  const displayCustomers  = (advancedData.curr?.topCustomers  || []).map(c => ({ ...c, status: c.orderCount > 1 ? "Active" : "New" })).slice(0, 20);
   const displayCategories = (advancedData.curr?.topCategories || []).slice(0, 10);
 
-  const productColumns = [
-    { key: "name", label: "Product", color: "#d8c8a8" },
-    { key: "qty", label: "Units", align: "right" },
-    { key: "revenue", label: "Revenue", align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-    { key: "margin", label: "Margin", align: "right", format: v => v ? `${v}%` : "—" },
+  const productColumns  = [
+    { key: "name",    label: "Product",  color: "#d8c8a8" },
+    { key: "qtySold", label: "Units",    align: "right" },
+    { key: "revenue", label: "Revenue",  align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+    { key: "margin",  label: "Margin",   align: "right", format: v => v ? `${v}%` : "—" },
   ];
-
   const customerColumns = [
-    { key: "name", label: "Customer", color: "#d8c8a8" },
-    { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
-    { key: "revenue", label: "Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-    { key: "status", label: "Status", align: "center", format: v => renderStatus(v) },
+    { key: "name",       label: "Customer", color: "#d8c8a8" },
+    { key: "orderCount", label: "Orders",   align: "center", color: "#7C9EC9" },
+    { key: "revenue",    label: "Spend",    align: "right",  color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "status",     label: "Status",   align: "center", format: v => renderStatus(v) },
   ];
-
   const categoryColumns = [
-    { key: "name", label: "Category", color: "#d8c8a8" },
-    { key: "qty", label: "Units Sold", align: "right" },
-    { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "name",    label: "Category",   color: "#d8c8a8" },
+    { key: "qty",     label: "Units Sold", align: "right" },
+    { key: "revenue", label: "Revenue",    align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
   ];
-
   const slowMovingColumns = [
-    { key: "name", label: "Product", color: "#d8c8a8" },
-    { key: "currentStock", label: "Stock", align: "right", color: "#C9A84C" },
-    { key: "qtySold", label: "Sold", align: "right", color: "#9EC97C" },
+    { key: "name",          label: "Product",      color: "#d8c8a8" },
+    { key: "currentStock",  label: "Stock",        align: "right", color: "#C9A84C" },
+    { key: "qtySold",       label: "Sold",         align: "right", color: "#9EC97C" },
     { key: "lockedCapital", label: "Value Locked", align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
   ];
-
   const churnedColumns = [
-    { key: "name", label: "Customer", color: "#d8c8a8" },
+    { key: "name",          label: "Customer",   color: "#d8c8a8" },
     { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "—" },
-    { key: "revenue", label: "Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-    { key: "status", label: "Risk", align: "center", format: () => <span style={{color: "#f87171", fontWeight: 700}}>LAPSED</span> },
+    { key: "revenue",       label: "Spend",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "status",        label: "Risk",       align: "center", format: () => <span style={{ color: "#f87171", fontWeight: 700 }}>LAPSED</span> },
   ];
+
+  // FIX 4: was [activeStore, selectedYear] — object reference caused potential infinite loop
+  useEffect(() => {
+    setAnimated(false);
+    setTimeout(() => setAnimated(true), 50);
+  }, [activeStore.id, selectedYear]);
 
   return (
     <div style={{ minHeight: "100vh", background: "#080A10", fontFamily: "'DM Sans',sans-serif", color: "#e8e0d0", paddingBottom: 40 }}>
@@ -395,11 +360,9 @@ export default function EcommerceDashboard() {
             </div>
           </div>
         </div>
-
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {STORES.map(s => <StorePill key={s.id} store={s} active={activeStore.id === s.id} onClick={() => setActiveStore(s)} />)}
         </div>
-
         <div style={{ display: "flex", gap: 6 }}>
           {ALL_YEARS.map(y => {
             const loaded   = hasData(y);
@@ -416,27 +379,31 @@ export default function EcommerceDashboard() {
       </div>
 
       <div style={{ padding: "32px 32px 0" }}>
+        {/* View toggle */}
         <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 4, border: "1px solid rgba(255,255,255,0.06)", width: "fit-content" }}>
           {[["monthly","Monthly Performance"],["yoy","Year over Year"]].map(([v, lbl]) => (
             <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : "#5a5040", boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
           ))}
         </div>
 
+        {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}     sub="currency" animated={animated} currency={activeStore.currency} />
-          <KPICard label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"  sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"  sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
+          <KPICard label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} />
           <KPICard label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} />
         </div>
 
         {view === "monthly" ? (
           <>
+            {/* Metric tabs */}
             <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
               {metrics.map(m => (
                 <button key={m.id} onClick={() => setActiveMetric(m.id)} style={{ padding: "7px 16px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: activeMetric === m.id ? `1px solid ${accent}60` : "1px solid rgba(255,255,255,0.07)", background: activeMetric === m.id ? `${accent}15` : "rgba(255,255,255,0.02)", color: activeMetric === m.id ? accent : "#5a5040", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</button>
               ))}
             </div>
 
+            {/* Area chart */}
             <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <div>
@@ -468,6 +435,7 @@ export default function EcommerceDashboard() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 2.2fr", gap: 20, marginBottom: 24 }}>
+              {/* YoY bar chart */}
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
                 <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
                 <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 18 }}>% vs same month {selectedYear - 1}</div>
@@ -483,6 +451,7 @@ export default function EcommerceDashboard() {
                 </ResponsiveContainer>
               </div>
 
+              {/* Monthly table */}
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>Monthly Breakdown</div>
@@ -505,16 +474,16 @@ export default function EcommerceDashboard() {
                         return (
                           <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
-                            <td style={{ padding: "8px 8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
-                            <td style={{ padding: "8px 8px", color: "#d8c8a8", fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px", color: "#aa8a6a" }}>{has && row.totalCost !== null ? fmtK(row.totalCost, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit !== null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px" }}>{has ? <MarginBar value={row.marginPct} /> : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px 8px" }}><GrowthBadge value={row.momGrowth} /></td>
+                            <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
+                            <td style={{ padding: "8px", color: "#d8c8a8", fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? fmtK(row.totalCost, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} /> : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
                           </tr>
                         );
                       })}
@@ -539,6 +508,7 @@ export default function EcommerceDashboard() {
             </div>
           </>
         ) : (
+          /* YOY VIEW */
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
@@ -576,9 +546,9 @@ export default function EcommerceDashboard() {
               <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600, marginBottom: 20 }}>Year-over-Year Summary</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
                 {yoyData.map((yr, i) => {
-                  const p  = yoyData[i - 1];
-                  const rg = p ? calcGrowth(yr.revenue, p.revenue) : null;
-                  const og = p ? calcGrowth(yr.orders,  p.orders)  : null;
+                  const p   = yoyData[i - 1];
+                  const rg  = p ? calcGrowth(yr.revenue, p.revenue) : null;
+                  const og  = p ? calcGrowth(yr.orders,  p.orders)  : null;
                   const isCur = yr.year === String(selectedYear);
                   return (
                     <div key={yr.year} style={{ borderRadius: 14, padding: "18px 20px", border: `1px solid ${isCur ? accent + "40" : "rgba(255,255,255,0.06)"}`, background: isCur ? `${accent}08` : "rgba(255,255,255,0.01)", opacity: yr.loaded ? 1 : 0.3, transition: "opacity 0.4s" }}>
@@ -613,100 +583,50 @@ export default function EcommerceDashboard() {
           </>
         )}
 
-        {/* ADVANCED ANALYTICS GRID */}
+        {/* ADVANCED ANALYTICS */}
         {activeStore.id === "worthy" && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16 }}>
               <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: "#f0e8d8", fontWeight: 600 }}>Advanced Table Date Filter:</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={(e) => setStartDate(e.target.value)}
-                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
-                />
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
                 <span style={{ color: "#5a5040", fontSize: 12 }}>to</span>
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
-                />
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
               </div>
-              <div style={{ fontSize: 10, color: "#4a4030", marginLeft: "auto" }}>
-                Filters Top Products, Customers, Categories & Inventory below.
-              </div>
+              <div style={{ fontSize: 10, color: "#4a4030", marginLeft: "auto" }}>Filters Top Products, Customers, Categories & Inventory below.</div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable 
-                title="Top Categories" 
-                subtitle="By Revenue"
-                loading={advLoading}
-                currency={activeStore.currency}
-                data={displayCategories}
-                columns={categoryColumns}
-              />
-              <AdvancedTable 
-                title="Top Products" 
-                subtitle="High Performers"
-                loading={advLoading}
-                currency={activeStore.currency}
-                data={displayProducts}
-                columns={productColumns}
-              />
-              <AdvancedTable 
-                title="Top Customers" 
-                subtitle="Loyalty & Spend"
-                loading={advLoading}
-                currency={activeStore.currency}
-                data={displayCustomers}
-                columns={customerColumns}
-              />
+              <AdvancedTable title="Top Categories"  subtitle="By Revenue"      loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns} />
+              <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns} />
+              <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable 
-                title="Sales Channels" 
-                subtitle="POS vs Online"
-                loading={advLoading}
-                currency={activeStore.currency}
+              <AdvancedTable title="Sales Channels" subtitle="POS vs Online" loading={advLoading} currency={activeStore.currency}
                 data={advancedData.curr?.channels || []}
                 columns={[
                   { key: "channel", label: "Channel", color: "#d8c8a8" },
-                  { key: "orders", label: "Orders", align: "right" },
+                  { key: "orders",  label: "Orders",  align: "right" },
                   { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-                  { key: "aov", label: "AOV", align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-                ]}
-              />
-              <AdvancedTable 
-                title="⚠️ Slow-Moving Inventory"
-                subtitle="Capital tied up in low-turnover stock"
-                loading={advLoading}
-                currency={activeStore.currency}
-                data={advancedData.curr?.slowMoving || []}
-                columns={slowMovingColumns}
-              />
-              <AdvancedTable 
-                title="🛑 Lapsed Customers (>90 Days)" 
-                subtitle="High-value clients who stopped ordering"
-                loading={advLoading}
-                currency={activeStore.currency}
-                data={advancedData.curr?.churned || []}
-                columns={churnedColumns}
-              />
+                  { key: "aov",     label: "AOV",     align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+                ]} />
+              <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} />
+              <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} />
             </div>
           </>
         )}
 
-        {/* Footer */}
+        {/* Footer — FIX: was hardcoded "OFFICE", now shows brand name */}
         <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
-              ["New Customers",   totalNewC || "—",                                         "#8aaa8a"],
-              ["Total Discounts", fmtK(totalDisc, activeStore.currency),                    "#C9A84C"],
+              ["New Customers",   totalNewC || "—",                                                                                                     "#8aaa8a"],
+              ["Total Discounts", fmtK(totalDisc, activeStore.currency),                                                                                "#C9A84C"],
               ["Discount Impact", advancedData.curr?.metrics?.discountImpactRatio ? `${(advancedData.curr.metrics.discountImpactRatio * 100).toFixed(1)}%` : "—", "#f87171"],
-              ["Gross Profit",     gp !== null ? fmtK(gp, activeStore.currency) : "—",       "#C97C9E"],
+              ["Gross Profit",    gp !== null ? fmtK(gp, activeStore.currency) : "—",                                                                   "#C97C9E"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "#3a3020", marginBottom: 2 }}>{lbl}</div>
@@ -714,7 +634,7 @@ export default function EcommerceDashboard() {
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 10, color: "#2a2416", letterSpacing: "0.08em" }}>OFFICE · SHOPIFY ANALYTICS · FY{selectedYear}</div>
+          <div style={{ fontSize: 10, color: "#2a2416", letterSpacing: "0.08em" }}>WORTHY PRODUCTS · SHOPIFY ANALYTICS · FY{selectedYear}</div>
         </div>
       </div>
     </div>
