@@ -49,7 +49,7 @@ export async function GET(request) {
   // No union types - tableData and parseErrors are direct fields per Shopify docs
   const analyticsQuery = `
     {
-      shopifyqlQuery(query: "FROM sessions SHOW sessions, orders_placed, conversion_rate SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY month ORDER BY month ASC") {
+      shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY month ORDER BY month ASC") {
         tableData {
           columns { name dataType displayName }
           rows
