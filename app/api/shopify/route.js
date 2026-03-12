@@ -39,19 +39,20 @@ export async function GET(request) {
     }
   `;
 
-  // ShopifyQL: staff sales report (same data as Shopify Admin → Reports → Sales by staff)
-  const staffAnalyticsQuery = `
+  // Single ShopifyQL query for sessions by month (staff fetched separately only for current year)
+  const analyticsQuery = `
     {
-      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, net_sales, orders_count SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY net_sales DESC") {
+      shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY month ORDER BY month ASC") {
         tableData { columns { name } rows }
         parseErrors
       }
     }
   `;
 
-  const analyticsQuery = `
+  // Staff query — only net_sales grouped by name (no order count, avoids bad column names)
+  const staffAnalyticsQuery = `
     {
-      shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY month ORDER BY month ASC") {
+      shopifyqlQuery(query: "FROM sales SHOW staff_member_name, net_sales SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY net_sales DESC") {
         tableData { columns { name } rows }
         parseErrors
       }
@@ -93,8 +94,10 @@ export async function GET(request) {
       cursor      = data.orders.pageInfo.endCursor;
     }
 
-    // ── Staff sales via ShopifyQL (same as Admin → Reports → Sales by staff) ─
+    // ── Staff sales via ShopifyQL — only fetch for current/recent years to avoid rate limits ─
     let salespeopleFromAnalytics = [];
+    const currentYear = new Date().getFullYear();
+    if (year >= currentYear - 1) { // only fetch staff for current and previous year
     try {
       const sRes  = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffAnalyticsQuery }) });
       const sJson = await sRes.json();
@@ -111,11 +114,12 @@ export async function GET(request) {
           .map(r => ({
             name:    r.staff_member_name,
             revenue: parseFloat(r.net_sales || 0),
-            orders:  parseInt(r.orders_count || 0),
+            orders:  0, // will be populated from POS orders bucket below
           }));
         console.log(`Staff ShopifyQL: found ${salespeopleFromAnalytics.length} staff members`);
       }
     } catch (e) { console.warn("Staff ShopifyQL failed:", e.message); }
+    } // end year >= currentYear - 1
 
     // ── Per-channel monthly buckets ──────────────────────────────────────────
     const mkB = () => Array(12).fill(null).map(() => ({
@@ -157,6 +161,15 @@ export async function GET(request) {
     });
 
     // ── Convert buckets → monthly arrays ────────────────────────────────────
+    const totalPosOrders = posB.reduce((s, b) => s + b.orders, 0);
+    const totalPosRevenue = posB.reduce((s, b) => s + b.revenue, 0);
+
+    // Distribute order counts proportionally across staff by revenue share
+    salespeopleFromAnalytics = salespeopleFromAnalytics.map(s => ({
+      ...s,
+      orders: totalPosRevenue > 0 ? Math.round((s.revenue / totalPosRevenue) * totalPosOrders) : 0,
+      aov: 0, // calculated in page.js
+    }));
     const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const toMonthly = (buckets, withAnalytics = false) =>
       buckets.map((b, i) => {
