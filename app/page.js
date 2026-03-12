@@ -146,10 +146,20 @@ CHANNELS:
 - POS/Field Sales: Reps visit stores directly, take orders on the spot
 - Online Sales: Covers ALL of NZ — rep territories + remote areas reps can't reach. Strategic priority to grow online significantly to compete with DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports.
 
-SEASONALITY (NZ Southern Hemisphere):
-- Winter (June–August): Chocolate and warm confectionery sells strongly
-- Summer (December–February): Beverages, cold drinks, summer snacks spike
-- School holidays and events can cause spikes in dairy/convenience channel
+NZ SEASONS (Southern Hemisphere — opposite to northern hemisphere):
+- Summer: December, January, February — hottest months, beverages/cold drinks/iced confectionery peak
+- Autumn: March, April, May — transitioning, beverage demand tapering, confectionery starting to pick up
+- Winter: June, July, August — coldest months, chocolate and warm confectionery peak demand
+- Spring: September, October, November — warming up, mixed demand
+
+TODAY'S DATE: ${new Date().toLocaleDateString('en-NZ', { month: 'long', day: 'numeric', year: 'numeric' })}
+CURRENT NZ SEASON: ${(() => {
+  const m = new Date().getMonth(); // 0-indexed
+  if (m <= 1 || m === 11) return "Summer (December–February) — peak beverage and cold drink season";
+  if (m <= 4) return "Autumn (March–May) — beverages tapering, confectionery starting to rise";
+  if (m <= 7) return "Winter (June–August) — peak chocolate and confectionery season";
+  return "Spring (September–November) — mixed demand, beverages beginning to recover";
+})()}
 
 STRATEGIC PRIORITIES:
 1. Grow online sales aggressively — this is the #1 growth lever right now
@@ -160,7 +170,7 @@ STRATEGIC PRIORITIES:
 
 When analysing data, always:
 - Reference specific rep names and their territories where relevant
-- Call out seasonality if it explains trends (e.g. "beverage spike expected in summer months Dec–Feb")
+- Correctly apply NZ seasonality — summer is Dec–Feb, winter is Jun–Aug
 - Flag margin concerns vs the 20% target
 - Highlight online channel growth opportunities specifically
 - Note if imported product lines are at risk (slow-moving imported stock ties up capital and has long reorder lead times)
