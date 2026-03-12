@@ -89,9 +89,13 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD" }) => {
   );
 };
 
-const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD" }) => {
+const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true }) => {
   const [display, setDisplay] = useState(0);
   const isPos = !growth || growth >= 0;
+  const textHead = darkMode ? "#f0e8d8" : "#1a120a";
+  const textMuted = darkMode ? "#6b6050" : "#7a6050";
+  const cardBg = darkMode ? "linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))" : "linear-gradient(135deg,rgba(255,255,255,0.95),rgba(255,255,255,0.8))";
+  const cardBorder = darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.1)";
   useEffect(() => {
     const t = value || 0;
     if (!animated || t === 0) { setDisplay(t); return; }
@@ -100,18 +104,18 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
     return () => clearInterval(timer);
   }, [value, animated]);
   return (
-    <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "22px 24px", position: "relative", overflow: "hidden", transition: "transform 0.2s,box-shadow 0.2s", cursor: "default" }}>
+    <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 16, padding: "22px 24px", position: "relative", overflow: "hidden", transition: "transform 0.2s,box-shadow 0.2s", cursor: "default" }}>
       <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, background: `radial-gradient(circle,${accent}20 0%,transparent 70%)`, borderRadius: "50%" }} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-        <div style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: growth === null ? "#4a4030" : isPos ? "#4ade80" : "#f87171", background: growth === null ? "rgba(255,255,255,0.04)" : isPos ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: growth === null ? textMuted : isPos ? "#4ade80" : "#f87171", background: growth === null ? (darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)") : isPos ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)" }}>
           {growth === null ? "No prior yr" : `${isPos ? "▲" : "▼"} ${Math.abs(growth)}%`}
         </div>
       </div>
-      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 26, fontWeight: 700, color: "#f0e8d8", letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
+      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
         {sub === "currency" ? fmtK(display, currency) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
       </div>
-      <div style={{ fontSize: 11, color: "#6b6050", textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
+      <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
     </div>
   );
 };
@@ -303,41 +307,48 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
   );
 };
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra }) => (
-  <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, theme }) => {
+  const T = theme || {
+    bgCard: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
+    border: "rgba(255,255,255,0.07)", bgTableHead: "#0a0c12",
+    borderFaint: "rgba(255,255,255,0.05)", textHead: "#f0e8d8",
+    textMuted: "#5a4030", textSub: "#5a4030", textRow: "#8a7860", textLabel: "#3a3020",
+  };
+  return (
+  <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>
+        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
           {title} {loading && <span style={{ fontSize: 10, color: "#C9A84C", marginLeft: 8 }}>Loading...</span>}
         </div>
         {headerExtra}
       </div>
-      {subtitle && <div style={{ fontSize: 10, color: "#5a4030", marginTop: 4 }}>{subtitle}</div>}
+      {subtitle && <div style={{ fontSize: 10, color: T.textSub, marginTop: 4 }}>{subtitle}</div>}
     </div>
     <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-        <thead style={{ position: "sticky", top: 0, background: "#0a0c12", zIndex: 1 }}>
+        <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}>
           <tr>
             {columns.map((col, i) => (
-              <th key={i} style={{ textAlign: col.align || "left", padding: "8px", color: "#3a3020", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{col.label}</th>
+              <th key={i} style={{ textAlign: col.align || "left", padding: "8px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{col.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {!loading && data?.map((row, i) => (
             <tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined}
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
+              style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
               onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = "rgba(201,168,76,0.05)"; }}
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
               {columns.map((col, j) => (
-                <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || "#8a7860" }}>
+                <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || T.textRow }}>
                   {col.format ? col.format(row[col.key], currency) : row[col.key]}
                 </td>
               ))}
             </tr>
           ))}
           {!loading && (!data || data.length === 0) && (
-            <tr><td colSpan={columns.length} style={{ padding: "20px", textAlign: "center", color: "#5a4030" }}>No data available</td></tr>
+            <tr><td colSpan={columns.length} style={{ padding: "20px", textAlign: "center", color: T.textMuted }}>No data available</td></tr>
           )}
         </tbody>
       </table>
@@ -346,7 +357,8 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
       <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} />
     )}
   </div>
-);
+  );
+};
 
 export default function EcommerceDashboard() {
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
@@ -364,8 +376,10 @@ export default function EcommerceDashboard() {
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading,   setAdvLoading]   = useState(false);
   const [channelTab,     setChannelTab]     = useState("online");
-  const [categoryModal,  setCategoryModal]  = useState(null); // { name, products }
-  const [decliningMode,  setDecliningMode]  = useState("yoy"); // "yoy" | "mom"
+  const [categoryModal,  setCategoryModal]  = useState(null);
+  const [decliningMode,  setDecliningMode]  = useState("yoy");
+  const [darkMode,       setDarkMode]       = useState(true);
+  const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef   = useRef({});
@@ -390,6 +404,8 @@ export default function EcommerceDashboard() {
         online:      convert(json.monthlyOnline),
         salespeople: json.salespeople || [],
       };
+      // Explicitly update salespeople state so the table re-renders
+      if (year === selectedYear) setSalespeopleData(json.salespeople || []);
     } catch {
       const empty = generateEmptyYear();
       cacheRef.current[key] = { all: empty, pos: empty, online: empty, salespeople: [] };
@@ -482,6 +498,47 @@ export default function EcommerceDashboard() {
   const gpMargin = trueMargin !== null ? Math.round(trueMargin * 100) : null;
 
   const accent = activeStore.color;
+
+  // ── Theme ────────────────────────────────────────────────────────────────
+  const T = darkMode ? {
+    bg:          "#080A10",
+    bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
+    bgHeader:    "rgba(255,255,255,0.015)",
+    bgInput:     "#0a0c12",
+    bgTableHead: "#0a0c12",
+    bgModal:     "#0d0f18",
+    border:      "rgba(255,255,255,0.07)",
+    borderFaint: "rgba(255,255,255,0.05)",
+    borderAccent:"rgba(255,255,255,0.06)",
+    text:        "#e8e0d0",
+    textHead:    "#f0e8d8",
+    textMuted:   "#5a4030",
+    textSub:     "#4a4030",
+    textRow:     "#8a7860",
+    textLabel:   "#3a3020",
+    scrollTrack: "#0d0f18",
+    scrollThumb: "#2a2416",
+    shadow:      "0 4px 24px rgba(0,0,0,0.4)",
+  } : {
+    bg:          "#F4F1EC",
+    bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.9),rgba(255,255,255,0.7))",
+    bgHeader:    "rgba(255,255,255,0.9)",
+    bgInput:     "#ffffff",
+    bgTableHead: "#f8f5f0",
+    bgModal:     "#ffffff",
+    border:      "rgba(0,0,0,0.1)",
+    borderFaint: "rgba(0,0,0,0.06)",
+    borderAccent:"rgba(0,0,0,0.08)",
+    text:        "#2a1f0f",
+    textHead:    "#1a120a",
+    textMuted:   "#8a7060",
+    textSub:     "#7a6050",
+    textRow:     "#4a3828",
+    textLabel:   "#9a8070",
+    scrollTrack: "#e8e0d0",
+    scrollThumb: "#c0a870",
+    shadow:      "0 4px 24px rgba(0,0,0,0.12)",
+  };
   const revG   = prevLoaded ? calcGrowth(totalRev, prevRev) : null;
   const ordG   = prevLoaded ? calcGrowth(totalOrd, prevOrd) : null;
   const aovG   = prevLoaded ? calcGrowth(avgAOV,   prevAOV) : null;
@@ -577,7 +634,7 @@ export default function EcommerceDashboard() {
     { key: "revenue", label: "Revenue",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(Math.round(v), c) },
     { key: "aov",     label: "Avg Order",    align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
   ];
-  const salespeople = getSalespeople().map(s => ({
+  const salespeople = salespeopleData.map(s => ({
     ...s,
     revenue: Math.round(s.revenue),
     aov: s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
@@ -587,26 +644,31 @@ export default function EcommerceDashboard() {
   useEffect(() => {
     setAnimated(false);
     setTimeout(() => setAnimated(true), 50);
+    // Sync salespeople for newly selected year if already cached
+    const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
+    if (cached?.salespeople) setSalespeopleData(cached.salespeople);
+    else setSalespeopleData([]);
   }, [activeStore.id, selectedYear]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080A10", fontFamily: "'DM Sans',sans-serif", color: "#e8e0d0", paddingBottom: 40 }}>
+    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", color: T.text, paddingBottom: 40, transition: "background 0.3s, color 0.3s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0d0f18}::-webkit-scrollbar-thumb{background:#2a2416;border-radius:4px}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:${T.scrollTrack}}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:4px}
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: ${darkMode ? "invert(1) opacity(0.4)" : "opacity(0.5)"}; }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, background: "rgba(255,255,255,0.015)", position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ borderBottom: `1px solid ${T.borderAccent}`, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, background: T.bgHeader, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg,${accent},${accent}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, boxShadow: `0 4px 16px ${accent}40` }}>{activeStore.icon}</div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontFamily: "'Cinzel',serif", fontSize: 15, fontWeight: 600, color: "#f0e8d8", letterSpacing: "0.05em" }}>{activeStore.name}</div>
+              <div style={{ fontFamily: "'Cinzel',serif", fontSize: 15, fontWeight: 600, color: T.textHead, letterSpacing: "0.05em" }}>{activeStore.name}</div>
               {anyLoading && <div style={{ fontSize: 10, color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: "2px 8px", borderRadius: 20 }}>LOADING…</div>}
             </div>
-            <div style={{ fontSize: 10, color: "#4a4030", textTransform: "uppercase", letterSpacing: "0.15em" }}>
+            <div style={{ fontSize: 10, color: T.textSub, textTransform: "uppercase", letterSpacing: "0.15em" }}>
               {activeStore.id === "worthy" ? "Live Shopify Data" : "Sample Data"} · Performance Overview
             </div>
           </div>
@@ -614,24 +676,29 @@ export default function EcommerceDashboard() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {STORES.map(s => <StorePill key={s.id} store={s} active={activeStore.id === s.id} onClick={() => setActiveStore(s)} />)}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {ALL_YEARS.map(y => {
             const loaded   = hasData(y);
             const fetching = isLoading(y);
             return (
-              <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: selectedYear === y ? `1px solid ${accent}` : "1px solid rgba(255,255,255,0.1)", background: selectedYear === y ? `${accent}20` : "transparent", color: selectedYear === y ? accent : loaded ? "#c0a870" : "#5a5040", cursor: "pointer", transition: "all 0.2s", position: "relative" }}>
+              <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: selectedYear === y ? `1px solid ${accent}` : `1px solid ${T.border}`, background: selectedYear === y ? `${accent}20` : "transparent", color: selectedYear === y ? accent : loaded ? (darkMode ? "#c0a870" : "#6a5040") : T.textMuted, cursor: "pointer", transition: "all 0.2s", position: "relative" }}>
                 {y}
                 {fetching && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: accent }} />}
                 {!fetching && loaded && selectedYear !== y && activeStore.id === "worthy" && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#4ade80", opacity: 0.7 }} />}
               </button>
             );
           })}
+          {/* Dark / Light toggle */}
+          <button onClick={() => setDarkMode(d => !d)} title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            style={{ marginLeft: 4, padding: "6px 12px", borderRadius: 8, fontSize: 16, border: `1px solid ${T.border}`, background: darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", cursor: "pointer", transition: "all 0.2s", lineHeight: 1 }}>
+            {darkMode ? "☀️" : "🌙"}
+          </button>
         </div>
       </div>
 
       {/* CHANNEL SUB-TABS — only shown for Worthy North (live store) */}
       {activeStore.id === "worthy" && (
-        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 32px", background: "rgba(255,255,255,0.01)", display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4 }}>
           {[
             { id: "online", label: "🌐  Online Sales" },
             { id: "pos",    label: "🏪  POS Sales" },
@@ -639,13 +706,13 @@ export default function EcommerceDashboard() {
             <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
               padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
               border: "none", borderBottom: channelTab === tab.id ? `2px solid ${accent}` : "2px solid transparent",
-              background: "transparent", color: channelTab === tab.id ? accent : "#4a4030",
+              background: "transparent", color: channelTab === tab.id ? accent : T.textSub,
               cursor: "pointer", transition: "all 0.2s", marginBottom: -1,
             }}>
               {tab.label}
             </button>
           ))}
-          <div style={{ marginLeft: "auto", fontSize: 10, color: "#3a3020", paddingRight: 8 }}>
+          <div style={{ marginLeft: "auto", fontSize: 10, color: T.textLabel, paddingRight: 8 }}>
             {channelTab === "pos" ? "In-person POS orders only" : "Online store orders · includes sessions & conv rate"}
           </div>
         </div>
@@ -653,18 +720,18 @@ export default function EcommerceDashboard() {
 
       <div style={{ padding: "32px 32px 0" }}>
         {/* View toggle */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 4, border: "1px solid rgba(255,255,255,0.06)", width: "fit-content" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 28, background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)", borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, width: "fit-content" }}>
           {[["monthly","Monthly Performance"],["yoy","Year over Year"]].map(([v, lbl]) => (
-            <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : "#5a5040", boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
+            <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : T.textMuted, boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
           ))}
         </div>
 
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} />
-          <KPICard label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} />
-          <KPICard label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} />
         </div>
 
         {view === "monthly" ? (
@@ -672,7 +739,7 @@ export default function EcommerceDashboard() {
             {/* Metric tabs */}
             <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
               {metrics.map(m => (
-                <button key={m.id} onClick={() => setActiveMetric(m.id)} style={{ padding: "7px 16px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: activeMetric === m.id ? `1px solid ${accent}60` : "1px solid rgba(255,255,255,0.07)", background: activeMetric === m.id ? `${accent}15` : "rgba(255,255,255,0.02)", color: activeMetric === m.id ? accent : "#5a5040", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</button>
+                <button key={m.id} onClick={() => setActiveMetric(m.id)} style={{ padding: "7px 16px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: activeMetric === m.id ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: activeMetric === m.id ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"), color: activeMetric === m.id ? accent : T.textMuted, cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</button>
               ))}
             </div>
 
@@ -867,46 +934,46 @@ export default function EcommerceDashboard() {
               onClose={() => setCategoryModal(null)}
             />
 
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16 }}>
-              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: "#f0e8d8", fontWeight: 600 }}>Advanced Table Date Filter:</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16 }}>
+              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Advanced Table Date Filter:</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
-                <span style={{ color: "#5a5040", fontSize: 12 }}>to</span>
+                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
+                <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
+                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
               </div>
-              <div style={{ fontSize: 10, color: "#4a4030", marginLeft: "auto" }}>Filters Top Products, Customers, Categories & Inventory below.</div>
+              <div style={{ fontSize: 10, color: T.textSub, marginLeft: "auto" }}>Filters Top Products, Customers, Categories & Inventory below.</div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="Top Categories" subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
+              <AdvancedTable theme={T} title="Top Categories" subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
                 onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
                 aiContext="top revenue categories"
                 aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
-              <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
+              <AdvancedTable theme={T} title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
                 aiExtra="Note any imported products in the top list — these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
-              <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
+              <AdvancedTable theme={T} title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
                 aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
             </div>
 
             {/* Salesperson table — POS only */}
             {channelTab === "pos" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                <AdvancedTable title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                <AdvancedTable theme={T} title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
                   aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
               </div>
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
+              <AdvancedTable theme={T} title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
                 aiExtra="Pay special attention to imported products — slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
-              <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
+              <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
                 aiExtra="These are likely dairies, gas stations or corner stores that may have switched to Gilmours, DKSH or Stock4Shop. Suggest which rep should personally visit and what offer might win them back." />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
+              <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
               <AdvancedTable
                 title="📉 Declining Products"
                 subtitle={decliningMode === "yoy" ? "Down >20% vs same period last year" : "Down >20% vs prior period"}
@@ -923,13 +990,13 @@ export default function EcommerceDashboard() {
                   </div>
                 }
               />
-              <AdvancedTable title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
+              <AdvancedTable theme={T} title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
             </div>
           </>
         )}
 
-        {/* Footer — FIX: was hardcoded "OFFICE", now shows brand name */}
-        <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        {/* Footer */}
+        <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
               ["New Customers",   totalNewC || "—",                                                                                                     "#8aaa8a"],
@@ -938,12 +1005,12 @@ export default function EcommerceDashboard() {
               ["Gross Profit",    gp !== null ? fmtK(gp, activeStore.currency) : "—",                                                                   "#C97C9E"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
-                <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "#3a3020", marginBottom: 2 }}>{lbl}</div>
+                <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.textLabel, marginBottom: 2 }}>{lbl}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: clr }}>{val}</div>
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 10, color: "#2a2416", letterSpacing: "0.08em" }}>WORTHY PRODUCTS · SHOPIFY ANALYTICS · FY{selectedYear}</div>
+          <div style={{ fontSize: 10, color: T.textLabel, letterSpacing: "0.08em" }}>WORTHY PRODUCTS · SHOPIFY ANALYTICS · FY{selectedYear}</div>
         </div>
       </div>
     </div>
