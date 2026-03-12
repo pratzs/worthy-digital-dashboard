@@ -221,8 +221,7 @@ export default function EcommerceDashboard() {
       // 2. Fetch advanced tables using Custom Dates
       setAdvLoading(true);
       try {
-        const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`);
-        const curr = await currResponse.json();
+const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });        const curr = await currResponse.json();
         
         console.log("API RAW DATA:", curr);
 
@@ -355,23 +354,16 @@ export default function EcommerceDashboard() {
   };
 
   if (view === "monthly") {
+    // Backend strictly bounds this data to the Date Picker now, no frontend override needed
     displayProducts = advancedData.curr?.topProducts?.map(p => {
-      if (tableMonth === "all") return { ...p, margin: p.revenue ? Math.round(((p.revenue - p.cost)/p.revenue)*100) : 0 };
-      const mData = p.monthly?.[parseInt(tableMonth)] || { revenue: 0, cost: 0, qty: 0 };
-      return { ...p, ...mData, margin: mData.revenue ? Math.round(((mData.revenue - mData.cost)/mData.revenue)*100) : 0 };
+      return { ...p, margin: p.revenue ? Math.round(((p.revenue - p.cost)/p.revenue)*100) : 0 };
     }).filter(p => p.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
 
-    displayCustomers = advancedData.curr?.topCustomers?.map(c => {
-      if (tableMonth === "all") return c;
-      const mData = c.monthly?.[parseInt(tableMonth)] || { revenue: 0, cost: 0 };
-      return { ...c, ...mData };
-    }).filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
+    displayCustomers = advancedData.curr?.topCustomers?.map(c => c)
+      .filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
 
-    displayCategories = advancedData.curr?.topCategories?.map(c => {
-      if (tableMonth === "all") return c;
-      const mData = c.monthly?.[parseInt(tableMonth)] || { revenue: 0, qty: 0 };
-      return { ...c, ...mData };
-    }).filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
+    displayCategories = advancedData.curr?.topCategories?.map(c => c)
+      .filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
 
     productColumns = [
       { key: "name", label: "Product", color: "#d8c8a8" },
@@ -429,16 +421,7 @@ export default function EcommerceDashboard() {
     ];
   }
 
-  const TopRightFilter = () => view === "monthly" && (
-    <select 
-      value={tableMonth} 
-      onChange={e => setTableMonth(e.target.value)}
-      style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "4px 8px", borderRadius: 6, fontSize: 11, outline: "none", cursor: "pointer" }}
-    >
-      <option value="all">Full Year</option>
-      {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
-    </select>
-  );
+  // TopRightFilter removed - Custom Date Range handles filtering globally.
 
   return (
     <div style={{ minHeight: "100vh", background: "#080A10", fontFamily: "'DM Sans',sans-serif", color: "#e8e0d0", paddingBottom: 40 }}>
@@ -721,7 +704,6 @@ export default function EcommerceDashboard() {
                 currency={activeStore.currency}
                 data={displayCategories}
                 columns={categoryColumns}
-                topRightElement={<TopRightFilter />}
               />
               <AdvancedTable 
                 title="Top Products" 
@@ -730,7 +712,6 @@ export default function EcommerceDashboard() {
                 currency={activeStore.currency}
                 data={displayProducts}
                 columns={productColumns}
-                topRightElement={<TopRightFilter />}
               />
               <AdvancedTable 
                 title="Top Customers" 
@@ -739,7 +720,6 @@ export default function EcommerceDashboard() {
                 currency={activeStore.currency}
                 data={displayCustomers}
                 columns={customerColumns}
-                topRightElement={<TopRightFilter />}
               />
             </div>
 
