@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; 
+export const maxDuration = 60;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -53,7 +53,7 @@ export async function GET(request) {
     let allOrders = [];
     let hasNextPage = true;
     let cursor = null;
-    
+
     // Fetch from previous year for true dead-stock/churn calculations
     const endYear = new Date(endParam).getFullYear();
     const dateQuery = `created_at:>=${endYear - 1}-01-01 AND created_at:<=${endParam}T23:59:59Z`;
@@ -72,59 +72,30 @@ export async function GET(request) {
       allOrders = allOrders.concat(data.orders.edges.map(e => e.node));
       hasNextPage = data.orders.pageInfo.hasNextPage;
       cursor = data.orders.pageInfo.endCursor;
-      
-      if (hasNextPage) await new Promise(res => setTimeout(res, 500)); 
+
+      if (hasNextPage) await new Promise(res => setTimeout(res, 300));
     }
 
     const products = {};
     const customers = {};
     const categories = {};
-    
-    // --- NEW: CHANNEL TRACKER ---
     const channels = { pos: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } };
-    
+
     let totalYearlyRevenue = 0;
     let totalYearlyDiscounts = 0;
 
-    // Define strict boundaries for the user's selected date range
-
-    // Define strict boundaries for the user's selected date range
-    const startD = new Date(startParam + 'T00:00:00Z'); 
-    const endD = new Date(endParam + 'T23:59:59Z');   
+    const startD = new Date(startParam + 'T00:00:00Z');
+    const endD = new Date(endParam + 'T23:59:59Z');
 
     allOrders.forEach(order => {
       const orderDate = new Date(order.createdAt);
-      
-      // CRITICAL FIX: Only attribute revenue if it happened exactly within the selected dates
       const isCurrentYear = orderDate >= startD && orderDate <= endD;
       const monthIndex = orderDate.getMonth();
-      
+
       const orderRevenue = parseFloat(order.totalPriceSet?.shopMoney?.amount || 0);
       const orderDiscount = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
 
-      if (isCurrentYear) {
-        totalYearlyRevenue += orderRevenue;
-        totalYearlyDiscounts += orderDiscount;
-
-        // --- NEW: CHANNEL CATEGORIZATION ---
-        const appName = order.app?.name || "";
-        const staffName = order.staffMember?.name || "";
-        
-        let isPos = appName.toLowerCase().includes("point of sale") || appName.toLowerCase() === "pos" || appName.toLowerCase().includes("shopify pos");
-        
-        // Force your sales to Online, regardless of app
-        if (staffName.toLowerCase().includes("pram jani") || staffName.toLowerCase().includes("pratham jani")) {
-          isPos = false; 
-        }
-        
-        if (isPos) {
-          channels.pos.orders += 1;
-          channels.pos.revenue += orderRevenue;
-        } else {
-          channels.online.orders += 1;
-          channels.online.revenue += orderRevenue;
-        }
-
+      // Handle Customers (Track activity across the whole fetched range for churn)
       if (order.customer) {
         const cId = order.customer.id;
         if (!customers[cId]) {
@@ -132,16 +103,15 @@ export async function GET(request) {
             name: order.customer.displayName || "Unknown Customer",
             email: order.customer.email,
             lastOrderDate: orderDate,
-            revenue: 0, 
+            revenue: 0,
             orderCount: 0,
-            monthly: Array(12).fill(null).map(() => ({ revenue: 0, cost: 0 })) 
+            monthly: Array(12).fill(null).map(() => ({ revenue: 0, cost: 0 }))
           };
         }
         if (orderDate > customers[cId].lastOrderDate) {
           customers[cId].lastOrderDate = orderDate;
         }
-        
-        // Only log their spend for the dashboard if they bought during the selected dates
+
         if (isCurrentYear) {
           customers[cId].revenue += orderRevenue;
           customers[cId].orderCount += 1;
@@ -149,29 +119,51 @@ export async function GET(request) {
         }
       }
 
+      // Handle Revenue & Channels (Only for selected date range)
+      if (isCurrentYear) {
+        totalYearlyRevenue += orderRevenue;
+        totalYearlyDiscounts += orderDiscount;
+
+        const appName = order.app?.name || "";
+        const staffName = order.staffMember?.name || "";
+        let isPos = appName.toLowerCase().includes("point of sale") || appName.toLowerCase() === "pos" || appName.toLowerCase().includes("shopify pos");
+
+        // Force Worthy-specific staff to Online
+        if (staffName.toLowerCase().includes("pram jani") || staffName.toLowerCase().includes("pratham jani")) {
+          isPos = false;
+        }
+
+        if (isPos) {
+          channels.pos.orders += 1;
+          channels.pos.revenue += orderRevenue;
+        } else {
+          channels.online.orders += 1;
+          channels.online.revenue += orderRevenue;
+        }
+      }
+
+      // Handle Line Items
       order.lineItems.edges.forEach(({ node: item }) => {
         const title = item.title || "Unknown Item";
         const catName = item.product?.productType || "Uncategorized";
         const qty = item.quantity || 0;
         const price = parseFloat(item.variant?.price || 0);
         const cost = parseFloat(item.variant?.inventoryItem?.unitCost?.amount || 0);
-        
+
         const stockNode = item.variant?.inventoryItem?.inventoryLevels?.nodes?.[0];
         const stock = stockNode?.quantities?.[0]?.quantity || 0;
 
         if (!products[title]) {
-          products[title] = { 
+          products[title] = {
             name: title, revenue: 0, qtySold: 0, historicalQtySold: 0,
             currentStock: stock, unitCost: cost, lockedCapital: 0,
             monthly: Array(12).fill(null).map(() => ({ revenue: 0, cost: 0, qty: 0 }))
           };
         }
-        
-        // Always track lifetime volume for accurate dead stock calculation
+
         products[title].historicalQtySold += qty;
         products[title].lockedCapital = products[title].currentStock * products[title].unitCost;
 
-        // Only log the product's revenue on the dashboard if sold during the selected dates
         if (isCurrentYear) {
           products[title].revenue += (price * qty);
           products[title].qtySold += qty;
@@ -180,7 +172,7 @@ export async function GET(request) {
           products[title].monthly[monthIndex].cost += (cost * qty);
 
           if (!categories[catName]) {
-            categories[catName] = { 
+            categories[catName] = {
               name: catName, revenue: 0, qty: 0,
               monthly: Array(12).fill(null).map(() => ({ revenue: 0, qty: 0 }))
             };
@@ -193,7 +185,7 @@ export async function GET(request) {
       });
     });
 
-    // ABSOLUTE DEAD STOCK FETCH
+    // Dead Stock Logic (Ensures high inventory items are visible even if zero sales)
     const deadStockQuery = `
       query getHighInventory {
         products(first: 100, query: "inventory_total:>10") {
@@ -201,6 +193,7 @@ export async function GET(request) {
         }
       }
     `;
+
     try {
       const invResponse = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: deadStockQuery }) });
       const invJson = await invResponse.json();
@@ -225,20 +218,27 @@ export async function GET(request) {
           }
         });
       }
-    } catch (invError) { console.error("Dead stock fetch error", invError); }
+    } catch (e) { console.error("Inventory Fetch Error", e); }
 
     const todayDate = new Date();
     const formatDecimals = (obj) => ({
-      ...obj, revenue: parseFloat(obj.revenue.toFixed(2)), lockedCapital: obj.lockedCapital ? parseFloat(obj.lockedCapital.toFixed(2)) : 0
+      ...obj, 
+      revenue: parseFloat((obj.revenue || 0).toFixed(2)), 
+      lockedCapital: parseFloat((obj.lockedCapital || 0).toFixed(2))
     });
 
-    const slowMoving = Object.values(products).filter(p => p.currentStock > 5 && p.historicalQtySold < 10)
-      .map(formatDecimals).sort((a, b) => b.lockedCapital - a.lockedCapital).slice(0, 15);
+    const slowMoving = Object.values(products)
+      .filter(p => p.currentStock > 5 && p.historicalQtySold < 10)
+      .map(formatDecimals)
+      .sort((a, b) => b.lockedCapital - a.lockedCapital)
+      .slice(0, 15);
 
-    const churned = Object.values(customers).filter(c => (todayDate - new Date(c.lastOrderDate)) / (1000 * 60 * 60 * 24) > 90)
-      .map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 15);
+    const churned = Object.values(customers)
+      .filter(c => (todayDate - new Date(c.lastOrderDate)) / (1000 * 60 * 60 * 24) > 90)
+      .map(formatDecimals)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 15);
 
-    // --- NEW: FORMAT CHANNELS ---
     const channelData = [
       { channel: "Online Sales", orders: channels.online.orders, revenue: parseFloat(channels.online.revenue.toFixed(2)), aov: channels.online.orders > 0 ? parseFloat((channels.online.revenue / channels.online.orders).toFixed(2)) : 0 },
       { channel: "POS Sales", orders: channels.pos.orders, revenue: parseFloat(channels.pos.revenue.toFixed(2)), aov: channels.pos.orders > 0 ? parseFloat((channels.pos.revenue / channels.pos.orders).toFixed(2)) : 0 }
@@ -246,11 +246,11 @@ export async function GET(request) {
 
     return NextResponse.json({
       channels: channelData,
-      // Critical: Remove items that had $0 revenue during the selected timeframe
       topProducts: Object.values(products).filter(p => p.revenue > 0).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
       topCustomers: Object.values(customers).filter(c => c.revenue > 0).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
       topCategories: Object.values(categories).filter(c => c.revenue > 0).map(formatDecimals).sort((a, b) => b.revenue - a.revenue),
-      slowMoving, churned,
+      slowMoving,
+      churned,
       metrics: {
         discountImpactRatio: totalYearlyRevenue > 0 ? (totalYearlyDiscounts / totalYearlyRevenue).toFixed(4) : 0,
         totalDiscounts: totalYearlyDiscounts.toFixed(2)
@@ -259,9 +259,9 @@ export async function GET(request) {
 
   } catch (error) {
     console.error("🚨 Advanced API Crash:", error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       topProducts: [], topCustomers: [], topCategories: [], slowMoving: [], churned: [],
-      metrics: { discountImpactRatio: 0, totalDiscounts: 0 }, error: error.message 
+      metrics: { discountImpactRatio: 0, totalDiscounts: 0 }, error: error.message
     }, { status: 500 });
   }
 }

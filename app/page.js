@@ -45,7 +45,7 @@ const generateEmptyYear = () => {
 };
 
 const calcGrowth = (c, p) => (!p || p === 0) ? null : +((( c - p) / p) * 100).toFixed(1);
-const fmt  = (n, cur = "NZD") => new Intl.NumberFormat("en-NZ", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n || 0);
+const fmt   = (n, cur = "NZD") => new Intl.NumberFormat("en-NZ", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n || 0);
 const fmtK = (n, cur = "NZD") => {
   if (n === null || n === undefined) return "—";
   const s = cur === "NZD" ? "NZ$" : "$";
@@ -167,7 +167,6 @@ export default function EcommerceDashboard() {
   const [activeStore, setActiveStore]   = useState(STORES[0]);
   const [selectedYear, setSelectedYear] = useState(2026);
   
-  // --- NEW DATE STATES FOR ADVANCED FETCH ---
   const todayStr = new Date().toISOString().split('T')[0];
   const firstOfYear = `${new Date().getFullYear()}-01-01`;
   const [startDate, setStartDate] = useState(firstOfYear);
@@ -180,7 +179,6 @@ export default function EcommerceDashboard() {
   
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading, setAdvLoading] = useState(false);
-  const [tableMonth, setTableMonth] = useState("all");
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef   = useRef({});
@@ -214,24 +212,20 @@ export default function EcommerceDashboard() {
     if (activeStore.id !== "worthy") return;
 
     const loadDashboardData = async () => {
-      // 1. Fetch main charts sequentially (Still respects selectedYear UI)
       await fetchYear(activeStore.id, selectedYear);
       await fetchYear(activeStore.id, selectedYear - 1);
 
-      // 2. Fetch advanced tables using Custom Dates
       setAdvLoading(true);
       try {
-const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });        const curr = await currResponse.json();
+        const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });        
+        const curr = await currResponse.json();
         
-        console.log("API RAW DATA:", curr);
-
         setAdvancedData({ 
           curr: {
             ...curr,
             slowMoving: curr.slowMoving || [],
             churned: curr.churned || []
           }, 
-          // Previous period fetch disabled for now to respect custom date logic without breaking YoY arrays
           prev: {} 
         });
       } catch(e) {
@@ -241,7 +235,7 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
     };
 
     loadDashboardData();
-  }, [activeStore.id, selectedYear, startDate, endDate]); // Added date dependencies here!
+  }, [activeStore.id, selectedYear, startDate, endDate]);
 
   useEffect(() => {
     if (view === "yoy" && activeStore.id === "worthy") {
@@ -283,16 +277,16 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
     };
   });
 
-  const totalRev  = curr.reduce((s, d) => s + (d.revenue       || 0), 0);
-  const prevRev   = prev.reduce((s, d) => s + (d.revenue       || 0), 0);
-  const totalOrd  = curr.reduce((s, d) => s + (d.orders        || 0), 0);
-  const prevOrd   = prev.reduce((s, d) => s + (d.orders        || 0), 0);
-  const totalCost = curr.reduce((s, d) => s + (d.totalCost     || 0), 0);
-  const totalNewC = curr.reduce((s, d) => s + (d.newCustomers  || 0), 0);
-  const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts|| 0), 0);
-  const totalRet  = curr.reduce((s, d) => s + (d.returns       || 0), 0);
+  const totalRev  = curr.reduce((s, d) => s + (d.revenue         || 0), 0);
+  const prevRev   = prev.reduce((s, d) => s + (d.revenue         || 0), 0);
+  const totalOrd  = curr.reduce((s, d) => s + (d.orders          || 0), 0);
+  const prevOrd   = prev.reduce((s, d) => s + (d.orders          || 0), 0);
+  const totalCost = curr.reduce((s, d) => s + (d.totalCost      || 0), 0);
+  const totalNewC = curr.reduce((s, d) => s + (d.newCustomers   || 0), 0);
+  const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
+  const totalRet  = curr.reduce((s, d) => s + (d.returns        || 0), 0);
   const avgAOV    = totalOrd ? Math.round(totalRev / totalOrd) : 0;
-  const prevAOV   = prevOrd  ? Math.round(prevRev  / prevOrd)  : 0;
+  const prevAOV   = prevOrd  ? Math.round(prevRev  / prevOrd)   : 0;
   
   const totalMarginableRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const trueOverallMargin  = (totalMarginableRev > 0) ? ((totalMarginableRev - totalCost) / totalMarginableRev) : null;
@@ -326,13 +320,44 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
     { id: "convRate", label: "Conv. Rate" },
   ];
 
- // ── DYNAMIC TABLE DATA ──────────────────────────────────────────────
-  let displayProducts = [];
-  let displayCustomers = [];
-  let displayCategories = [];
-  let productColumns = [];
-  let customerColumns = [];
-  let categoryColumns = [];
+  const renderStatus = (status) => {
+    const colors = { "New": "#9EC97C", "Active": "#C9A84C", "At Risk": "#f87171" };
+    return <span style={{ color: colors[status] || "#8a9aaa", fontWeight: 600 }}>{status}</span>;
+  };
+
+  // --- Process data from API with fallbacks ---
+  const displayProducts = (advancedData.curr?.topProducts || []).map(p => ({
+    ...p,
+    qty: p.qtySold,
+    margin: p.revenue ? Math.round(((p.revenue - (p.unitCost * p.qtySold)) / p.revenue) * 100) : 0
+  })).slice(0, 20);
+
+  const displayCustomers = (advancedData.curr?.topCustomers || []).map(c => ({
+    ...c,
+    status: c.orderCount > 1 ? "Active" : "New"
+  })).slice(0, 20);
+
+  const displayCategories = (advancedData.curr?.topCategories || []).slice(0, 10);
+
+  const productColumns = [
+    { key: "name", label: "Product", color: "#d8c8a8" },
+    { key: "qty", label: "Units", align: "right" },
+    { key: "revenue", label: "Revenue", align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+    { key: "margin", label: "Margin", align: "right", format: v => v ? `${v}%` : "—" },
+  ];
+
+  const customerColumns = [
+    { key: "name", label: "Customer", color: "#d8c8a8" },
+    { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
+    { key: "revenue", label: "Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "status", label: "Status", align: "center", format: v => renderStatus(v) },
+  ];
+
+  const categoryColumns = [
+    { key: "name", label: "Category", color: "#d8c8a8" },
+    { key: "qty", label: "Units Sold", align: "right" },
+    { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+  ];
 
   const slowMovingColumns = [
     { key: "name", label: "Product", color: "#d8c8a8" },
@@ -343,85 +368,10 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
 
   const churnedColumns = [
     { key: "name", label: "Customer", color: "#d8c8a8" },
-    { key: "lastOrderDate", label: "Last Order", align: "right", format: v => new Date(v).toLocaleDateString() },
-    { key: "revenue", label: "Total Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+    { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "—" },
+    { key: "revenue", label: "Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
     { key: "status", label: "Risk", align: "center", format: () => <span style={{color: "#f87171", fontWeight: 700}}>LAPSED</span> },
   ];
-
-  const renderStatus = (status) => {
-    const colors = { "New": "#9EC97C", "Active": "#C9A84C", "At Risk": "#f87171" };
-    return <span style={{ color: colors[status] || "#8a9aaa", fontWeight: 600 }}>{status}</span>;
-  };
-
-  if (view === "monthly") {
-    // Backend strictly bounds this data to the Date Picker now, no frontend override needed
-    displayProducts = advancedData.curr?.topProducts?.map(p => {
-      return { ...p, margin: p.revenue ? Math.round(((p.revenue - p.cost)/p.revenue)*100) : 0 };
-    }).filter(p => p.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
-
-    displayCustomers = advancedData.curr?.topCustomers?.map(c => c)
-      .filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
-
-    displayCategories = advancedData.curr?.topCategories?.map(c => c)
-      .filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
-
-    productColumns = [
-      { key: "name", label: "Product", color: "#d8c8a8" },
-      { key: "qty", label: "Units", align: "right" },
-      { key: "revenue", label: "Revenue", align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-      { key: "margin", label: "Margin", align: "right", format: v => v > 0 ? `${v}%` : "—" },
-    ];
-    customerColumns = [
-      { key: "name", label: "Customer", color: "#d8c8a8" },
-      { key: "lifetimeOrders", label: "LTV Orders", align: "center", color: "#7C9EC9" },
-      { key: "revenue", label: "Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-      { key: "status", label: "Status", align: "center", format: v => renderStatus(v) },
-    ];
-    categoryColumns = [
-      { key: "name", label: "Category", color: "#d8c8a8" },
-      { key: "qty", label: "Units Sold", align: "right" },
-      { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-    ];
-  } else {
-    displayProducts = advancedData.curr?.topProducts?.map(p => {
-      const prevP = advancedData.prev?.topProducts?.find(x => x.name === p.name);
-      const prevRev = prevP ? prevP.revenue : 0;
-      return { ...p, prevRevenue: prevRev, yoy: prevRev ? Math.round(((p.revenue - prevRev)/prevRev)*100) : null };
-    }).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
-
-    displayCustomers = advancedData.curr?.topCustomers?.map(c => {
-      const prevC = advancedData.prev?.topCustomers?.find(x => x.name === c.name);
-      const prevRev = prevC ? prevC.revenue : 0;
-      return { ...c, prevRevenue: prevRev, yoy: prevRev ? Math.round(((c.revenue - prevRev)/prevRev)*100) : null };
-    }).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
-
-    displayCategories = advancedData.curr?.topCategories?.map(c => {
-      const prevC = advancedData.prev?.topCategories?.find(x => x.name === c.name);
-      const prevRev = prevC ? prevC.revenue : 0;
-      return { ...c, prevRevenue: prevRev, yoy: prevRev ? Math.round(((c.revenue - prevRev)/prevRev)*100) : null };
-    }).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
-
-    productColumns = [
-      { key: "name", label: "Product", color: "#d8c8a8" },
-      { key: "prevRevenue", label: `Prev Range`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
-      { key: "revenue", label: `Current`, align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-      { key: "yoy", label: "Growth", align: "right", format: v => <GrowthBadge value={v} /> },
-    ];
-    customerColumns = [
-      { key: "name", label: "Customer", color: "#d8c8a8" },
-      { key: "prevRevenue", label: `Prev Range`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
-      { key: "revenue", label: `Current`, align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-      { key: "yoy", label: "Growth", align: "right", format: v => <GrowthBadge value={v} /> },
-    ];
-    categoryColumns = [
-      { key: "name", label: "Category", color: "#d8c8a8" },
-      { key: "prevRevenue", label: `Prev Range`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
-      { key: "revenue", label: `Current`, align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-      { key: "yoy", label: "Growth", align: "right", format: v => <GrowthBadge value={v} /> },
-    ];
-  }
-
-  // TopRightFilter removed - Custom Date Range handles filtering globally.
 
   return (
     <div style={{ minHeight: "100vh", background: "#080A10", fontFamily: "'DM Sans',sans-serif", color: "#e8e0d0", paddingBottom: 40 }}>
@@ -466,22 +416,19 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
       </div>
 
       <div style={{ padding: "32px 32px 0" }}>
-        {/* View toggle */}
         <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 4, border: "1px solid rgba(255,255,255,0.06)", width: "fit-content" }}>
           {[["monthly","Monthly Performance"],["yoy","Year over Year"]].map(([v, lbl]) => (
             <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : "#5a5040", boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
           ))}
         </div>
 
-        {/* KPI Row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}     sub="currency" animated={animated} currency={activeStore.currency} />
           <KPICard label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"  sub="count"    animated={animated} currency={activeStore.currency} />
           <KPICard label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"  sub="currency" animated={animated} currency={activeStore.currency} />
           <KPICard label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} />
         </div>
 
-        {/* MONTHLY VIEW */}
         {view === "monthly" ? (
           <>
             <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
@@ -536,7 +483,6 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
                 </ResponsiveContainer>
               </div>
 
-              {/* Table */}
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>Monthly Breakdown</div>
@@ -592,9 +538,7 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
               </div>
             </div>
           </>
-
         ) : (
-          /* YOY VIEW */
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
@@ -672,7 +616,6 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
         {/* ADVANCED ANALYTICS GRID */}
         {activeStore.id === "worthy" && (
           <>
-            {/* --- NEW DATE RANGE PICKER UI --- */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16 }}>
               <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: "#f0e8d8", fontWeight: 600 }}>Advanced Table Date Filter:</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -695,7 +638,6 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
               </div>
             </div>
 
-            {/* Row 1: Products, Customers, Categories */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable 
                 title="Top Categories" 
@@ -723,10 +665,22 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
               />
             </div>
 
-            {/* Row 2: NEW ANALYTICS (Slow Moving & Churn) */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable 
-                title="⚠️ Slow-Moving Inventory" 
+                title="Sales Channels" 
+                subtitle="POS vs Online"
+                loading={advLoading}
+                currency={activeStore.currency}
+                data={advancedData.curr?.channels || []}
+                columns={[
+                  { key: "channel", label: "Channel", color: "#d8c8a8" },
+                  { key: "orders", label: "Orders", align: "right" },
+                  { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+                  { key: "aov", label: "AOV", align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+                ]}
+              />
+              <AdvancedTable 
+                title="⚠️ Slow-Moving Inventory"
                 subtitle="Capital tied up in low-turnover stock"
                 loading={advLoading}
                 currency={activeStore.currency}
@@ -752,7 +706,7 @@ const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&e
               ["New Customers",   totalNewC || "—",                                         "#8aaa8a"],
               ["Total Discounts", fmtK(totalDisc, activeStore.currency),                    "#C9A84C"],
               ["Discount Impact", advancedData.curr?.metrics?.discountImpactRatio ? `${(advancedData.curr.metrics.discountImpactRatio * 100).toFixed(1)}%` : "—", "#f87171"],
-              ["Gross Profit",    gp !== null ? fmtK(gp, activeStore.currency) : "—",       "#C97C9E"],
+              ["Gross Profit",     gp !== null ? fmtK(gp, activeStore.currency) : "—",       "#C97C9E"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "#3a3020", marginBottom: 2 }}>{lbl}</div>
