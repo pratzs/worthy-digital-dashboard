@@ -14,6 +14,11 @@ export async function GET(request) {
   const endpoint = `https://${store}/admin/api/2025-01/graphql.json`;
   const headers  = { "X-Shopify-Access-Token": token, "Content-Type": "application/json" };
 
+  // channel filter: "pos" | "online" | "all" (default)
+  const channelFilter = searchParams.get("channel") || "all";
+  const isPosFn = (appName) =>
+    appName.includes("point of sale") || appName === "pos" || appName.includes("shopify pos");
+
   // ── GraphQL: 250 per page (max), no staffMember (needs extra scope) ────────
   const query = `
     query getDeepAnalytics($query: String!, $cursor: String) {
@@ -105,9 +110,14 @@ export async function GET(request) {
     allOrders.forEach(order => {
       const orderDate    = new Date(order.createdAt);
       const inPeriod     = orderDate >= startD && orderDate <= endD;
-      const monthIndex   = orderDate.getMonth();
       const orderRevenue = parseFloat(order.totalPriceSet?.shopMoney?.amount  || 0);
       const orderDisc    = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
+
+      // ── Channel filter ────────────────────────────────────────────────────
+      const appName = (order.app?.name || "").toLowerCase();
+      const isPos   = isPosFn(appName);
+      if (channelFilter === "pos"    && !isPos) return;
+      if (channelFilter === "online" &&  isPos) return;
 
       // ── Customers (track across full fetched range for churn) ──────────────
       if (order.customer) {
@@ -140,9 +150,7 @@ export async function GET(request) {
       totalRevenue  += orderRevenue;
       totalDiscount += orderDisc;
 
-      // ── Channel detection (POS vs Online) ──────────────────────────────────
-      const appName = (order.app?.name || "").toLowerCase();
-      const isPos   = appName.includes("point of sale") || appName === "pos" || appName.includes("shopify pos");
+      // ── Channel tracking (POS vs Online totals) ────────────────────────────
       if (isPos) {
         channels.pos.orders   += 1;
         channels.pos.revenue  += orderRevenue;

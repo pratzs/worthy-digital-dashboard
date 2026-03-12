@@ -174,6 +174,7 @@ export default function EcommerceDashboard() {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading,   setAdvLoading]   = useState(false);
+  const [channelTab,   setChannelTab]   = useState("pos"); // "pos" | "online"
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef   = useRef({});
@@ -188,16 +189,19 @@ export default function EcommerceDashboard() {
     try {
       const r    = await fetch("/api/shopify?year=" + year);
       const json = await r.json();
-      const monthly = json.monthly?.length > 0
-        ? json.monthly.map(m => ({
-            ...m,
-            // API returns convRate as decimal (0.0346), convert to percentage (3.46)
-            convRate: m.convRate ? +((m.convRate * 100).toFixed(2)) : 0,
-          }))
-        : generateEmptyYear();
-      cacheRef.current[key] = monthly;
+      const convert = (arr) => (arr?.length > 0 ? arr.map(m => ({
+        ...m,
+        convRate: m.convRate ? +((m.convRate * 100).toFixed(2)) : 0,
+      })) : generateEmptyYear());
+      cacheRef.current[key] = {
+        all:         convert(json.monthly),
+        pos:         convert(json.monthlyPos),
+        online:      convert(json.monthlyOnline),
+        salespeople: json.salespeople || [],
+      };
     } catch {
-      cacheRef.current[key] = generateEmptyYear();
+      const empty = generateEmptyYear();
+      cacheRef.current[key] = { all: empty, pos: empty, online: empty, salespeople: [] };
     }
     loadingRef.current[key] = false;
     forceUpdate();
@@ -213,14 +217,15 @@ export default function EcommerceDashboard() {
       ]);
       setAdvLoading(true);
       try {
-        const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
+        const channelParam = activeStore.id === "worthy" ? `&channel=${channelTab}` : "";
+        const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
         const data = await res.json();
         setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
       } catch (e) { console.error("Advanced fetch failed", e); }
       setAdvLoading(false);
     };
     load();
-  }, [activeStore.id, selectedYear, startDate, endDate]); // eslint-disable-line
+  }, [activeStore.id, selectedYear, startDate, endDate, channelTab]); // eslint-disable-line
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
@@ -229,7 +234,19 @@ export default function EcommerceDashboard() {
     }
   }, [activeStore.id, view]); // eslint-disable-line
 
-  const getMonthly = (year) => cacheRef.current[activeStore.id + ":" + year] || generateMonthlyData(activeStore.id, year);
+  const getMonthly = (year) => {
+    const cached = cacheRef.current[activeStore.id + ":" + year];
+    if (!cached) return generateMonthlyData(activeStore.id, year);
+    if (activeStore.id !== "worthy") return cached;
+    // Return channel-specific slice for worthy store
+    if (channelTab === "pos")    return cached.pos    || generateEmptyYear();
+    if (channelTab === "online") return cached.online || generateEmptyYear();
+    return cached.all || generateEmptyYear();
+  };
+  const getSalespeople = () => {
+    const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
+    return cached?.salespeople || [];
+  };
   const isLoading  = (year) => !!loadingRef.current[activeStore.id + ":" + year];
   const hasData    = (year) => activeStore.id !== "worthy" || !!cacheRef.current[activeStore.id + ":" + year];
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
@@ -363,6 +380,17 @@ export default function EcommerceDashboard() {
     { key: "qtySold",     label: "Units Now",   align: "right", color: "#aa8a8a" },
     { key: "prevQtySold", label: "Units Prev",  align: "right", color: "#6a7a8a" },
   ];
+  const salespersonColumns = [
+    { key: "name",    label: "Staff Member", color: "#d8c8a8" },
+    { key: "orders",  label: "Orders",       align: "right", color: "#7C9EC9" },
+    { key: "revenue", label: "Revenue",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(Math.round(v), c) },
+    { key: "aov",     label: "Avg Order",    align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+  ];
+  const salespeople = getSalespeople().map(s => ({
+    ...s,
+    revenue: Math.round(s.revenue),
+    aov: s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
+  }));
 
   // FIX 4: was [activeStore, selectedYear] — object reference caused potential infinite loop
   useEffect(() => {
@@ -409,6 +437,28 @@ export default function EcommerceDashboard() {
           })}
         </div>
       </div>
+
+      {/* CHANNEL SUB-TABS — only shown for Worthy North (live store) */}
+      {activeStore.id === "worthy" && (
+        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 32px", background: "rgba(255,255,255,0.01)", display: "flex", alignItems: "center", gap: 4 }}>
+          {[
+            { id: "pos",    label: "🏪  POS Sales" },
+            { id: "online", label: "🌐  Online Sales" },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
+              padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
+              border: "none", borderBottom: channelTab === tab.id ? `2px solid ${accent}` : "2px solid transparent",
+              background: "transparent", color: channelTab === tab.id ? accent : "#4a4030",
+              cursor: "pointer", transition: "all 0.2s", marginBottom: -1,
+            }}>
+              {tab.label}
+            </button>
+          ))}
+          <div style={{ marginLeft: "auto", fontSize: 10, color: "#3a3020", paddingRight: 8 }}>
+            {channelTab === "pos" ? "In-person POS orders only" : "Online store orders · includes sessions & conv rate"}
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: "32px 32px 0" }}>
         {/* View toggle */}
@@ -635,6 +685,13 @@ export default function EcommerceDashboard() {
               <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns} />
               <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} />
             </div>
+
+            {/* Salesperson table — POS only */}
+            {channelTab === "pos" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+                <AdvancedTable title="👤 Sales by Staff Member" subtitle="POS performance by salesperson" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} />
+              </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable title="Sales Channels" subtitle="POS vs Online" loading={advLoading} currency={activeStore.currency}
