@@ -166,6 +166,13 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
 export default function EcommerceDashboard() {
   const [activeStore, setActiveStore]   = useState(STORES[0]);
   const [selectedYear, setSelectedYear] = useState(2026);
+  
+  // --- NEW DATE STATES FOR ADVANCED FETCH ---
+  const todayStr = new Date().toISOString().split('T')[0];
+  const firstOfYear = `${new Date().getFullYear()}-01-01`;
+  const [startDate, setStartDate] = useState(firstOfYear);
+  const [endDate, setEndDate] = useState(todayStr);
+
   const [view, setView]                 = useState("monthly");
   const [animated, setAnimated]         = useState(true);
   const [activeMetric, setActiveMetric] = useState("revenue");
@@ -207,33 +214,26 @@ export default function EcommerceDashboard() {
     if (activeStore.id !== "worthy") return;
 
     const loadDashboardData = async () => {
-      // 1. Fetch main charts sequentially
+      // 1. Fetch main charts sequentially (Still respects selectedYear UI)
       await fetchYear(activeStore.id, selectedYear);
       await fetchYear(activeStore.id, selectedYear - 1);
 
-      // 2. Fetch advanced tables sequentially
+      // 2. Fetch advanced tables using Custom Dates
       setAdvLoading(true);
       try {
-        const currResponse = await fetch(`/api/shopify/advanced?year=${selectedYear}`);
+        const currResponse = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}`);
         const curr = await currResponse.json();
         
-        // Give Shopify's API bucket a tiny breather
-        await new Promise(res => setTimeout(res, 500)); 
-        
-        const prevResponse = await fetch(`/api/shopify/advanced?year=${selectedYear - 1}`);
-        const prev = await prevResponse.json();
-        
-        // LOG THIS to your browser console to see what's actually coming back
         console.log("API RAW DATA:", curr);
 
         setAdvancedData({ 
           curr: {
             ...curr,
-            // Fallback to empty arrays if the API forgot them
             slowMoving: curr.slowMoving || [],
             churned: curr.churned || []
           }, 
-          prev 
+          // Previous period fetch disabled for now to respect custom date logic without breaking YoY arrays
+          prev: {} 
         });
       } catch(e) {
         console.error("Advanced fetch failed", e);
@@ -242,7 +242,7 @@ export default function EcommerceDashboard() {
     };
 
     loadDashboardData();
-  }, [activeStore.id, selectedYear]); // eslint-disable-line
+  }, [activeStore.id, selectedYear, startDate, endDate]); // Added date dependencies here!
 
   useEffect(() => {
     if (view === "yoy" && activeStore.id === "worthy") {
@@ -253,7 +253,7 @@ export default function EcommerceDashboard() {
       };
       loadAllYears();
     }
-  }, [activeStore.id, view]); // eslint-disable-line
+  }, [activeStore.id, view]); 
 
   const getMonthly = (year) => {
     const key = activeStore.id + ":" + year;
@@ -297,7 +297,7 @@ export default function EcommerceDashboard() {
   
   const totalMarginableRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const trueOverallMargin  = (totalMarginableRev > 0) ? ((totalMarginableRev - totalCost) / totalMarginableRev) : null;
-  const gp       = trueOverallMargin !== null ? Math.round(totalRev * trueOverallMargin) : null;
+  const gp         = trueOverallMargin !== null ? Math.round(totalRev * trueOverallMargin) : null;
   const gpMargin = trueOverallMargin !== null ? Math.round(trueOverallMargin * 100) : null;
   const accent   = activeStore.color;
 
@@ -335,7 +335,6 @@ export default function EcommerceDashboard() {
   let customerColumns = [];
   let categoryColumns = [];
 
-  // MOVE THESE HERE (Outside the if/else)
   const slowMovingColumns = [
     { key: "name", label: "Product", color: "#d8c8a8" },
     { key: "currentStock", label: "Stock", align: "right", color: "#C9A84C" },
@@ -358,21 +357,18 @@ export default function EcommerceDashboard() {
   if (view === "monthly") {
     displayProducts = advancedData.curr?.topProducts?.map(p => {
       if (tableMonth === "all") return { ...p, margin: p.revenue ? Math.round(((p.revenue - p.cost)/p.revenue)*100) : 0 };
-      // ADD THE QUESTION MARK HERE: p.monthly?.[...]
       const mData = p.monthly?.[parseInt(tableMonth)] || { revenue: 0, cost: 0, qty: 0 };
       return { ...p, ...mData, margin: mData.revenue ? Math.round(((mData.revenue - mData.cost)/mData.revenue)*100) : 0 };
     }).filter(p => p.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
 
     displayCustomers = advancedData.curr?.topCustomers?.map(c => {
       if (tableMonth === "all") return c;
-      // ADD THE QUESTION MARK HERE: c.monthly?.[...]
       const mData = c.monthly?.[parseInt(tableMonth)] || { revenue: 0, cost: 0 };
       return { ...c, ...mData };
     }).filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 20);
 
     displayCategories = advancedData.curr?.topCategories?.map(c => {
       if (tableMonth === "all") return c;
-      // ADD THE QUESTION MARK HERE: c.monthly?.[...]
       const mData = c.monthly?.[parseInt(tableMonth)] || { revenue: 0, qty: 0 };
       return { ...c, ...mData };
     }).filter(c => c.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
@@ -394,21 +390,6 @@ export default function EcommerceDashboard() {
       { key: "qty", label: "Units Sold", align: "right" },
       { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
     ];
-    // NEW: Slow Moving Inventory Columns
-  const slowMovingColumns = [
-    { key: "name", label: "Product", color: "#d8c8a8" },
-    { key: "currentStock", label: "Stock", align: "right", color: "#C9A84C" },
-    { key: "qtySold", label: "Sold", align: "right", color: "#9EC97C" },
-    { key: "lockedCapital", label: "Value Locked", align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
-  ];
-
-  // NEW: Churned Customer Columns
-  const churnedColumns = [
-    { key: "name", label: "Customer", color: "#d8c8a8" },
-    { key: "lastOrderDate", label: "Last Order", align: "right", format: v => new Date(v).toLocaleDateString() },
-    { key: "revenue", label: "Total Spend", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-    { key: "status", label: "Risk", align: "center", format: () => <span style={{color: "#f87171", fontWeight: 700}}>LAPSED</span> },
-  ];
   } else {
     displayProducts = advancedData.curr?.topProducts?.map(p => {
       const prevP = advancedData.prev?.topProducts?.find(x => x.name === p.name);
@@ -430,20 +411,20 @@ export default function EcommerceDashboard() {
 
     productColumns = [
       { key: "name", label: "Product", color: "#d8c8a8" },
-      { key: "prevRevenue", label: `FY${selectedYear-1}`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
-      { key: "revenue", label: `FY${selectedYear}`, align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+      { key: "prevRevenue", label: `Prev Range`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
+      { key: "revenue", label: `Current`, align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
       { key: "yoy", label: "Growth", align: "right", format: v => <GrowthBadge value={v} /> },
     ];
     customerColumns = [
       { key: "name", label: "Customer", color: "#d8c8a8" },
-      { key: "prevRevenue", label: `FY${selectedYear-1}`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
-      { key: "revenue", label: `FY${selectedYear}`, align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+      { key: "prevRevenue", label: `Prev Range`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
+      { key: "revenue", label: `Current`, align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
       { key: "yoy", label: "Growth", align: "right", format: v => <GrowthBadge value={v} /> },
     ];
     categoryColumns = [
       { key: "name", label: "Category", color: "#d8c8a8" },
-      { key: "prevRevenue", label: `FY${selectedYear-1}`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
-      { key: "revenue", label: `FY${selectedYear}`, align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
+      { key: "prevRevenue", label: `Prev Range`, align: "right", color: "#8a9aaa", format: (v, c) => fmtK(v, c) },
+      { key: "revenue", label: `Current`, align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
       { key: "yoy", label: "Growth", align: "right", format: v => <GrowthBadge value={v} /> },
     ];
   }
@@ -512,8 +493,8 @@ export default function EcommerceDashboard() {
         {/* KPI Row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
           <KPICard label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} />
-          <KPICard label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"  sub="count"    animated={animated} currency={activeStore.currency} />
+          <KPICard label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"  sub="currency" animated={animated} currency={activeStore.currency} />
           <KPICard label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} />
         </div>
 
@@ -708,8 +689,31 @@ export default function EcommerceDashboard() {
         {/* ADVANCED ANALYTICS GRID */}
         {activeStore.id === "worthy" && (
           <>
+            {/* --- NEW DATE RANGE PICKER UI --- */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16 }}>
+              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: "#f0e8d8", fontWeight: 600 }}>Advanced Table Date Filter:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+                />
+                <span style={{ color: "#5a5040", fontSize: 12 }}>to</span>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{ background: "#0a0c12", color: "#c0a870", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+                />
+              </div>
+              <div style={{ fontSize: 10, color: "#4a4030", marginLeft: "auto" }}>
+                Filters Top Products, Customers, Categories & Inventory below.
+              </div>
+            </div>
+
             {/* Row 1: Products, Customers, Categories */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable 
                 title="Top Categories" 
                 subtitle="By Revenue"
