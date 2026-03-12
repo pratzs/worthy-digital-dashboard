@@ -694,14 +694,6 @@ export default function EcommerceDashboard() {
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="Sales Channels" subtitle="POS vs Online" loading={advLoading} currency={activeStore.currency}
-                data={advancedData.curr?.channels || []}
-                columns={[
-                  { key: "channel", label: "Channel", color: "#d8c8a8" },
-                  { key: "orders",  label: "Orders",  align: "right" },
-                  { key: "revenue", label: "Revenue", align: "right", color: "#C9A84C", format: (v, c) => fmtK(v, c) },
-                  { key: "aov",     label: "AOV",     align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-                ]} />
               <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} />
               <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} />
             </div>

@@ -101,16 +101,19 @@ export async function GET(request) {
     }
 
     // ── Separate staff fetch (non-fatal, needs read_staff scope) ────────────
-    const staffByCreatedAt = {}; // ISO createdAt string → staff name
+    const staffByCreatedAt = {};
     try {
       let staffPage = true, staffCursor = null;
       while (staffPage) {
         const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffOrdersQuery, variables: { query: dateQuery, cursor: staffCursor } }) });
         const { data, errors } = await res.json();
-        if (errors) { console.warn("staffMember not available:", errors[0].message); break; }
-        data.orders.edges.forEach(({ node: o }) => {
-          if (o.staffMember?.name) staffByCreatedAt[o.createdAt] = o.staffMember.name;
-        });
+        if (errors) {
+          console.warn("Staff fetch GraphQL error:", JSON.stringify(errors));
+          break;
+        }
+        const fetched = data.orders.edges.filter(({ node: o }) => o.staffMember?.name);
+        console.log(`Staff fetch: ${data.orders.edges.length} orders, ${fetched.length} with named staff`);
+        fetched.forEach(({ node: o }) => { staffByCreatedAt[o.createdAt] = o.staffMember.name; });
         staffPage   = data.orders.pageInfo.hasNextPage;
         staffCursor = data.orders.pageInfo.endCursor;
       }
