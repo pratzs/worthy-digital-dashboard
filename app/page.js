@@ -123,8 +123,52 @@ const StorePill = ({ store, active, onClick }) => (
   </button>
 );
 
+const WORTHY_CONTEXT = `
+You are a senior business analyst embedded at Worthy Products NZ, a wholesale confectionery and beverages distributor based in Auckland.
+
+BUSINESS OVERVIEW:
+- Wholesale distributor of confectionery and beverages to the NZ trade market
+- Procures locally (NZ) and imports from: USA, Thailand, Korea, Australia, Vietnam, Malaysia, China and other markets
+- Customers: Dairies, supermarkets, petrol stations/gas stations, local corner stores, night market vendors, event suppliers
+- Also runs a small B2C channel where end customers buy by the carton and pay online directly
+- B2B customers are on credit terms; B2C customers pay upfront online
+- Currency: NZD. Target gross margin: 20% annually
+- Main competitors: DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports — all aggressive online
+
+SALES TEAM (5 reps, all via POS/field sales):
+- Hari Patel: Auckland East, West, North Shore
+- Nayan Patel: Auckland East, West, North Shore (works alongside Hari)
+- Rubin Monpara: South Auckland including Pukekohe, Waiuku, Tuakau
+- Savan: Waikato Region including Hawke's Bay
+- Naitik Trivedi: Northland including Whangārei
+
+CHANNELS:
+- POS/Field Sales: Reps visit stores directly, take orders on the spot
+- Online Sales: Covers ALL of NZ — rep territories + remote areas reps can't reach. Strategic priority to grow online significantly to compete with DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports.
+
+SEASONALITY (NZ Southern Hemisphere):
+- Winter (June–August): Chocolate and warm confectionery sells strongly
+- Summer (December–February): Beverages, cold drinks, summer snacks spike
+- School holidays and events can cause spikes in dairy/convenience channel
+
+STRATEGIC PRIORITIES:
+1. Grow online sales aggressively — this is the #1 growth lever right now
+2. Defend territory against competitors with strong online presence
+3. Maintain 20% gross margin target
+4. Identify slow-moving imported stock early (import lead times make overstock costly)
+5. Keep B2B credit customers ordering regularly — churn is expensive to recover
+
+When analysing data, always:
+- Reference specific rep names and their territories where relevant
+- Call out seasonality if it explains trends (e.g. "beverage spike expected in summer months Dec–Feb")
+- Flag margin concerns vs the 20% target
+- Highlight online channel growth opportunities specifically
+- Note if imported product lines are at risk (slow-moving imported stock ties up capital and has long reorder lead times)
+- Be direct and actionable — the audience is the owner and sales manager, not an analyst
+`;
+
 // ── AI Insights Panel ─────────────────────────────────────────────────────────
-const AIInsights = ({ data, context, currency }) => {
+const AIInsights = ({ data, context, currency, extraContext }) => {
   const [insight, setInsight]   = useState(null);
   const [loading, setLoading]   = useState(false);
   const [open,    setOpen]      = useState(false);
@@ -133,24 +177,25 @@ const AIInsights = ({ data, context, currency }) => {
     if (insight) { setOpen(o => !o); return; }
     setLoading(true); setOpen(true);
     try {
-      const prompt = `You are a wholesale trade business analyst for Worthy Products NZ, a FMCG/grocery distribution company.
+      const prompt = `${WORTHY_CONTEXT}
 
-Analyse this ${context} data and provide 3-4 specific, actionable insights. Be direct and concise. Focus on:
-- What's working and why
-- What needs attention
-- Specific actions the sales/ops team should take
+${extraContext ? extraContext + "\n\n" : ""}Analyse this ${context} data and provide 4-5 specific, actionable insights. Be direct. Reference rep names, territories, and product categories where relevant.
 
 Data (${currency}):
-${JSON.stringify(data?.slice?.(0,20) ?? data, null, 2)}
+${JSON.stringify(data?.slice?.(0,25) ?? data, null, 2)}
 
-Format: Brief title + 1-2 sentence explanation for each insight. No fluff.`;
+Format your response as:
+**[Insight Title]**
+1-2 sentences of direct, specific analysis and recommended action.
+
+No generic advice. Every point must reference something specific in the data.`;
 
       const res  = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
+          max_tokens: 1200,
           messages: [{ role: "user", content: prompt }],
         }),
       });
@@ -165,16 +210,16 @@ Format: Brief title + 1-2 sentence explanation for each insight. No fluff.`;
   return (
     <div style={{ marginTop: 12 }}>
       <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.06)", color: "#C9A84C", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
-        <span>✦</span>{loading ? "Analysing…" : open ? "Hide AI Insights" : "AI Insights"}
+        <span>✦</span>{loading ? "Analysing…" : open ? "Hide AI Insights" : "✦ AI Insights"}
       </button>
       {open && !loading && insight && (
-        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#c0a870", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#c0a870", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
           {insight}
         </div>
       )}
       {open && loading && (
         <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)", fontSize: 11, color: "#6a5a40" }}>
-          ✦ Analysing data…
+          ✦ Analysing Worthy Products data…
         </div>
       )}
     </div>
@@ -252,7 +297,7 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
   );
 };
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, headerExtra }) => (
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra }) => (
   <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -292,7 +337,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
       </table>
     </div>
     {aiContext && !loading && data?.length > 0 && (
-      <AIInsights data={data} context={aiContext} currency={currency} />
+      <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} />
     )}
   </div>
 );
@@ -831,21 +876,27 @@ export default function EcommerceDashboard() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable title="Top Categories" subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
                 onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
-                aiContext="top revenue categories" />
-              <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products" />
-              <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend" />
+                aiContext="top revenue categories"
+                aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
+              <AdvancedTable title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
+                aiExtra="Note any imported products in the top list — these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
+              <AdvancedTable title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
+                aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
             </div>
 
             {/* Salesperson table — POS only */}
             {channelTab === "pos" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                <AdvancedTable title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance" />
+                <AdvancedTable title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                  aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
               </div>
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory" />
-              <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers" />
+              <AdvancedTable title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
+                aiExtra="Pay special attention to imported products — slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
+              <AdvancedTable title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
+                aiExtra="These are likely dairies, gas stations or corner stores that may have switched to Gilmours, DKSH or Stock4Shop. Suggest which rep should personally visit and what offer might win them back." />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
