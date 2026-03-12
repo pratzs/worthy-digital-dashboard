@@ -190,17 +190,13 @@ Format your response as:
 
 No generic advice. Every point must reference something specific in the data.`;
 
-      const res  = await fetch("https://api.anthropic.com/v1/messages", {
+      const res  = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1200,
-          messages: [{ role: "user", content: prompt }],
-        }),
+        body: JSON.stringify({ prompt }),
       });
       const json = await res.json();
-      setInsight(json.content?.[0]?.text || "No insights available.");
+      setInsight(json.text || json.error || "No insights available.");
     } catch (e) {
       setInsight("Failed to load insights. Please try again.");
     }
