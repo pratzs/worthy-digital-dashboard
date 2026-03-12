@@ -113,13 +113,16 @@ export async function GET(request) {
             name: order.customer.displayName || "Unknown",
             email: order.customer.email || "",
             lastOrderDate: orderDate,
-            revenue: 0,
+            revenue: 0,          // current period spend (for topCustomers)
+            lifetimeRevenue: 0,  // full fetched range spend (for churned)
             orderCount: 0,
           };
         }
         if (orderDate > customers[cId].lastOrderDate) {
           customers[cId].lastOrderDate = orderDate;
         }
+        // Always accumulate lifetime revenue across full fetched range
+        customers[cId].lifetimeRevenue += orderRevenue;
         if (inPeriod) {
           customers[cId].revenue    += orderRevenue;
           customers[cId].orderCount += 1;
@@ -252,7 +255,7 @@ export async function GET(request) {
 
     const churned = Object.values(customers)
       .filter(c => (todayMs - new Date(c.lastOrderDate).getTime()) / 86400000 > 90)
-      .map(c => ({ ...c, revenue: round2(c.revenue) }))
+      .map(c => ({ ...c, revenue: round2(c.lifetimeRevenue) })) // show lifetime spend
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 15);
 
