@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+// CRITICAL FIX: Tell Vercel to allow up to 60 seconds for this heavy analytics route
+export const maxDuration = 60; 
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -14,12 +16,10 @@ export async function GET(request) {
     "Content-Type": "application/json",
   };
 
-  const sleep = ms => new Promise(res => setTimeout(res, ms));
-
-  // Optimized Query: Fetches Discounts, Customer History, and Inventory Levels
+  // Optimized Query
   const query = `
     query getDeepAnalytics($query: String!, $cursor: String) {
-      orders(first: 40, query: $query, after: $cursor) {
+      orders(first: 50, query: $query, after: $cursor) {
         pageInfo { hasNextPage, endCursor }
         edges {
           node {
@@ -41,16 +41,15 @@ export async function GET(request) {
                   product { productType }
                   variant {
                     price
-                    # Replace the inventoryItem block in your query with this:
                     inventoryItem { 
-                    unitCost { amount }
-                    # Fetching total available across the first location found
-                    inventoryLevels(first: 1) {
+                      unitCost { amount }
+                      inventoryLevels(first: 1) {
                         nodes {
-                        quantities(names: ["available"]) { quantity }
+                          quantities(names: ["available"]) { quantity }
                         }
+                      }
                     }
-                    }
+                  }
                 }
               }
             }
@@ -77,15 +76,20 @@ export async function GET(request) {
       });
 
       const { data, errors } = await response.json();
-      if (errors) throw new Error(errors[0].message);
+      
+      if (errors) {
+        console.error("GraphQL Error:", errors);
+        throw new Error(errors[0].message);
+      }
 
       allOrders = allOrders.concat(data.orders.edges.map(e => e.node));
       hasNextPage = data.orders.pageInfo.hasNextPage;
       cursor = data.orders.pageInfo.endCursor;
-      if (hasNextPage) await sleep(500); 
+      
+      // Removed the 500ms sleep. We only sleep a tiny bit to prevent stack overflow, 
+      // relying on Shopify's generous 50pts/sec GraphQL bucket instead.
+      if (hasNextPage) await new Promise(res => setTimeout(res, 50)); 
     }
-
-    // ... inside your try block, after the while loop ...
 
     const products = {};
     const customers = {};
@@ -95,17 +99,18 @@ export async function GET(request) {
 
     allOrders.forEach(order => {
       const orderDate = new Date(order.createdAt);
-      const orderRevenue = parseFloat(order.totalPriceSet.shopMoney.amount);
+      const orderRevenue = parseFloat(order.totalPriceSet?.shopMoney?.amount || 0);
       const orderDiscount = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
 
       totalYearlyRevenue += orderRevenue;
       totalYearlyDiscounts += orderDiscount;
 
+      // Customer Processing
       if (order.customer) {
         const cId = order.customer.id;
         if (!customers[cId]) {
           customers[cId] = {
-            name: order.customer.displayName || "Unknown",
+            name: order.customer.displayName || "Unknown Customer",
             email: order.customer.email,
             lastOrderDate: orderDate,
             revenue: 0,
@@ -117,32 +122,32 @@ export async function GET(request) {
         if (orderDate > customers[cId].lastOrderDate) customers[cId].lastOrderDate = orderDate;
       }
 
+      // Line Item Processing
       order.lineItems.edges.forEach(({ node: item }) => {
-        const title = item.title;
+        const title = item.title || "Unknown Item";
         const catName = item.product?.productType || "Uncategorized";
-        const qty = item.quantity;
+        const qty = item.quantity || 0;
         const price = parseFloat(item.variant?.price || 0);
         const cost = parseFloat(item.variant?.inventoryItem?.unitCost?.amount || 0);
-
+        
+        // Safely extract the stock quantity
         const stockNode = item.variant?.inventoryItem?.inventoryLevels?.nodes?.[0];
         const stock = stockNode?.quantities?.[0]?.quantity || 0;
 
+        // Initialize Product
         if (!products[title]) {
           products[title] = { 
-            name: title, 
-            revenue: 0, 
-            qtySold: 0, 
-            currentStock: stock, 
-            unitCost: cost, 
-            lockedCapital: 0 
+            name: title, revenue: 0, qtySold: 0, 
+            currentStock: stock, unitCost: cost, lockedCapital: 0 
           };
         }
-
-        // CRITICAL: Update the values for every item found in orders
+        
+        // Increment Data
         products[title].revenue += (price * qty);
         products[title].qtySold += qty;
-        products[title].lockedCapital = stock * cost;
+        products[title].lockedCapital = products[title].currentStock * products[title].unitCost;
 
+        // Initialize Category
         if (!categories[catName]) {
           categories[catName] = { name: catName, revenue: 0, qty: 0 };
         }
@@ -151,25 +156,33 @@ export async function GET(request) {
       });
     });
 
-    // REPORT FIXES:
     const today = new Date();
     
-    // 1. Slow Moving: Include items with 0 sales this year if they have stock
+    // Formatting: Ensure everything drops to 2 decimal places to prevent messy UI numbers
+    const formatDecimals = (obj) => ({
+      ...obj,
+      revenue: parseFloat(obj.revenue.toFixed(2)),
+      lockedCapital: obj.lockedCapital ? parseFloat(obj.lockedCapital.toFixed(2)) : 0
+    });
+
+    // Slow Moving: High stock, low sales
     const slowMoving = Object.values(products)
-      .filter(p => p.currentStock > 5 && p.qtySold < 10) // Adjusted thresholds for Worthy
+      .filter(p => p.currentStock > 5 && p.qtySold < 10)
+      .map(formatDecimals)
       .sort((a, b) => b.lockedCapital - a.lockedCapital)
       .slice(0, 15);
 
-    // 2. Churned: Customers in this year's data whose last order was > 90 days ago
+    // Churned: No orders in 90+ days
     const churned = Object.values(customers)
       .filter(c => (today - new Date(c.lastOrderDate)) / (1000 * 60 * 60 * 24) > 90)
+      .map(formatDecimals)
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 15);
 
     return NextResponse.json({
-      topProducts: Object.values(products).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
-      topCustomers: Object.values(customers).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
-      topCategories: Object.values(categories).sort((a, b) => b.revenue - a.revenue),
+      topProducts: Object.values(products).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
+      topCustomers: Object.values(customers).map(formatDecimals).sort((a, b) => b.revenue - a.revenue).slice(0, 50),
+      topCategories: Object.values(categories).map(formatDecimals).sort((a, b) => b.revenue - a.revenue),
       slowMoving,
       churned,
       metrics: {
@@ -179,7 +192,7 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    console.error("Advanced API Error:", error);
+    console.error("🚨 Advanced API Crash:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
