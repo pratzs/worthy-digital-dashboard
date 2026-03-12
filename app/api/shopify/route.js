@@ -70,8 +70,11 @@ export async function GET(request) {
       fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: analyticsQuery }) }),
     ]);
 
+    let analyticsDebug = {};
     try {
       const analyticsJson = await analyticsRes.json();
+      analyticsDebug = analyticsJson; // expose full response for debugging
+
       const tableData = analyticsJson?.data?.shopifyqlQuery?.tableData;
 
       if (tableData?.rowData && tableData?.columns) {
@@ -83,7 +86,6 @@ export async function GET(request) {
         tableData.rowData.forEach(row => {
           const parsed   = JSON.parse(row);
           if (mIdx === -1 || !parsed[mIdx]) return;
-          // month value is like "2026-01-01" — extract month index
           const monthNum = parseInt(String(parsed[mIdx]).slice(5, 7)) - 1;
           analyticsMonthly[monthNum] = {
             sessions: parseInt(parsed[sIdx]  || 0),
@@ -95,7 +97,7 @@ export async function GET(request) {
       }
     } catch (e) {
       console.error("Analytics fetch/parse error:", e.message);
-      // Non-fatal — orders will still load, sessions just show 0
+      analyticsDebug = { error: e.message };
     }
 
     // ── Fetch orders (paginated) ─────────────────────────────────────────────
@@ -179,8 +181,9 @@ export async function GET(request) {
 
     return NextResponse.json({
       year,
-      totalOrders:  allOrders.length,
-      hasAnalytics: Object.keys(analyticsMonthly).length > 0,
+      totalOrders:    allOrders.length,
+      hasAnalytics:   Object.keys(analyticsMonthly).length > 0,
+      analyticsDebug, // remove this once working
       monthly,
     });
 
