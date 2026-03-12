@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // ← was missing, causes Vercel timeout on large years
+export const maxDuration = 60;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -15,7 +15,7 @@ export async function GET(request) {
     "Content-Type": "application/json",
   };
 
-  const query = `
+  const ordersQuery = `
     query getYearlyData($query: String!, $cursor: String) {
       orders(first: 250, query: $query, after: $cursor) {
         pageInfo { hasNextPage endCursor }
@@ -44,21 +44,71 @@ export async function GET(request) {
     }
   `;
 
+  // ShopifyQL: sessions + conversion rate by month (requires read_analytics scope)
+  const analyticsQuery = `
+    {
+      shopifyqlQuery(query: "FROM sessions SHOW sessions, orders_placed, conversion_rate SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY month ORDER BY month ASC") {
+        __typename
+        ... on TableResponse {
+          tableData {
+            columns { name dataType }
+            rowData
+          }
+        }
+        ... on ParseErrorResponse {
+          parseErrors { code message }
+        }
+      }
+    }
+  `;
+
   try {
+    // ── Fetch analytics + orders in parallel ────────────────────────────────
+    const analyticsMonthly = {}; // monthIndex (0-11) → { sessions, convRate }
+
+    const [analyticsRes] = await Promise.all([
+      fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: analyticsQuery }) }),
+    ]);
+
+    try {
+      const analyticsJson = await analyticsRes.json();
+      const tableData = analyticsJson?.data?.shopifyqlQuery?.tableData;
+
+      if (tableData?.rowData && tableData?.columns) {
+        const cols    = tableData.columns.map(c => c.name);
+        const mIdx    = cols.indexOf("month");
+        const sIdx    = cols.indexOf("sessions");
+        const convIdx = cols.indexOf("conversion_rate");
+
+        tableData.rowData.forEach(row => {
+          const parsed   = JSON.parse(row);
+          if (mIdx === -1 || !parsed[mIdx]) return;
+          // month value is like "2026-01-01" — extract month index
+          const monthNum = parseInt(String(parsed[mIdx]).slice(5, 7)) - 1;
+          analyticsMonthly[monthNum] = {
+            sessions: parseInt(parsed[sIdx]  || 0),
+            convRate: parseFloat(parsed[convIdx] || 0),
+          };
+        });
+      } else if (analyticsJson?.data?.shopifyqlQuery?.parseErrors) {
+        console.warn("ShopifyQL parse error:", JSON.stringify(analyticsJson.data.shopifyqlQuery.parseErrors));
+      }
+    } catch (e) {
+      console.error("Analytics fetch/parse error:", e.message);
+      // Non-fatal — orders will still load, sessions just show 0
+    }
+
+    // ── Fetch orders (paginated) ─────────────────────────────────────────────
     let allOrders   = [];
     let hasNextPage = true;
     let cursor      = null;
-
-    // Full day range with time to avoid missing orders near midnight NZ time
     const dateQuery = `created_at:>=${year}-01-01T00:00:00 AND created_at:<=${year}-12-31T23:59:59`;
 
     while (hasNextPage) {
       const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query, variables: { query: dateQuery, cursor } })
+        method: 'POST', headers,
+        body: JSON.stringify({ query: ordersQuery, variables: { query: dateQuery, cursor } })
       });
-
       const { data, errors } = await response.json();
       if (errors) throw new Error(errors[0].message);
       if (!data?.orders) throw new Error("No orders data returned from Shopify");
@@ -68,16 +118,17 @@ export async function GET(request) {
       cursor      = data.orders.pageInfo.endCursor;
     }
 
-    const months  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    // ── Build monthly breakdown ──────────────────────────────────────────────
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
     const monthly = months.map((month, i) => {
       const moOrders = allOrders.filter(o => new Date(o.createdAt).getMonth() === i);
 
-      let revenue          = 0;
-      let totalCost        = 0;
-      let totalDiscounts   = 0;
+      let revenue           = 0;
+      let totalCost         = 0;
+      let totalDiscounts    = 0;
       let marginableRevenue = 0;
-      let hasCostData      = false;
+      let hasCostData       = false;
 
       moOrders.forEach(o => {
         revenue        += parseFloat(o.totalPriceSet.shopMoney.amount);
@@ -87,7 +138,6 @@ export async function GET(request) {
           const cost  = parseFloat(li.variant?.inventoryItem?.unitCost?.amount || 0);
           const price = parseFloat(li.discountedUnitPriceSet?.shopMoney?.amount || 0);
           const qty   = li.quantity || 0;
-
           if (cost > 0) {
             totalCost         += cost * qty;
             marginableRevenue += price * qty;
@@ -99,15 +149,15 @@ export async function GET(request) {
       const orderCount  = moOrders.length;
       const grossProfit = hasCostData ? marginableRevenue - totalCost : 0;
       const marginPct   = (hasCostData && marginableRevenue > 0)
-        ? Math.round((grossProfit / marginableRevenue) * 100)
-        : 0;
+        ? Math.round((grossProfit / marginableRevenue) * 100) : 0;
 
-      // New customers: account created this month/year
       const newCustomers = moOrders.filter(o => {
         if (!o.customer?.createdAt) return false;
         const cd = new Date(o.customer.createdAt);
         return cd.getFullYear() === year && cd.getMonth() === i;
       }).length;
+
+      const analytics = analyticsMonthly[i] || { sessions: 0, convRate: 0 };
 
       return {
         month,
@@ -122,14 +172,15 @@ export async function GET(request) {
         returns:           0,
         totalDiscounts:    Math.round(totalDiscounts),
         hasCostData,
-        sessions:          0,
-        convRate:          0,
+        sessions:          analytics.sessions,
+        convRate:          analytics.convRate,
       };
     });
 
     return NextResponse.json({
       year,
-      totalOrders: allOrders.length,
+      totalOrders:  allOrders.length,
+      hasAnalytics: Object.keys(analyticsMonthly).length > 0,
       monthly,
     });
 
