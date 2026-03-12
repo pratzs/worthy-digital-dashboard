@@ -62,13 +62,6 @@ export async function GET(request) {
     let hasNextPage = true;
     let cursor      = null;
 
-    // Fetch from earlier so prevMonth comparison has data
-    const endYear   = new Date(endParam).getFullYear();
-    const fetchFrom = startPrevMo < new Date(`${endYear - 1}-01-01`) 
-      ? `${endYear - 1}-01-01` 
-      : startPrevMo.toISOString().split('T')[0];
-    const dateQuery = `created_at:>=${fetchFrom} AND created_at:<=${endParam}T23:59:59`;
-
     while (hasNextPage) {
       const res  = await fetch(endpoint, {
         method: 'POST', headers,
@@ -103,6 +96,13 @@ export async function GET(request) {
     const periodMs    = endD - startD;
     const startPrevMo = new Date(startD.getTime() - periodMs - 86400000);
     const endPrevMo   = new Date(startD.getTime() - 86400000);
+
+    // Fetch from earlier so prevMonth comparison has data
+    const endYear   = new Date(endParam).getFullYear();
+    const fetchFrom = startPrevMo < new Date(`${endYear - 1}-01-01`)
+      ? `${endYear - 1}-01-01`
+      : startPrevMo.toISOString().split('T')[0];
+    const dateQuery = `created_at:>=${fetchFrom} AND created_at:<=${endParam}T23:59:59`;
 
     const products   = {};
     const customers  = {};
