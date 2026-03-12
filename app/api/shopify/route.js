@@ -120,7 +120,6 @@ export async function GET(request) {
       orders: 0, newCustomers: 0, hasCostData: false,
     }));
     const allB = mkB(), posB = mkB(), onlineB = mkB();
-    const salespeople = {};
 
     allOrders.forEach(order => {
       const i       = new Date(order.createdAt).getMonth();
@@ -128,7 +127,6 @@ export async function GET(request) {
       const disc    = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
       const appName = (order.app?.name || "").toLowerCase();
       const isPos   = isPosFn(appName);
-      const staff   = staffByCreatedAt[order.createdAt] || (isPos ? "Unknown Staff" : null);
 
       let lineCost = 0, lineMargRev = 0, hasCD = false;
       order.lineItems.edges.forEach(({ node: li }) => {
@@ -153,13 +151,6 @@ export async function GET(request) {
         if (hasCD) b[i].hasCostData  = true;
         if (isNew) b[i].newCustomers += 1;
       });
-
-      if (isPos && staff) {
-        if (!salespeople[staff]) salespeople[staff] = { name: staff, revenue: 0, orders: 0, monthly: Array(12).fill(0) };
-        salespeople[staff].revenue    += rev;
-        salespeople[staff].orders     += 1;
-        salespeople[staff].monthly[i] += Math.round(rev);
-      }
     });
 
     // ── Convert buckets → monthly arrays ────────────────────────────────────
@@ -187,10 +178,7 @@ export async function GET(request) {
       monthly:      toMonthly(allB,    true),   // all orders + web sessions
       monthlyPos:   toMonthly(posB,    false),  // POS only, no web sessions
       monthlyOnline:toMonthly(onlineB, true),   // online only + web sessions
-      // Prefer ShopifyQL staff data (real names from admin report); fallback to order-derived
-      salespeople: salespeopleFromAnalytics.length > 0
-        ? salespeopleFromAnalytics
-        : Object.values(salespeople).sort((a, b) => b.revenue - a.revenue),
+      salespeople: salespeopleFromAnalytics,
     });
 
   } catch (error) {
