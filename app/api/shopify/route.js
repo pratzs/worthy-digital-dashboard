@@ -39,7 +39,7 @@ export async function GET(request) {
     }
   `;
 
-  // Separate query for POS staff — only runs if read_staff scope available
+  // Query POS orders to find where staff name is stored
   const staffOrdersQuery = `
     query getStaffOrders($query: String!, $cursor: String) {
       orders(first: 250, query: $query, after: $cursor) {
@@ -49,7 +49,10 @@ export async function GET(request) {
             createdAt
             totalPriceSet { shopMoney { amount } }
             app            { name }
-            staffMember    { name }
+            tags
+            note
+            customAttributes { key value }
+            location       { name }
           }
         }
       }
@@ -100,24 +103,44 @@ export async function GET(request) {
       cursor      = data.orders.pageInfo.endCursor;
     }
 
-    // ── Separate staff fetch (non-fatal, needs read_staff scope) ────────────
+    // ── Separate POS location/staff fetch ───────────────────────────────────
     const staffByCreatedAt = {};
+    let posOrdersDebugLogged = false;
     try {
       let staffPage = true, staffCursor = null;
       while (staffPage) {
         const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ query: staffOrdersQuery, variables: { query: dateQuery, cursor: staffCursor } }) });
         const { data, errors } = await res.json();
-        if (errors) {
-          console.warn("Staff fetch GraphQL error:", JSON.stringify(errors));
-          break;
-        }
-        const fetched = data.orders.edges.filter(({ node: o }) => o.staffMember?.name);
-        console.log(`Staff fetch: ${data.orders.edges.length} orders, ${fetched.length} with named staff`);
-        fetched.forEach(({ node: o }) => { staffByCreatedAt[o.createdAt] = o.staffMember.name; });
+        if (errors) { console.warn("POS detail fetch error:", JSON.stringify(errors)); break; }
+        data.orders.edges.forEach(({ node: o }) => {
+          const appName = (o.app?.name || "").toLowerCase();
+          if (!isPosFn(appName)) return;
+
+          // Log first 3 POS orders so we can see what fields contain staff info
+          if (!posOrdersDebugLogged) {
+            console.log("POS ORDER SAMPLE:", JSON.stringify({
+              tags: o.tags,
+              note: o.note,
+              customAttributes: o.customAttributes,
+              location: o.location,
+            }));
+            posOrdersDebugLogged = true;
+          }
+
+          // Try to extract staff name from known locations
+          const tagStaff  = (o.tags || []).find(t => /staff|rep|salesperson|driver|agent/i.test(t));
+          const attrStaff = (o.customAttributes || []).find(a => /staff|rep|salesperson|driver|agent|name/i.test(a.key));
+          const name = tagStaff
+            ? tagStaff.split(":")[1]?.trim() || tagStaff
+            : attrStaff
+            ? attrStaff.value
+            : o.note?.split("\n")[0]?.trim() || "Unassigned";
+          staffByCreatedAt[o.createdAt] = name;
+        });
         staffPage   = data.orders.pageInfo.hasNextPage;
         staffCursor = data.orders.pageInfo.endCursor;
       }
-    } catch (e) { console.warn("Staff fetch failed:", e.message); }
+    } catch (e) { console.warn("POS detail fetch failed:", e.message); }
 
     // ── Per-channel monthly buckets ──────────────────────────────────────────
     const mkB = () => Array(12).fill(null).map(() => ({

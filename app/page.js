@@ -381,7 +381,7 @@ export default function EcommerceDashboard() {
     { key: "prevQtySold", label: "Units Prev",  align: "right", color: "#6a7a8a" },
   ];
   const salespersonColumns = [
-    { key: "name",    label: "Staff Member", color: "#d8c8a8" },
+    { key: "name",    label: "Location",     color: "#d8c8a8" },
     { key: "orders",  label: "Orders",       align: "right", color: "#7C9EC9" },
     { key: "revenue", label: "Revenue",      align: "right", color: "#C9A84C", format: (v, c) => fmtK(Math.round(v), c) },
     { key: "aov",     label: "Avg Order",    align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
@@ -689,7 +689,7 @@ export default function EcommerceDashboard() {
             {/* Salesperson table — POS only */}
             {channelTab === "pos" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                <AdvancedTable title="👤 Sales by Staff Member" subtitle="POS performance by salesperson" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} />
+                <AdvancedTable title="🏪 POS Sales by Location" subtitle="Revenue breakdown by POS location" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} />
               </div>
             )}
 
