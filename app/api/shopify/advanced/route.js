@@ -257,7 +257,7 @@ export async function GET(request) {
       .filter(c => (todayMs - new Date(c.lastOrderDate).getTime()) / 86400000 > 90)
       .map(c => ({ ...c, revenue: round2(c.lifetimeRevenue) })) // show lifetime spend
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 15);
+      .slice(0, 50);
 
     const channelData = [
       { channel: "Online Sales", orders: channels.online.orders, revenue: round2(channels.online.revenue), aov: channels.online.orders > 0 ? round2(channels.online.revenue / channels.online.orders) : 0 },
