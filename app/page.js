@@ -227,7 +227,7 @@ No generic advice. Every point must reference something specific in the data.`;
 
   return (
     <div style={{ marginTop: 12 }}>
-      <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.06)", color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
+      <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${accent}50`, background: `${accent}10`, color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
         <span>✦</span>{loading ? "Analysing…" : open ? "Hide AI Insights" : "✦ AI Insights"}
       </button>
       {open && !loading && insight && (
@@ -253,7 +253,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div style={{ background: "#0d0f18", border: "1px solid rgba(201,168,76,0.3)", borderRadius: 20, padding: 28, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: "#0d0f18", border: `1px solid ${accent}50`, borderRadius: 20, padding: 28, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <div style={{ fontFamily: "'Cinzel',serif", fontSize: 16, color: accent, fontWeight: 700 }}>{category}</div>
@@ -328,7 +328,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
-          {title} {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading...</span>}
+          {title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
         </div>
         {headerExtra}
       </div>
@@ -347,7 +347,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
           {!loading && data?.map((row, i) => (
             <tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined}
               style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
-              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = "rgba(201,168,76,0.05)"; }}
+              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = `${T.accent || "#3f7bdd"}15`; }}
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
               {columns.map((col, j) => (
                 <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || T.textRow }}>
@@ -959,10 +959,10 @@ export default function EcommerceDashboard() {
               <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Advanced Table Date Filter:</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
+                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: `1px solid ${accent}50`, padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
                 <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: "1px solid rgba(201,168,76,0.3)", padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
+                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: `1px solid ${accent}50`, padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
               </div>
               <div style={{ fontSize: 10, color: T.textSub, marginLeft: "auto" }}>Filters Top Products, Customers, Categories & Inventory below.</div>
             </div>
@@ -1006,7 +1006,7 @@ export default function EcommerceDashboard() {
                 headerExtra={
                   <div style={{ display: "flex", gap: 4 }}>
                     {[["yoy","YoY"],["mom","MoM"]].map(([m, lbl]) => (
-                      <button key={m} onClick={() => setDecliningMode(m)} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${decliningMode === m ? accent : "rgba(255,255,255,0.1)"}`, background: decliningMode === m ? "rgba(201,168,76,0.15)" : "transparent", color: decliningMode === m ? accent : "#4a4030", cursor: "pointer" }}>{lbl}</button>
+                      <button key={m} onClick={() => setDecliningMode(m)} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${decliningMode === m ? accent : "rgba(255,255,255,0.1)"}`, background: decliningMode === m ? `${accent}25` : "transparent", color: decliningMode === m ? accent : "#4a4030", cursor: "pointer" }}>{lbl}</button>
                     ))}
                   </div>
                 }
