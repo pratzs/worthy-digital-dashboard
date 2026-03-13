@@ -87,7 +87,7 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f
         <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, display: "inline-block" }} />
           <span style={{ color: "#a09070" }}>{p.name}:</span>
-          <span style={{ color: T.textHead, fontWeight: 600 }}>
+          <span style={{ color: "#f0f0f0", fontWeight: 600 }}>
             {["Revenue","AOV","Gross Profit"].includes(p.name) ? fmt(p.value, currency) : p.name === "Growth" ? fmtPct(p.value) : String(p.value?.toLocaleString?.() ?? p.value)}
           </span>
         </div>
@@ -236,7 +236,7 @@ No generic advice. Every point must reference something specific in the data.`;
         </div>
       )}
       {open && loading && (
-        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: T.textSub }}>
+        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#8a9aaa" }}>
           ✦ Analysing Worthy Products data…
         </div>
       )}
@@ -267,7 +267,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▲ Top Performers</div>
             {top.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: T.text, flex: 1 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: "#e8e4dc", flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
                   <span style={{ color: accent }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "—"}</span>
                   <span style={{ color: "#7C9EC9" }}>{p.qtySold} units</span>
@@ -283,7 +283,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontSize: 11, color: accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📈 Growing Fast</div>
             {rising.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: T.text }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: "#e8e4dc" }}>{p.name}</div>
                 <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 11 }}>▲{p.yoyChange}% YoY</span>
               </div>
             ))}
@@ -295,7 +295,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▼ Declining in This Category</div>
             {declining.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: T.text, flex: 1 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: "#e8e4dc", flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
                   <span style={{ color: "#8a7860" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
                   <span style={{ color: "#f87171", fontWeight: 700 }}>▼{Math.abs(p.yoyChange)}% YoY</span>
