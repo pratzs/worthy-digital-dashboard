@@ -60,13 +60,13 @@ const fmtK  = (n, cur = "NZD") => {
 const fmtPct = (n) => (n === null || n === undefined) ? "—" : `${n > 0 ? "+" : ""}${n}%`;
 
 const GrowthBadge = ({ value }) => {
-  if (value === null || value === undefined) return <span style={{ color: "#3a3020" }}>—</span>;
+  if (value === null || value === undefined) return <span style={{ color: "#888" }}>—</span>;
   const pos = value >= 0;
   return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}>{pos ? "▲" : "▼"} {Math.abs(value)}%</span>;
 };
 
 const MarginBar = ({ value, accent = "#3f7bdd" }) => {
-  if (value === null || value === undefined) return <span style={{ color: "#3a3020" }}>—</span>;
+  if (value === null || value === undefined) return <span style={{ color: "#888" }}>—</span>;
   const color = value > 40 ? "#4ade80" : value > 20 ? accent : "#f87171";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -87,7 +87,7 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f
         <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, display: "inline-block" }} />
           <span style={{ color: "#a09070" }}>{p.name}:</span>
-          <span style={{ color: "#f0e8d8", fontWeight: 600 }}>
+          <span style={{ color: T.textHead, fontWeight: 600 }}>
             {["Revenue","AOV","Gross Profit"].includes(p.name) ? fmt(p.value, currency) : p.name === "Growth" ? fmtPct(p.value) : String(p.value?.toLocaleString?.() ?? p.value)}
           </span>
         </div>
@@ -236,7 +236,7 @@ No generic advice. Every point must reference something specific in the data.`;
         </div>
       )}
       {open && loading && (
-        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#6a5a40" }}>
+        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: T.textSub }}>
           ✦ Analysing Worthy Products data…
         </div>
       )}
@@ -267,7 +267,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▲ Top Performers</div>
             {top.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: "#d8c8a8", flex: 1 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: T.text, flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
                   <span style={{ color: accent }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "—"}</span>
                   <span style={{ color: "#7C9EC9" }}>{p.qtySold} units</span>
@@ -283,7 +283,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontSize: 11, color: accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📈 Growing Fast</div>
             {rising.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: "#d8c8a8" }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: T.text }}>{p.name}</div>
                 <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 11 }}>▲{p.yoyChange}% YoY</span>
               </div>
             ))}
@@ -295,7 +295,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▼ Declining in This Category</div>
             {declining.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: "#d8c8a8", flex: 1 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: T.text, flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
                   <span style={{ color: "#8a7860" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
                   <span style={{ color: "#f87171", fontWeight: 700 }}>▼{Math.abs(p.yoyChange)}% YoY</span>
@@ -593,50 +593,50 @@ export default function EcommerceDashboard() {
   const displayDeclining  = (advancedData.curr?.declining     || []).slice(0, 30);
 
   const productColumns  = [
-    { key: "name",    label: "Product",  color: "#d8c8a8" },
+    { key: "name",    label: "Product",  color: T.text },
     { key: "qtySold", label: "Units",    align: "right" },
     { key: "revenue", label: "Revenue",  align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
     { key: "margin",  label: "Margin",   align: "right", format: v => v ? `${v}%` : "—" },
   ];
   const customerColumns = [
-    { key: "name",       label: "Customer", color: "#d8c8a8" },
+    { key: "name",       label: "Customer", color: T.text },
     { key: "orderCount", label: "Orders",   align: "center", color: "#7C9EC9" },
     { key: "revenue",    label: "Spend",    align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
     { key: "status",     label: "Status",   align: "center", format: v => renderStatus(v) },
   ];
   const categoryColumns = [
-    { key: "name",    label: "Category",   color: "#d8c8a8" },
+    { key: "name",    label: "Category",   color: T.text },
     { key: "qty",     label: "Units Sold", align: "right" },
     { key: "revenue", label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
   ];
   const slowMovingColumns = [
-    { key: "name",          label: "Product",      color: "#d8c8a8" },
+    { key: "name",          label: "Product",      color: T.text },
     { key: "currentStock",  label: "Stock",        align: "right", color: accent },
     { key: "qtySold",       label: "Sold",         align: "right", color: "#9EC97C" },
     { key: "lockedCapital", label: "Value Locked", align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
   ];
   const churnedColumns = [
-    { key: "name",          label: "Customer",   color: "#d8c8a8" },
+    { key: "name",          label: "Customer",   color: T.text },
     { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "—" },
     { key: "revenue",       label: "Spend",      align: "right", color: accent, format: (v, c) => fmtK(v, c) },
     { key: "status",        label: "Risk",       align: "center", format: () => <span style={{ color: "#f87171", fontWeight: 700 }}>LAPSED</span> },
   ];
   const atRiskColumns = [
-    { key: "name",          label: "Customer",    color: "#d8c8a8" },
+    { key: "name",          label: "Customer",    color: T.text },
     { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? "#f87171" : accent, fontWeight: 700 }}>{v}d</span> },
     { key: "lastOrderDate", label: "Last Order",  align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
     { key: "revenue",       label: "Lifetime $",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
     { key: "orderCount",    label: "Orders",      align: "center", color: "#7C9EC9" },
   ];
   const clvColumns = [
-    { key: "name",            label: "Customer",    color: "#d8c8a8" },
+    { key: "name",            label: "Customer",    color: T.text },
     { key: "lifetimeRevenue", label: "Lifetime $",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
     { key: "totalOrders",     label: "Orders",      align: "center", color: "#7C9EC9" },
     { key: "avgOrderValue",   label: "Avg Order",   align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
     { key: "firstOrderDate",  label: "First Order", align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
   ];
   const decliningColumns = [
-    { key: "name",        label: "Product",    color: "#d8c8a8" },
+    { key: "name",        label: "Product",    color: T.text },
     { key: "revenue",     label: "This Period", align: "right", color: "#f87171",  format: (v, c) => fmtK(v, c) },
     { key: "prevRevenue", label: "Prior Year",  align: "right", color: "#8a9aaa",  format: (v, c) => fmtK(v, c) },
     { key: "change",      label: "Change",      align: "center", format: v => v !== null ? <span style={{ color: "#f87171", fontWeight: 700 }}>▼ {Math.abs(v)}%</span> : "—" },
@@ -644,7 +644,7 @@ export default function EcommerceDashboard() {
     { key: "prevQtySold", label: "Units Prev",  align: "right", color: "#6a7a8a" },
   ];
   const salespersonColumns = [
-    { key: "name",    label: "Sales Rep",    color: "#d8c8a8" },
+    { key: "name",    label: "Sales Rep",    color: T.text },
     { key: "orders",  label: "Orders",       align: "right", color: "#7C9EC9" },
     { key: "revenue", label: "Revenue",      align: "right", color: accent, format: (v, c) => fmtK(Math.round(v), c) },
     { key: "aov",     label: "Avg Order",    align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
@@ -767,7 +767,7 @@ export default function EcommerceDashboard() {
             <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: "#f0e8d8", fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {selectedYear}</div>
+                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {selectedYear}</div>
                   <div style={{ fontSize: 11, color: "#4a4030", marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#5a5040" }}>
@@ -785,7 +785,7 @@ export default function EcommerceDashboard() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#4a4030" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false}
+                  <YAxis tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "aov" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "convRate" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
                   <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                   <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
@@ -797,13 +797,13 @@ export default function EcommerceDashboard() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 2.2fr", gap: 20, marginBottom: 24 }}>
               {/* YoY bar chart */}
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
                 <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 18 }}>% vs same month {selectedYear - 1}</div>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={momData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#4a4030" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+                    <YAxis tick={{ fontSize: 9, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
                     <Tooltip content={<CustomTooltip accent={accent} />} />
                     <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
                     <Bar dataKey="momGrowth" name="Growth" radius={[4, 4, 0, 0]} fill={accent} />
@@ -814,7 +814,7 @@ export default function EcommerceDashboard() {
               {/* Monthly table */}
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600 }}>Monthly Breakdown</div>
+                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
                     {hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}
                   </div>
@@ -824,7 +824,7 @@ export default function EcommerceDashboard() {
                     <thead>
                       <tr>
                         {["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
-                          <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: "#3a3020", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{h}</th>
+                          <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -835,14 +835,14 @@ export default function EcommerceDashboard() {
                           <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
                             <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
-                            <td style={{ padding: "8px", color: "#d8c8a8", fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? fmtK(row.totalCost, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: "#2a2416" }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: "#2a2416" }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? fmtK(row.totalCost, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
                           </tr>
                         );
@@ -850,8 +850,8 @@ export default function EcommerceDashboard() {
                     </tbody>
                     <tfoot>
                       <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                        <td style={{ padding: "10px 8px", color: "#6a5a40", fontSize: 10, fontWeight: 700 }}>TOTAL</td>
-                        <td style={{ padding: "10px 8px", color: "#f0e8d8", fontWeight: 700 }}>{fmtK(totalRev, activeStore.currency)}</td>
+                        <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
+                        <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(totalRev, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? fmtK(totalCost, activeStore.currency) : "—"}</td>
                         <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? fmtK(gp, activeStore.currency) : "—"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
@@ -872,28 +872,28 @@ export default function EcommerceDashboard() {
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600, marginBottom: 4 }}>Annual Revenue</div>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Annual Revenue</div>
                 <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 20 }}>Year-over-Year</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                     <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent} stopOpacity={1} /><stop offset="100%" stopColor={accent} stopOpacity={0.5} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: "#6a5a40", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: darkMode ? "#6a5a40" : "#7090c0", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
                     <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                     <Bar dataKey="revenue" name="Revenue" fill="url(#bg)" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
               <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600, marginBottom: 4 }}>Orders & AOV Trend</div>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Orders & AOV Trend</div>
                 <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 20 }}>Volume and value evolution</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: "#6a5a40", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: "#3a3020" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: darkMode ? "#6a5a40" : "#7090c0", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
                     <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                     <Bar yAxisId="l" dataKey="orders" name="Orders" fill="#7C9EC960" radius={[6, 6, 0, 0]} />
                     <Line yAxisId="r" type="monotone" dataKey="aov" name="AOV" stroke="#9EC97C" strokeWidth={3} dot={{ fill: "#9EC97C", r: 6, stroke: "#080A10", strokeWidth: 2 }} />
@@ -903,7 +903,7 @@ export default function EcommerceDashboard() {
             </div>
 
             <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-              <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: "#f0e8d8", fontWeight: 600, marginBottom: 20 }}>Year-over-Year Summary</div>
+              <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 20 }}>Year-over-Year Summary</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
                 {yoyData.map((yr, i) => {
                   const p   = yoyData[i - 1];
@@ -917,13 +917,13 @@ export default function EcommerceDashboard() {
                         {isLoading(parseInt(yr.year)) && <span style={{ fontSize: 9, color: accent }}>…</span>}
                       </div>
                       <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 9, color: "#3a3020", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Revenue</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#d8c8a8" }}>{fmt(yr.revenue, activeStore.currency)}</div>
+                        <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Revenue</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{fmt(yr.revenue, activeStore.currency)}</div>
                         {rg !== null && <div style={{ fontSize: 11, color: rg >= 0 ? "#4ade80" : "#f87171", marginTop: 2, fontWeight: 600 }}>{fmtPct(rg)} vs {p.year}</div>}
                       </div>
                       {yr.grossProfit !== null && (
                         <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontSize: 9, color: "#3a3020", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Gross Profit</div>
+                          <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Gross Profit</div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: "#C97C9E" }}>
                             {fmt(yr.grossProfit, activeStore.currency)}
                             {yr.margin !== null && <span style={{ fontSize: 10, color: "#7a5a6a", marginLeft: 5 }}>{yr.margin}%</span>}
@@ -931,7 +931,7 @@ export default function EcommerceDashboard() {
                         </div>
                       )}
                       <div>
-                        <div style={{ fontSize: 9, color: "#3a3020", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Orders</div>
+                        <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Orders</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#8a9aaa" }}>{yr.orders.toLocaleString()}</div>
                         {og !== null && <div style={{ fontSize: 11, color: og >= 0 ? "#4ade80" : "#f87171", marginTop: 2, fontWeight: 600 }}>{fmtPct(og)} vs {p.year}</div>}
                       </div>
