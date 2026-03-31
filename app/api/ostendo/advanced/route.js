@@ -4,8 +4,22 @@ import https from 'node:https';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Custom HTTPS agent — handles self-signed certs on ostendo.dutchrusk.co.nz:442
 const agent = new https.Agent({ rejectUnauthorized: false });
 
+/**
+ * Confirmed table & column names from Dutch Rusk Ostendo (Table for Queries.rps):
+ *
+ *  SALESINVOICEHEADER  → INVOICEDATE, INVOICENO, INVOICECUSTOMER,
+ *                         INVOICENETTAMOUNT, INVOICETOTALAMOUNT, DISCOUNTAMOUNT
+ *  SALESINVOICELINES   → ITEMCODE, INVOICEDQTY, INVOICEDNETTAMOUNT,
+ *                         INVOICEDTOTALAMOUNT, INVOICEUNITCOST, INVOICEDCOST
+ *  ITEMMASTER          → ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY,
+ *                         ITEMSUBCATEGORY, ITEMAVERAGECOST, ITEMUNIT
+ *  CUSTOMERMASTER      → CUSTOMERCODE, CUSTOMERNAME, CUSTOMEREMAIL,
+ *                         CUSTOMERPHONE, CUSTOMERREGION
+ *  ITEMQTYSUMMARIES    → ITEMCODE, ONHANDQTY (or QTYONHAND / STOCKONHANDQTY)
+ */
 async function ostendoFetch(tablename, condition = null) {
   const base    = process.env.OSTENDO_BASE_URL;
   const apiKey  = process.env.OSTENDO_API_KEY;
@@ -34,33 +48,27 @@ async function ostendoFetch(tablename, condition = null) {
         catch { resolve([]); }
       });
     });
-    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Ostendo timeout')); });
+    req.setTimeout(25000, () => { req.destroy(); reject(new Error('Ostendo timeout')); });
     req.on('error', reject);
     req.end();
   });
 }
 
-const col = (row, ...names) => {
-  for (const n of names) {
-    if (row[n] !== undefined && row[n] !== null && row[n] !== '') return row[n];
-  }
-  return null;
-};
+const normalizeRows = (res) =>
+  Array.isArray(res) ? res : res?.rows || res?.data || res?.records || [];
+
 const parseNum = (v) => (v === null || v === undefined) ? 0 : parseFloat(v) || 0;
 const parseDate = (v) => {
   if (!v) return null;
-  const s = String(v);
+  const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10));
   if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
     const [d, m, y] = s.split('/');
-    return new Date(`${y}-${m}-${d}`);
+    return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
   }
   const d = new Date(s);
   return isNaN(d) ? null : d;
 };
-
-const normalizeRows = (res) =>
-  Array.isArray(res) ? res : res?.rows || res?.data || res?.records || [];
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -69,72 +77,59 @@ export async function GET(request) {
   const endParam   = searchParams.get('endDate')   || today.toISOString().split('T')[0];
 
   try {
-    // ── 1. Invoice headers for date range ───────────────────────────────────
     const invCondition = `INVOICEDATE >= '${startParam}' AND INVOICEDATE <= '${endParam}'`;
-    const [invoices, invoiceLines, items, customers, itemBalance] = await Promise.allSettled([
+
+    // Fetch in parallel — gracefully handle any table that errors
+    const [invRes, linesRes, itemsRes, custsRes, qtyRes] = await Promise.allSettled([
       ostendoFetch('SALESINVOICEHEADER', invCondition),
-      ostendoFetch('SALESINVOICELINES',  invCondition),  // may fail — handled gracefully
-      ostendoFetch('ITEMS'),
-      ostendoFetch('CUSTOMERS'),
-      ostendoFetch('ITEMBALANCE'),   // or WAREHOUSELOCATIONS
+      ostendoFetch('SALESINVOICELINES',  invCondition),
+      ostendoFetch('ITEMMASTER'),
+      ostendoFetch('CUSTOMERMASTER'),
+      ostendoFetch('ITEMQTYSUMMARIES'),
     ]);
 
-    const invRows   = normalizeRows(invoices.status  === 'fulfilled' ? invoices.value  : []);
-    const lineRows  = normalizeRows(invoiceLines.status === 'fulfilled' ? invoiceLines.value : []);
-    const itemRows  = normalizeRows(items.status     === 'fulfilled' ? items.value     : []);
-    const custRows  = normalizeRows(customers.status === 'fulfilled' ? customers.value : []);
-    const balRows   = normalizeRows(itemBalance.status === 'fulfilled' ? itemBalance.value : []);
+    const invRows   = normalizeRows(invRes.status   === 'fulfilled' ? invRes.value   : []);
+    const lineRows  = normalizeRows(linesRes.status === 'fulfilled' ? linesRes.value : []);
+    const itemRows  = normalizeRows(itemsRes.status === 'fulfilled' ? itemsRes.value : []);
+    const custRows  = normalizeRows(custsRes.status === 'fulfilled' ? custsRes.value : []);
+    const qtyRows   = normalizeRows(qtyRes.status   === 'fulfilled' ? qtyRes.value   : []);
 
-    // ── 2. Item lookup map ───────────────────────────────────────────────────
+    // ── Item lookup ──────────────────────────────────────────────────────────
     const itemMap = {};
     for (const it of itemRows) {
-      const code = col(it, 'ITEMCODE', 'CODE', 'ItemCode');
-      if (code) itemMap[code] = it;
+      if (it.ITEMCODE) itemMap[it.ITEMCODE] = it;
     }
 
-    // ── 3. Customer lookup map ───────────────────────────────────────────────
+    // ── Customer lookup ──────────────────────────────────────────────────────
     const custMap = {};
     for (const c of custRows) {
-      const code = col(c, 'CUSTOMERCODE', 'CUSTCODE', 'CODE', 'CustomerCode');
-      if (code) custMap[code] = c;
+      if (c.CUSTOMERCODE) custMap[c.CUSTOMERCODE] = c;
     }
 
-    // ── 4. Top Products (from invoice lines) ─────────────────────────────────
+    // ── Top Products (from SALESINVOICELINES) ────────────────────────────────
     const productMap = {};
     for (const line of lineRows) {
-      const lineDate = col(line, 'INVOICEDATE', 'DOCDATE', 'DATE', 'InvoiceDate');
-      const d = parseDate(lineDate);
-      if (d && (d < new Date(startParam) || d > new Date(endParam))) continue;
-
-      const code = col(line, 'ITEMCODE', 'CODE', 'PRODUCTCODE', 'ItemCode');
+      const code = line.ITEMCODE;
       if (!code) continue;
 
-      const qty    = parseNum(col(line, 'QUANTITY', 'QTY', 'INVOICEDQTY', 'Quantity'));
-      const rev    = parseNum(col(line, 'LINETOTAL', 'TOTALEX', 'LINEAMOUNT', 'SELLPRICE', 'LineTotal'));
-      const cost   = parseNum(col(line, 'UNITCOSTPRICE', 'COSTPRICE', 'UNITCOST', 'UnitCostPrice'));
-      const lineCost = cost * qty;
+      const qty      = parseNum(line.INVOICEDQTY);
+      const lineNet  = parseNum(line.INVOICEDNETTAMOUNT  ?? line.INVOICEDTOTALAMOUNT ?? line.INVOICEEXTENDEDPRICE);
+      const unitCost = parseNum(line.INVOICEUNITCOST     ?? line.INVOICEDCOST);
+      const lineCost = unitCost * qty;
 
       if (!productMap[code]) {
         const it   = itemMap[code] || {};
-        const desc = col(it, 'DESCRIPTION', 'ITEMDESCRIPTION', 'NAME', 'Description') || code;
-        const cat  = col(it, 'PRODUCTTYPE', 'ITEMGROUP', 'CATEGORY', 'ITEMTYPE', 'ProductType') || 'Uncategorised';
-        productMap[code] = { title: desc, category: cat, revenue: 0, unitsSold: 0, grossProfit: 0, margin: 0 };
+        productMap[code] = {
+          title:       it.ITEMDESCRIPTION || code,
+          category:    it.ITEMCATEGORY    || it.ITEMSUBCATEGORY || 'Uncategorised',
+          revenue:     0,
+          unitsSold:   0,
+          grossProfit: 0,
+        };
       }
-      productMap[code].revenue    += rev;
+      productMap[code].revenue    += lineNet;
       productMap[code].unitsSold  += qty;
-      productMap[code].grossProfit += (rev - lineCost);
-    }
-
-    // Fallback: derive products from invoices if no lines available
-    if (lineRows.length === 0) {
-      for (const inv of invRows) {
-        const code = col(inv, 'ITEMCODE', 'PRODUCTCODE');
-        if (!code) continue;
-        const rev = parseNum(col(inv, 'TOTALEX', 'TOTALEXGSTTAX', 'NETSALESVALUE', 'ORDERTOTAL'));
-        if (!productMap[code]) productMap[code] = { title: code, category: 'Unknown', revenue: 0, unitsSold: 0, grossProfit: 0, margin: 0 };
-        productMap[code].revenue += rev;
-        productMap[code].unitsSold += 1;
-      }
+      productMap[code].grossProfit += (lineNet - lineCost);
     }
 
     const products = Object.values(productMap)
@@ -142,12 +137,12 @@ export async function GET(request) {
       .slice(0, 50)
       .map(p => ({
         ...p,
-        margin: p.revenue > 0 ? Math.round((p.grossProfit / p.revenue) * 100) : 0,
-        revenue: Math.round(p.revenue),
+        revenue:     Math.round(p.revenue),
         grossProfit: Math.round(p.grossProfit),
+        margin:      p.revenue > 0 ? Math.round((p.grossProfit / p.revenue) * 100) : 0,
       }));
 
-    // ── 5. Categories (grouped from products) ────────────────────────────────
+    // ── Categories ───────────────────────────────────────────────────────────
     const catMap = {};
     for (const p of products) {
       const c = p.category;
@@ -162,23 +157,29 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .map(c => ({ ...c, margin: c.revenue > 0 ? Math.round((c.grossProfit / c.revenue) * 100) : 0 }));
 
-    // ── 6. Top Customers ─────────────────────────────────────────────────────
+    // ── Top Customers (from SALESINVOICEHEADER.INVOICECUSTOMER) ─────────────
     const custSpend = {};
     for (const inv of invRows) {
-      const code = col(inv, 'CUSTOMERCODE', 'CUSTCODE', 'CUSTOMER', 'CustomerCode');
+      // INVOICECUSTOMER is the customer reference on the invoice header
+      const code = inv.INVOICECUSTOMER ?? inv.CUSTOMERCODE;
       if (!code) continue;
-      const rev = parseNum(col(inv, 'TOTALEX', 'TOTALEXGSTTAX', 'NETSALESVALUE', 'ORDERTOTAL'));
+
+      const rev = parseNum(inv.INVOICENETTAMOUNT ?? inv.INVOICETOTALAMOUNT ?? inv.INVOICEVALUE);
+
       if (!custSpend[code]) {
-        const cInfo  = custMap[code] || {};
-        const name   = col(cInfo, 'CUSTOMERNAME', 'NAME', 'COMPANY', 'CustomerName') || code;
-        const email  = col(cInfo, 'EMAILADDRESS', 'EMAIL', 'EmailAddress') || '';
-        custSpend[code] = { customer: name, email, totalSpend: 0, orderCount: 0, lastOrder: null };
+        const cInfo = custMap[code] || {};
+        custSpend[code] = {
+          customer:   cInfo.CUSTOMERNAME || code,
+          email:      cInfo.CUSTOMEREMAIL || '',
+          totalSpend: 0,
+          orderCount: 0,
+          lastOrder:  null,
+        };
       }
       custSpend[code].totalSpend += rev;
       custSpend[code].orderCount += 1;
 
-      const dateVal = col(inv, 'INVOICEDATE', 'INVDATE', 'DOCDATE');
-      const d = parseDate(dateVal);
+      const d = parseDate(inv.INVOICEDATE);
       if (d) {
         const prev = custSpend[code].lastOrder;
         if (!prev || d > prev) custSpend[code].lastOrder = d;
@@ -188,63 +189,61 @@ export async function GET(request) {
     const customerList = Object.values(custSpend)
       .sort((a, b) => b.totalSpend - a.totalSpend)
       .slice(0, 50)
-      .map(c => ({
-        ...c,
-        totalSpend:  Math.round(c.totalSpend),
-        aov:         c.orderCount > 0 ? Math.round(c.totalSpend / c.orderCount) : 0,
-        lastOrderDays: c.lastOrder
+      .map(c => {
+        const daysSince = c.lastOrder
           ? Math.floor((Date.now() - c.lastOrder.getTime()) / 86400000)
-          : null,
-        status: c.lastOrder
-          ? (Math.floor((Date.now() - c.lastOrder.getTime()) / 86400000) > 90 ? 'Lapsed'
-           : Math.floor((Date.now() - c.lastOrder.getTime()) / 86400000) > 45 ? 'At Risk' : 'Active')
-          : 'Unknown',
-      }));
+          : null;
+        return {
+          ...c,
+          totalSpend:    Math.round(c.totalSpend),
+          aov:           c.orderCount > 0 ? Math.round(c.totalSpend / c.orderCount) : 0,
+          lastOrderDays: daysSince,
+          status:        daysSince === null ? 'Unknown'
+                       : daysSince > 90    ? 'Lapsed'
+                       : daysSince > 45    ? 'At Risk'
+                       : 'Active',
+        };
+      });
 
-    // ── 7. Slow-moving inventory (from ITEMBALANCE) ──────────────────────────
-    const activeItems = new Set(lineRows.map(r => col(r, 'ITEMCODE', 'CODE', 'PRODUCTCODE')).filter(Boolean));
-    const slowMoving = balRows
+    // ── Slow-moving inventory (from ITEMQTYSUMMARIES) ────────────────────────
+    const soldCodes = new Set(lineRows.map(r => r.ITEMCODE).filter(Boolean));
+    const slowMoving = qtyRows
       .filter(r => {
-        const code = col(r, 'ITEMCODE', 'CODE', 'ItemCode');
-        const qty  = parseNum(col(r, 'QUANTITYONHAND', 'ONHANDQTY', 'QTY', 'STOCKONHAND', 'QuantityOnHand'));
-        return qty > 0 && code && !activeItems.has(code);
+        const qty = parseNum(r.ONHANDQTY ?? r.QTYONHAND ?? r.STOCKONHANDQTY);
+        return qty > 0 && r.ITEMCODE && !soldCodes.has(r.ITEMCODE);
       })
       .map(r => {
-        const code  = col(r, 'ITEMCODE', 'CODE', 'ItemCode');
-        const qty   = parseNum(col(r, 'QUANTITYONHAND', 'ONHANDQTY', 'QTY', 'STOCKONHAND', 'QuantityOnHand'));
-        const cost  = parseNum(col(r, 'AVERAGECOST', 'UNITCOSTPRICE', 'COSTPRICE', 'AverageCost'));
-        const it    = itemMap[code] || {};
-        const desc  = col(it, 'DESCRIPTION', 'ITEMDESCRIPTION', 'NAME', 'Description') || code;
-        return { itemCode: code, title: desc, stockOnHand: qty, capitalTied: Math.round(qty * cost), lastSold: null };
+        const qty   = parseNum(r.ONHANDQTY ?? r.QTYONHAND ?? r.STOCKONHANDQTY);
+        const it    = itemMap[r.ITEMCODE] || {};
+        const cost  = parseNum(it.ITEMAVERAGECOST);
+        return {
+          itemCode:    r.ITEMCODE,
+          title:       it.ITEMDESCRIPTION || r.ITEMCODE,
+          stockOnHand: Math.round(qty),
+          capitalTied: Math.round(qty * cost),
+          lastSold:    null,
+        };
       })
       .sort((a, b) => b.capitalTied - a.capitalTied)
       .slice(0, 30);
 
-    // ── 8. Churned / at-risk customers ───────────────────────────────────────
-    const churned  = customerList.filter(c => c.status === 'Lapsed');
-    const atRisk   = customerList.filter(c => c.status === 'At Risk');
-
-    // ── 9. CLV (all-time: use available period data as proxy) ────────────────
-    const clv = customerList.slice(0, 20).map(c => ({
-      customer:   c.customer,
-      email:      c.email,
-      totalSpend: c.totalSpend,
-      orderCount: c.orderCount,
-      aov:        c.aov,
-    }));
+    const churned = customerList.filter(c => c.status === 'Lapsed');
+    const atRisk  = customerList.filter(c => c.status === 'At Risk');
+    const clv     = customerList.slice(0, 20).map(({ customer, email, totalSpend, orderCount, aov }) =>
+      ({ customer, email, totalSpend, orderCount, aov }));
 
     return NextResponse.json({
       products,
       categories,
-      customers: customerList,
+      customers:  customerList,
       slowMoving,
       churned,
       atRisk,
       clv,
-      declining: [],   // requires multi-period comparison — future enhancement
+      declining:  [],
       metrics: {
-        totalRevenue:  invRows.reduce((s, r) => s + parseNum(col(r, 'TOTALEX','TOTALEXGSTTAX','NETSALESVALUE','ORDERTOTAL')), 0),
-        totalOrders:   invRows.length,
+        totalRevenue:    invRows.reduce((s, r) => s + parseNum(r.INVOICENETTAMOUNT ?? r.INVOICETOTALAMOUNT), 0),
+        totalOrders:     invRows.length,
         uniqueCustomers: Object.keys(custSpend).length,
       },
     });
@@ -254,6 +253,7 @@ export async function GET(request) {
     return NextResponse.json({
       products: [], categories: [], customers: [], slowMoving: [],
       churned: [], atRisk: [], clv: [], declining: [], metrics: {},
+      error: err.message,
     });
   }
 }
