@@ -75,7 +75,15 @@ export async function GET(request) {
   const endParam   = searchParams.get('endDate')   || today.toISOString().split('T')[0];
 
   try {
-    const invCondition = `INVOICEDATE >= '${startParam}' AND INVOICEDATE <= '${endParam}'`;
+    // Use EXTRACT() to avoid >= / <= encoding issues with Ostendo's Firebird SQL parser
+    const startYear = new Date(startParam).getFullYear();
+    const startMonth = new Date(startParam).getMonth() + 1;
+    const endYear = new Date(endParam).getFullYear();
+    const endMonth = new Date(endParam).getMonth() + 1;
+    // Filter by year range; for single-year use simple EXTRACT
+    const invCondition = startYear === endYear
+      ? `EXTRACT(YEAR FROM INVOICEDATE) = ${startYear}`
+      : `EXTRACT(YEAR FROM INVOICEDATE) >= ${startYear} AND EXTRACT(YEAR FROM INVOICEDATE) <= ${endYear}`;
 
     // Fetch in parallel — gracefully handle any table that errors
     const [invRes, linesRes, itemsRes, custsRes, qtyRes] = await Promise.allSettled([
