@@ -10,22 +10,20 @@ const agent = new https.Agent({ rejectUnauthorized: false });
  * Confirmed live column names from Dutch Rusk Ostendo:
  *
  *  SALESINVOICEHEADER → INVOICENUMBER, INVOICEDATE (D/MM/YYYY), CUSTOMER,
- *                        INVOICENETTAMOUNT, INVOICETOTALAMOUNT, LINEDISCOUNTAMOUNT
- *  SALESINVOICELINES  → INVOICENUMBER (FK to header), ITEMCODE,
+ *                        INVOICENETTAMOUNT, INVOICETOTALAMOUNT, LINEDISCOUNTAMOUNT,
+ *                        BILLINGEMAIL
+ *  SALESINVOICELINES  → INVOICENUMBER (FK, no INVOICEDATE!), ITEMCODE,
  *                        INVOICEDQTY, INVOICEDNETTAMOUNT, INVOICEDTOTALAMOUNT,
  *                        INVOICEUNITCOST, INVOICEDCOST
- *                        *** NO INVOICEDATE column — filter by INVOICENUMBER IN (...) ***
  *  ITEMMASTER         → ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY,
  *                        ITEMAVERAGECOST, ITEMUNIT
- *  CUSTOMERMASTER     → CUSTOMERCODE, CUSTOMERNAME, CUSTOMEREMAIL
- *  ITEMQTYSUMMARIES   → ITEMCODE, ONHANDQTY (also try QTYONHAND / STOCKONHANDQTY)
  */
-async function ostendoFetch(tablename, condition = null) {
+
+// Spaces must be %20 — Firebird treats URLSearchParams '+' as arithmetic operator
+async function ostendoFetch(tablename, condition = null, timeoutMs = 22000) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
-
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
-  // Spaces must be %20 — Firebird treats URLSearchParams '+' as arithmetic operator
   const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20')}` : '';
 
   return new Promise((resolve, reject) => {
@@ -45,38 +43,48 @@ async function ostendoFetch(tablename, condition = null) {
         catch { resolve([]); }
       });
     });
-    req.setTimeout(25000, () => { req.destroy(); reject(new Error(`Ostendo timeout: ${tablename}`)); });
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(`timeout:${tablename}`)); });
     req.on('error', reject);
     req.end();
   });
 }
 
-/**
- * Fetch SALESINVOICELINES in batches by INVOICENUMBER.
- * SALESINVOICELINES has NO INVOICEDATE — must join via header invoice numbers.
- */
-async function fetchLinesByInvoiceNumbers(invoiceNumbers) {
-  if (!invoiceNumbers.length) return [];
-  const BATCH = 40;
-  const batches = [];
-  for (let i = 0; i < invoiceNumbers.length; i += BATCH) {
-    const chunk = invoiceNumbers.slice(i, i + BATCH);
-    const inList = chunk.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',');
-    batches.push(ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`));
-  }
-  const results = await Promise.allSettled(batches);
-  return results.flatMap(r => r.status === 'fulfilled' ? normalizeRows(r.value) : []);
-}
-
 const normalizeRows = (res) =>
   Array.isArray(res) ? res : res?.rows || res?.data || res?.records || [];
 
-const parseNum = (v) => (v === null || v === undefined) ? 0 : parseFloat(v) || 0;
+const safe = async (fn) => { try { return normalizeRows(await fn()); } catch { return []; } };
+
+/** Batch-fetch a table with ITEMCODE IN (...) chunks */
+async function fetchByItemCodes(tablename, codes, chunkSize = 30) {
+  if (!codes.length) return [];
+  const rows = [];
+  for (let i = 0; i < codes.length; i += chunkSize) {
+    const chunk = codes.slice(i, i + chunkSize);
+    const inList = chunk.map(c => `'${String(c).replace(/'/g, "''")}'`).join(',');
+    const batch = await safe(() => ostendoFetch(tablename, `ITEMCODE IN (${inList})`));
+    rows.push(...batch);
+  }
+  return rows;
+}
+
+/** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) chunks */
+async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 30) {
+  if (!invoiceNumbers.length) return [];
+  const rows = [];
+  for (let i = 0; i < invoiceNumbers.length; i += chunkSize) {
+    const chunk = invoiceNumbers.slice(i, i + chunkSize);
+    const inList = chunk.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',');
+    const batch = await safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`));
+    rows.push(...batch);
+  }
+  return rows;
+}
+
+const parseNum  = (v) => (v === null || v === undefined) ? 0 : parseFloat(v) || 0;
 const parseDate = (v) => {
   if (!v) return null;
   const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10));
-  // D/MM/YYYY or DD/MM/YYYY  e.g. "3/03/2025"
   if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
     const [d, m, y] = s.split('/');
     return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
@@ -98,46 +106,34 @@ export async function GET(request) {
       ? `EXTRACT(YEAR FROM INVOICEDATE) = ${startYear}`
       : `EXTRACT(YEAR FROM INVOICEDATE) >= ${startYear} AND EXTRACT(YEAR FROM INVOICEDATE) <= ${endYear}`;
 
-    // Step 1: fetch header + lookup tables in parallel
-    const [invRes, itemsRes, custsRes, qtyRes] = await Promise.allSettled([
-      ostendoFetch('SALESINVOICEHEADER', invCondition),
-      ostendoFetch('ITEMMASTER'),
-      ostendoFetch('CUSTOMERMASTER'),
-      ostendoFetch('ITEMQTYSUMMARIES'),
-    ]);
+    // ── Step 1: Invoice headers (year-filtered — confirmed working) ───────────
+    const invRows = await safe(() => ostendoFetch('SALESINVOICEHEADER', invCondition));
+    console.log(`[Ostendo/adv] invRows: ${invRows.length}`);
 
-    const invRows  = normalizeRows(invRes.status  === 'fulfilled' ? invRes.value  : []);
-    const itemRows = normalizeRows(itemsRes.status === 'fulfilled' ? itemsRes.value : []);
-    const custRows = normalizeRows(custsRes.status === 'fulfilled' ? custsRes.value : []);
-    const qtyRows  = normalizeRows(qtyRes.status  === 'fulfilled' ? qtyRes.value  : []);
-
-    // Step 2: fetch SALESINVOICELINES by invoice numbers (no INVOICEDATE in that table)
+    // ── Step 2: Invoice lines by invoice number (SALESINVOICELINES has no date col) ──
     const invoiceNumbers = [...new Set(invRows.map(r => r.INVOICENUMBER).filter(Boolean))];
     const lineRows = await fetchLinesByInvoiceNumbers(invoiceNumbers);
+    console.log(`[Ostendo/adv] lineRows: ${lineRows.length} from ${invoiceNumbers.length} invoices`);
 
-    // ── Item lookup ──────────────────────────────────────────────────────────
+    // ── Step 3: Item master — only for codes that appeared in lines ──────────
+    const soldCodes = [...new Set(lineRows.map(r => r.ITEMCODE).filter(Boolean))];
+    const itemRows  = await fetchByItemCodes('ITEMMASTER', soldCodes);
+    console.log(`[Ostendo/adv] itemRows: ${itemRows.length}`);
+
     const itemMap = {};
     for (const it of itemRows) {
       if (it.ITEMCODE) itemMap[it.ITEMCODE] = it;
     }
 
-    // ── Customer lookup (by code) ────────────────────────────────────────────
-    const custMap = {};
-    for (const c of custRows) {
-      if (c.CUSTOMERCODE) custMap[c.CUSTOMERCODE] = c;
-    }
-
-    // ── Top Products (from SALESINVOICELINES) ────────────────────────────────
+    // ── Top Products ─────────────────────────────────────────────────────────
     const productMap = {};
     for (const line of lineRows) {
       const code = line.ITEMCODE;
       if (!code) continue;
-
       const qty      = parseNum(line.INVOICEDQTY);
       const lineNet  = parseNum(line.INVOICEDNETTAMOUNT ?? line.INVOICEDTOTALAMOUNT ?? line.INVOICEEXTENDEDPRICE);
       const unitCost = parseNum(line.INVOICEUNITCOST    ?? line.INVOICEDCOST);
       const lineCost = unitCost * qty;
-
       if (!productMap[code]) {
         const it = itemMap[code] || {};
         productMap[code] = {
@@ -168,37 +164,26 @@ export async function GET(request) {
     for (const p of products) {
       const c = p.category;
       if (!catMap[c]) catMap[c] = { category: c, revenue: 0, unitsSold: 0, grossProfit: 0, productCount: 0 };
-      catMap[c].revenue      += p.revenue;
-      catMap[c].unitsSold    += p.unitsSold;
-      catMap[c].grossProfit  += p.grossProfit;
+      catMap[c].revenue     += p.revenue;
+      catMap[c].unitsSold   += p.unitsSold;
+      catMap[c].grossProfit += p.grossProfit;
       catMap[c].productCount++;
     }
     const categories = Object.values(catMap)
       .sort((a, b) => b.revenue - a.revenue)
       .map(c => ({ ...c, margin: c.revenue > 0 ? Math.round((c.grossProfit / c.revenue) * 100) : 0 }));
 
-    // ── Top Customers (from SALESINVOICEHEADER) ──────────────────────────────
-    // CUSTOMER field on the header IS the customer name for Dutch Rusk
+    // ── Top Customers (from invoice header — CUSTOMER field is the name) ──────
     const custSpend = {};
     for (const inv of invRows) {
-      const name = inv.CUSTOMER ?? inv.INVOICECUSTOMER ?? inv.CUSTOMERCODE;
+      const name = inv.CUSTOMER ?? inv.INVOICECUSTOMER;
       if (!name) continue;
-
       const rev = parseNum(inv.INVOICENETTAMOUNT ?? inv.INVOICETOTALAMOUNT ?? inv.INVOICEVALUE);
-
       if (!custSpend[name]) {
-        const cInfo = custMap[name] || {};
-        custSpend[name] = {
-          customer:   name,
-          email:      cInfo.CUSTOMEREMAIL || inv.BILLINGEMAIL || '',
-          totalSpend: 0,
-          orderCount: 0,
-          lastOrder:  null,
-        };
+        custSpend[name] = { customer: name, email: inv.BILLINGEMAIL || '', totalSpend: 0, orderCount: 0, lastOrder: null };
       }
       custSpend[name].totalSpend += rev;
       custSpend[name].orderCount += 1;
-
       const d = parseDate(inv.INVOICEDATE);
       if (d && (!custSpend[name].lastOrder || d > custSpend[name].lastOrder)) {
         custSpend[name].lastOrder = d;
@@ -227,27 +212,6 @@ export async function GET(request) {
         };
       });
 
-    // ── Slow-moving inventory ────────────────────────────────────────────────
-    const soldCodes = new Set(lineRows.map(r => r.ITEMCODE).filter(Boolean));
-    const slowMoving = qtyRows
-      .filter(r => {
-        const qty = parseNum(r.ONHANDQTY ?? r.QTYONHAND ?? r.STOCKONHANDQTY);
-        return qty > 0 && r.ITEMCODE && !soldCodes.has(r.ITEMCODE);
-      })
-      .map(r => {
-        const qty  = parseNum(r.ONHANDQTY ?? r.QTYONHAND ?? r.STOCKONHANDQTY);
-        const it   = itemMap[r.ITEMCODE] || {};
-        const cost = parseNum(it.ITEMAVERAGECOST);
-        return {
-          itemCode:    r.ITEMCODE,
-          title:       it.ITEMDESCRIPTION || r.ITEMCODE,
-          stockOnHand: Math.round(qty),
-          capitalTied: Math.round(qty * cost),
-        };
-      })
-      .sort((a, b) => b.capitalTied - a.capitalTied)
-      .slice(0, 30);
-
     const churned = customerList.filter(c => c.status === 'Lapsed');
     const atRisk  = customerList.filter(c => c.status === 'At Risk');
     const clv     = customerList.slice(0, 20).map(({ customer, email, totalSpend, orderCount, aov }) =>
@@ -257,7 +221,7 @@ export async function GET(request) {
       products,
       categories,
       customers:  customerList,
-      slowMoving,
+      slowMoving: [],   // requires full ITEMQTYSUMMARIES scan — skipped for performance
       churned,
       atRisk,
       clv,
@@ -272,7 +236,7 @@ export async function GET(request) {
     });
 
   } catch (err) {
-    console.error('[Ostendo/advanced] error:', err.message);
+    console.error('[Ostendo/advanced] fatal:', err.message);
     return NextResponse.json({
       products: [], categories: [], customers: [], slowMoving: [],
       churned: [], atRisk: [], clv: [], declining: [], metrics: {},
