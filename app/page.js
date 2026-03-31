@@ -427,14 +427,16 @@ export default function EcommerceDashboard() {
   // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
     if (activeStore.id !== "worthy" && activeStore.id !== "luxe") return;
+    const storeId = activeStore.id; // capture so async closure stays correct
     const load = async () => {
-      await Promise.all([
-        fetchYear(activeStore.id, selectedYear),
-        fetchYear(activeStore.id, selectedYear - 1),
-      ]);
+      setAdvancedData({});          // clear old store data immediately
       setAdvLoading(true);
+      await Promise.all([
+        fetchYear(storeId, selectedYear),
+        fetchYear(storeId, selectedYear - 1),
+      ]);
       try {
-        if (activeStore.id === "luxe") {
+        if (storeId === "luxe") {
           const res  = await fetch(`/api/ostendo/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
           const data = await res.json();
           // Map Ostendo field names → Shopify-compatible names used by display columns
@@ -452,7 +454,10 @@ export default function EcommerceDashboard() {
           const data = await res.json();
           setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
         }
-      } catch (e) { console.error("Advanced fetch failed", e); }
+      } catch (e) {
+        console.error(`[${storeId}] Advanced fetch failed:`, e);
+        setAdvancedData({ curr: { topProducts: [], topCategories: [], topCustomers: [], slowMoving: [], churned: [], atRisk: [], clv: [], declining: [], metrics: {} }, prev: {} });
+      }
       setAdvLoading(false);
     };
     load();
