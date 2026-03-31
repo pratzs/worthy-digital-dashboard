@@ -20,7 +20,7 @@ const agent = new https.Agent({ rejectUnauthorized: false });
  */
 
 // Spaces must be %20 — Firebird treats URLSearchParams '+' as arithmetic operator
-async function ostendoFetch(tablename, condition = null, timeoutMs = 22000) {
+async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
@@ -54,30 +54,53 @@ const normalizeRows = (res) =>
 
 const safe = async (fn) => { try { return normalizeRows(await fn()); } catch { return []; } };
 
-/** Batch-fetch a table with ITEMCODE IN (...) chunks */
-async function fetchByItemCodes(tablename, codes, chunkSize = 30) {
-  if (!codes.length) return [];
-  const rows = [];
-  for (let i = 0; i < codes.length; i += chunkSize) {
-    const chunk = codes.slice(i, i + chunkSize);
-    const inList = chunk.map(c => `'${String(c).replace(/'/g, "''")}'`).join(',');
-    const batch = await safe(() => ostendoFetch(tablename, `ITEMCODE IN (${inList})`));
-    rows.push(...batch);
-  }
-  return rows;
+/** Run an array of async tasks with at most `limit` running at once */
+async function parallelLimit(tasks, limit = 4) {
+  const results = new Array(tasks.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (next < tasks.length) {
+      const idx = next++;
+      results[idx] = await tasks[idx]();
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
-/** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) chunks */
-async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 30) {
+/** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) — parallel chunks */
+async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 50) {
   if (!invoiceNumbers.length) return [];
-  const rows = [];
+  const chunks = [];
   for (let i = 0; i < invoiceNumbers.length; i += chunkSize) {
-    const chunk = invoiceNumbers.slice(i, i + chunkSize);
-    const inList = chunk.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',');
-    const batch = await safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`));
-    rows.push(...batch);
+    chunks.push(invoiceNumbers.slice(i, i + chunkSize));
   }
-  return rows;
+  // Run up to 4 chunks at once to stay within timeout
+  const taskResults = await parallelLimit(
+    chunks.map(chunk => () => {
+      const inList = chunk.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',');
+      return safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`));
+    }),
+    4
+  );
+  return taskResults.flat();
+}
+
+/** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks */
+async function fetchByItemCodes(codes, chunkSize = 50) {
+  if (!codes.length) return [];
+  const chunks = [];
+  for (let i = 0; i < codes.length; i += chunkSize) {
+    chunks.push(codes.slice(i, i + chunkSize));
+  }
+  const taskResults = await parallelLimit(
+    chunks.map(chunk => () => {
+      const inList = chunk.map(c => `'${String(c).replace(/'/g, "''")}'`).join(',');
+      return safe(() => ostendoFetch('ITEMMASTER', `ITEMCODE IN (${inList})`));
+    }),
+    4
+  );
+  return taskResults.flat();
 }
 
 const parseNum  = (v) => (v === null || v === undefined) ? 0 : parseFloat(v) || 0;
@@ -110,14 +133,14 @@ export async function GET(request) {
     const invRows = await safe(() => ostendoFetch('SALESINVOICEHEADER', invCondition));
     console.log(`[Ostendo/adv] invRows: ${invRows.length}`);
 
-    // ── Step 2: Invoice lines by invoice number (SALESINVOICELINES has no date col) ──
+    // ── Step 2: Invoice lines — parallel chunks (SALESINVOICELINES has no date col) ──
     const invoiceNumbers = [...new Set(invRows.map(r => r.INVOICENUMBER).filter(Boolean))];
     const lineRows = await fetchLinesByInvoiceNumbers(invoiceNumbers);
     console.log(`[Ostendo/adv] lineRows: ${lineRows.length} from ${invoiceNumbers.length} invoices`);
 
-    // ── Step 3: Item master — only for codes that appeared in lines ──────────
+    // ── Step 3: Item master — parallel chunks, only for sold items ────────────
     const soldCodes = [...new Set(lineRows.map(r => r.ITEMCODE).filter(Boolean))];
-    const itemRows  = await fetchByItemCodes('ITEMMASTER', soldCodes);
+    const itemRows  = await fetchByItemCodes(soldCodes);
     console.log(`[Ostendo/adv] itemRows: ${itemRows.length}`);
 
     const itemMap = {};
@@ -180,22 +203,24 @@ export async function GET(request) {
       if (!name) continue;
       const rev = parseNum(inv.INVOICENETTAMOUNT ?? inv.INVOICETOTALAMOUNT ?? inv.INVOICEVALUE);
       if (!custSpend[name]) {
-        custSpend[name] = { customer: name, email: inv.BILLINGEMAIL || '', totalSpend: 0, orderCount: 0, lastOrder: null };
+        custSpend[name] = { customer: name, email: inv.BILLINGEMAIL || '', totalSpend: 0, orderCount: 0, lastOrder: null, firstOrder: null };
       }
       custSpend[name].totalSpend += rev;
       custSpend[name].orderCount += 1;
       const d = parseDate(inv.INVOICEDATE);
-      if (d && (!custSpend[name].lastOrder || d > custSpend[name].lastOrder)) {
-        custSpend[name].lastOrder = d;
+      if (d) {
+        if (!custSpend[name].lastOrder  || d > custSpend[name].lastOrder)  custSpend[name].lastOrder  = d;
+        if (!custSpend[name].firstOrder || d < custSpend[name].firstOrder) custSpend[name].firstOrder = d;
       }
     }
 
+    const today2 = new Date();
     const customerList = Object.values(custSpend)
       .sort((a, b) => b.totalSpend - a.totalSpend)
-      .slice(0, 50)
+      .slice(0, 100)
       .map(c => {
         const daysSince = c.lastOrder
-          ? Math.floor((Date.now() - c.lastOrder.getTime()) / 86400000)
+          ? Math.floor((today2.getTime() - c.lastOrder.getTime()) / 86400000)
           : null;
         return {
           customer:      c.customer,
@@ -203,7 +228,8 @@ export async function GET(request) {
           totalSpend:    Math.round(c.totalSpend),
           orderCount:    c.orderCount,
           aov:           c.orderCount > 0 ? Math.round(c.totalSpend / c.orderCount) : 0,
-          lastOrder:     c.lastOrder ? c.lastOrder.toISOString() : null,
+          lastOrder:     c.lastOrder  ? c.lastOrder.toISOString()  : null,
+          firstOrder:    c.firstOrder ? c.firstOrder.toISOString() : null,
           lastOrderDays: daysSince,
           status:        daysSince === null ? 'Unknown'
                        : daysSince > 90    ? 'Lapsed'
@@ -214,14 +240,13 @@ export async function GET(request) {
 
     const churned = customerList.filter(c => c.status === 'Lapsed');
     const atRisk  = customerList.filter(c => c.status === 'At Risk');
-    const clv     = customerList.slice(0, 20).map(({ customer, email, totalSpend, orderCount, aov }) =>
-      ({ customer, email, totalSpend, orderCount, aov }));
+    const clv     = [...customerList].sort((a, b) => b.totalSpend - a.totalSpend).slice(0, 50);
 
     return NextResponse.json({
       products,
       categories,
       customers:  customerList,
-      slowMoving: [],   // requires full ITEMQTYSUMMARIES scan — skipped for performance
+      slowMoving: [],
       churned,
       atRisk,
       clv,

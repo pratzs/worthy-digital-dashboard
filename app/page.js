@@ -450,7 +450,7 @@ export default function EcommerceDashboard() {
           const mappedSlowMoving  = (data.slowMoving || []).map(s => ({ name: s.title, currentStock: s.stockOnHand, qtySold: 0, lockedCapital: s.capitalTied }));
           const mappedChurned     = (data.churned    || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
           const mappedAtRisk      = (data.atRisk     || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
-          const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: null }));
+          const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: c.firstOrder || null }));
           setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], metrics: data.metrics || {} }, prev: {} });
         } else {
           const channelParam = `&channel=${channelTab}`;
