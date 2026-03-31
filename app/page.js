@@ -16,7 +16,7 @@ const BRAND = {
 
 const STORES = [
   { id: "worthy", name: "Worthy Products North", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
-  { id: "luxe",   name: "Worthy Products South (Coming Soon)", color: BRAND.products.mid, accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
+  { id: "luxe",   name: "Worthy Products South", color: BRAND.products.mid, accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
   { id: "nova",   name: "Worthy Oceania (Coming Soon)", color: BRAND.oceania.mid, accent2: BRAND.oceania.light, dark: BRAND.oceania.primary, logo: "oceania", currency: "NZD" },
 ];
 
@@ -395,13 +395,14 @@ export default function EcommerceDashboard() {
   const loadingRef = useRef({});
 
   const fetchYear = async (storeId, year) => {
-    if (storeId !== "worthy") return;
+    if (storeId !== "worthy" && storeId !== "luxe") return;
     const key = storeId + ":" + year;
     if (cacheRef.current[key] || loadingRef.current[key]) return;
     loadingRef.current[key] = true;
     forceUpdate();
     try {
-      const r    = await fetch("/api/shopify?year=" + year);
+      const endpoint = storeId === "luxe" ? "/api/ostendo?year=" + year : "/api/shopify?year=" + year;
+      const r    = await fetch(endpoint);
       const json = await r.json();
       const convert = (arr) => (arr?.length > 0 ? arr.map(m => ({
         ...m,
@@ -425,7 +426,7 @@ export default function EcommerceDashboard() {
 
   // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
-    if (activeStore.id !== "worthy") return;
+    if (activeStore.id !== "worthy" && activeStore.id !== "luxe") return;
     const load = async () => {
       await Promise.all([
         fetchYear(activeStore.id, selectedYear),
@@ -433,10 +434,16 @@ export default function EcommerceDashboard() {
       ]);
       setAdvLoading(true);
       try {
-        const channelParam = activeStore.id === "worthy" ? `&channel=${channelTab}` : "";
-        const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
-        const data = await res.json();
-        setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
+        if (activeStore.id === "luxe") {
+          const res  = await fetch(`/api/ostendo/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
+          const data = await res.json();
+          setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
+        } else {
+          const channelParam = `&channel=${channelTab}`;
+          const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
+          const data = await res.json();
+          setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
+        }
       } catch (e) { console.error("Advanced fetch failed", e); }
       setAdvLoading(false);
     };
@@ -445,14 +452,19 @@ export default function EcommerceDashboard() {
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
-    if (view === "yoy" && activeStore.id === "worthy") {
+    if (view === "yoy" && (activeStore.id === "worthy" || activeStore.id === "luxe")) {
       Promise.all(ALL_YEARS.map(yr => fetchYear(activeStore.id, yr)));
     }
   }, [activeStore.id, view]); // eslint-disable-line
 
   const getMonthly = (year) => {
     const cached = cacheRef.current[activeStore.id + ":" + year];
-    if (!cached) return generateMonthlyData(activeStore.id, year);
+    if (!cached) {
+      // Show sample data only for stores not yet connected (nova), loading state for luxe/worthy
+      if (activeStore.id === "luxe") return generateEmptyYear();
+      return generateMonthlyData(activeStore.id, year);
+    }
+    if (activeStore.id === "luxe") return cached.all || generateEmptyYear();
     if (activeStore.id !== "worthy") return cached;
     // Return channel-specific slice for worthy store
     if (channelTab === "pos")    return cached.pos    || generateEmptyYear();
@@ -464,7 +476,7 @@ export default function EcommerceDashboard() {
     return cached?.salespeople || [];
   };
   const isLoading  = (year) => !!loadingRef.current[activeStore.id + ":" + year];
-  const hasData    = (year) => activeStore.id !== "worthy" || !!cacheRef.current[activeStore.id + ":" + year];
+  const hasData    = (year) => (activeStore.id !== "worthy" && activeStore.id !== "luxe") || !!cacheRef.current[activeStore.id + ":" + year];
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
 
   const curr       = getMonthly(selectedYear);
