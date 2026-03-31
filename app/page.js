@@ -701,7 +701,7 @@ export default function EcommerceDashboard() {
               {anyLoading && <div style={{ fontSize: 10, color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: "2px 8px", borderRadius: 20 }}>LOADING…</div>}
             </div>
             <div style={{ fontSize: 10, color: T.textSub, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-              {activeStore.id === "worthy" ? "Live Shopify Data" : "Sample Data"} · Performance Overview
+              {activeStore.id === "worthy" ? "Live Shopify Data" : activeStore.id === "luxe" ? "Live Ostendo Data" : "Sample Data"} · Performance Overview
             </div>
           </div>
         </div>
@@ -716,7 +716,7 @@ export default function EcommerceDashboard() {
               <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: selectedYear === y ? `1px solid ${accent}` : `1px solid ${T.border}`, background: selectedYear === y ? `${accent}20` : "transparent", color: selectedYear === y ? accent : loaded ? (darkMode ? "#c0a870" : "#6a5040") : T.textMuted, cursor: "pointer", transition: "all 0.2s", position: "relative" }}>
                 {y}
                 {fetching && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: accent }} />}
-                {!fetching && loaded && selectedYear !== y && activeStore.id === "worthy" && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#4ade80", opacity: 0.7 }} />}
+                {!fetching && loaded && selectedYear !== y && (activeStore.id === "worthy" || activeStore.id === "luxe") && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#4ade80", opacity: 0.7 }} />}
               </button>
             );
           })}
@@ -956,7 +956,7 @@ export default function EcommerceDashboard() {
         )}
 
         {/* ADVANCED ANALYTICS */}
-        {activeStore.id === "worthy" && (
+        {(activeStore.id === "worthy" || activeStore.id === "luxe") && (
           <>
             {/* Category drill-down modal */}
             <CategoryModal
@@ -990,8 +990,8 @@ export default function EcommerceDashboard() {
                 aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
             </div>
 
-            {/* Salesperson table — POS only */}
-            {channelTab === "pos" && (
+            {/* Salesperson table — POS only, not for Ostendo (luxe) */}
+            {activeStore.id !== "luxe" && channelTab === "pos" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
                 <AdvancedTable theme={T} title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
                   aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
