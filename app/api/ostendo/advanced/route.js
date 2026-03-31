@@ -21,22 +21,19 @@ const agent = new https.Agent({ rejectUnauthorized: false });
  *  ITEMQTYSUMMARIES    → ITEMCODE, ONHANDQTY (or QTYONHAND / STOCKONHANDQTY)
  */
 async function ostendoFetch(tablename, condition = null) {
-  const base    = process.env.OSTENDO_BASE_URL;
-  const apiKey  = process.env.OSTENDO_API_KEY;
-  const encoded = encodeURIComponent(apiKey);
+  const base   = process.env.OSTENDO_BASE_URL;
+  const apiKey = process.env.OSTENDO_API_KEY;
 
-  const url = new URL(`${base}/tabledata`);
-  url.searchParams.set('tablename', tablename);
-  url.searchParams.set('apikey',    encoded);
-  url.searchParams.set('format',    'json');
-  if (condition) url.searchParams.set('condition', condition);
+  // Use URLSearchParams — it handles encoding internally (do NOT pre-encode the key)
+  const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
+  if (condition) params.set('condition', condition);
 
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(url.toString());
+    const urlObj = new URL(base);
     const options = {
       hostname: urlObj.hostname,
       port:     parseInt(urlObj.port) || 443,
-      path:     urlObj.pathname + urlObj.search,
+      path:     `/tabledata?${params.toString()}`,
       method:   'GET',
       agent,
     };
