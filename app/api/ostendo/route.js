@@ -75,7 +75,8 @@ export async function GET(request) {
 
   try {
     // ── Fetch SALESINVOICEHEADER for the year ────────────────────────────────
-    const condition = `INVOICEDATE >= '${yearStart}' AND INVOICEDATE <= '${yearEnd}'`;
+    // Use EXTRACT() to avoid >= / <= encoding issues with Ostendo's Firebird SQL parser
+    const condition = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
     const raw = await ostendoFetch('SALESINVOICEHEADER', condition);
     const rows = normalizeRows(raw);
 
