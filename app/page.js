@@ -391,8 +391,9 @@ export default function EcommerceDashboard() {
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
-  const cacheRef   = useRef({});
-  const loadingRef = useRef({});
+  const cacheRef      = useRef({});
+  const loadingRef    = useRef({});
+  const advStoreRef   = useRef(null); // tracks which store's advanced fetch is active
 
   const fetchYear = async (storeId, year) => {
     if (storeId !== "worthy" && storeId !== "luxe") return;
@@ -428,6 +429,7 @@ export default function EcommerceDashboard() {
   useEffect(() => {
     if (activeStore.id !== "worthy" && activeStore.id !== "luxe") return;
     const storeId = activeStore.id; // capture so async closure stays correct
+    advStoreRef.current = storeId;  // mark this store as the active advanced fetch
     const load = async () => {
       setAdvancedData({});          // clear old store data immediately
       setAdvLoading(true);
@@ -435,10 +437,12 @@ export default function EcommerceDashboard() {
         fetchYear(storeId, selectedYear),
         fetchYear(storeId, selectedYear - 1),
       ]);
+      if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       try {
         if (storeId === "luxe") {
           const res  = await fetch(`/api/ostendo/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
           const data = await res.json();
+          if (advStoreRef.current !== storeId) return; // stale — discard
           // Map Ostendo field names → Shopify-compatible names used by display columns
           const mappedProducts    = (data.products   || []).map(p => ({ name: p.title, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin, category: p.category }));
           const mappedCategories  = (data.categories || []).map(c => ({ name: c.category, qty: c.unitsSold, revenue: c.revenue, margin: c.margin, productCount: c.productCount }));
@@ -452,13 +456,15 @@ export default function EcommerceDashboard() {
           const channelParam = `&channel=${channelTab}`;
           const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
           const data = await res.json();
+          if (advStoreRef.current !== storeId) return; // stale — discard
           setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
         }
       } catch (e) {
         console.error(`[${storeId}] Advanced fetch failed:`, e);
+        if (advStoreRef.current !== storeId) return;
         setAdvancedData({ curr: { topProducts: [], topCategories: [], topCustomers: [], slowMoving: [], churned: [], atRisk: [], clv: [], declining: [], metrics: {} }, prev: {} });
       }
-      setAdvLoading(false);
+      if (advStoreRef.current === storeId) setAdvLoading(false);
     };
     load();
   }, [activeStore.id, selectedYear, startDate, endDate, channelTab]); // eslint-disable-line
