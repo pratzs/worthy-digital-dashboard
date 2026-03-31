@@ -24,16 +24,16 @@ async function ostendoFetch(tablename, condition = null) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
 
-  // Use URLSearchParams — it handles encoding internally (do NOT pre-encode the key)
+  // Ostendo's Firebird parser requires %20 for spaces — URLSearchParams uses + which breaks SQL
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
-  if (condition) params.set('condition', condition);
+  const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20')}` : '';
 
   return new Promise((resolve, reject) => {
     const urlObj = new URL(base);
     const options = {
       hostname: urlObj.hostname,
       port:     parseInt(urlObj.port) || 443,
-      path:     `/tabledata?${params.toString()}`,
+      path:     `/tabledata?${params.toString()}${conditionStr}`,
       method:   'GET',
       agent,
     };
