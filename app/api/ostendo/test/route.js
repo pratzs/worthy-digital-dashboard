@@ -46,7 +46,7 @@ export async function GET() {
     // Test 2: tabledata with SALESINVOICEHEADER, no condition, apikey as raw (let URLSearchParams encode)
     const p2 = new URLSearchParams({
       tablename: 'SALESINVOICEHEADER',
-      apikey:    rawKey,           // raw key — URLSearchParams encodes internally
+      apikey:    rawKey,
       format:    'json',
     });
     const t2 = await rawFetch(host, port, `/tabledata?${p2.toString()}`);

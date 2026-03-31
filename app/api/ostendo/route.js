@@ -57,8 +57,8 @@ const parseDate = (v) => {
   const s = String(v).trim();
   // YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10));
-  // DD/MM/YYYY
-  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+  // D/MM/YYYY or DD/MM/YYYY (Ostendo format e.g. "3/03/2025")
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
     const [d, m, y] = s.split('/');
     return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
   }
@@ -92,8 +92,8 @@ export async function GET(request) {
 
       const mi  = d.getMonth();
       // INVOICENETTAMOUNT = excl. tax  |  fallback to INVOICETOTALAMOUNT
-      const rev  = parseNum(row.INVOICENETTAMOUNT  ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
-      const disc = parseNum(row.DISCOUNTAMOUNT);
+      const rev  = parseNum(row.INVOICENETTAMOUNT ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
+      const disc = parseNum(row.LINEDISCOUNTAMOUNT ?? row.DISCOUNTAMOUNT);
 
       monthly[mi].revenue        += rev;
       monthly[mi].totalDiscounts += disc;

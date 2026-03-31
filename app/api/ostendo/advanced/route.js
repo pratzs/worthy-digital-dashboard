@@ -59,7 +59,8 @@ const parseDate = (v) => {
   if (!v) return null;
   const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10));
-  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+  // D/MM/YYYY or DD/MM/YYYY (Ostendo format e.g. "3/03/2025")
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
     const [d, m, y] = s.split('/');
     return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
   }
@@ -157,8 +158,8 @@ export async function GET(request) {
     // ── Top Customers (from SALESINVOICEHEADER.INVOICECUSTOMER) ─────────────
     const custSpend = {};
     for (const inv of invRows) {
-      // INVOICECUSTOMER is the customer reference on the invoice header
-      const code = inv.INVOICECUSTOMER ?? inv.CUSTOMERCODE;
+      // CUSTOMER is the customer name directly on the invoice header
+      const code = inv.CUSTOMER ?? inv.INVOICECUSTOMER ?? inv.CUSTOMERCODE;
       if (!code) continue;
 
       const rev = parseNum(inv.INVOICENETTAMOUNT ?? inv.INVOICETOTALAMOUNT ?? inv.INVOICEVALUE);
@@ -166,8 +167,8 @@ export async function GET(request) {
       if (!custSpend[code]) {
         const cInfo = custMap[code] || {};
         custSpend[code] = {
-          customer:   cInfo.CUSTOMERNAME || code,
-          email:      cInfo.CUSTOMEREMAIL || '',
+          customer:   code,  // CUSTOMER field IS the name on Dutch Rusk invoices
+          email:      cInfo.CUSTOMEREMAIL || cInfo.BILLINGEMAIL || '',
           totalSpend: 0,
           orderCount: 0,
           lastOrder:  null,
