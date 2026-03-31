@@ -437,7 +437,15 @@ export default function EcommerceDashboard() {
         if (activeStore.id === "luxe") {
           const res  = await fetch(`/api/ostendo/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
           const data = await res.json();
-          setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
+          // Map Ostendo field names → Shopify-compatible names used by display columns
+          const mappedProducts    = (data.products   || []).map(p => ({ name: p.title, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin, category: p.category }));
+          const mappedCategories  = (data.categories || []).map(c => ({ name: c.category, qty: c.unitsSold, revenue: c.revenue, margin: c.margin, productCount: c.productCount }));
+          const mappedCustomers   = (data.customers  || []).map(c => ({ name: c.customer, orderCount: c.orderCount, revenue: c.totalSpend, status: c.status, email: c.email, aov: c.aov, lastOrderDays: c.lastOrderDays }));
+          const mappedSlowMoving  = (data.slowMoving || []).map(s => ({ name: s.title, currentStock: s.stockOnHand, qtySold: 0, lockedCapital: s.capitalTied }));
+          const mappedChurned     = (data.churned    || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
+          const mappedAtRisk      = (data.atRisk     || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
+          const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: null }));
+          setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], metrics: data.metrics || {} }, prev: {} });
         } else {
           const channelParam = `&channel=${channelTab}`;
           const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
