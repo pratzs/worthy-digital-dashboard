@@ -138,6 +138,58 @@ const lineNet = (line) => {
 const lineCostTotal = (line) =>
   parseNum(line.INVOICEQTY) * parseNum(line.INVOICEUNITCOST);
 
+/**
+ * Build a Firebird INVOICEDATE condition using only EXTRACT() and IN() —
+ * avoids >= / <= operators which can be problematic in Firebird URL conditions.
+ *
+ * Same-year example: Jan–Apr 2026
+ *   → EXTRACT(YEAR FROM INVOICEDATE) = 2026
+ *     AND EXTRACT(MONTH FROM INVOICEDATE) IN (1,2,3,4)
+ *
+ * Multi-year example: Oct 2025–Apr 2026
+ *   → EXTRACT(YEAR FROM INVOICEDATE) IN (2025,2026)
+ *   (over-fetches slightly; JS filters rows to exact date range after)
+ */
+function buildDateCond(startIso, endIso) {
+  const s  = new Date(startIso);
+  const e  = new Date(endIso);
+  const sy = s.getFullYear(), sm = s.getMonth() + 1; // months 1-12
+  const ey = e.getFullYear(), em = e.getMonth() + 1;
+
+  if (sy === ey) {
+    if (sm === 1 && em === 12) {
+      return `EXTRACT(YEAR FROM INVOICEDATE) = ${sy}`;
+    }
+    const months = Array.from({ length: em - sm + 1 }, (_, i) => sm + i);
+    if (months.length === 1) {
+      return `EXTRACT(YEAR FROM INVOICEDATE) = ${sy} AND EXTRACT(MONTH FROM INVOICEDATE) = ${sm}`;
+    }
+    return `EXTRACT(YEAR FROM INVOICEDATE) = ${sy} AND EXTRACT(MONTH FROM INVOICEDATE) IN (${months.join(',')})`;
+  }
+
+  // Multi-year span: use IN() for the year list
+  const years = Array.from({ length: ey - sy + 1 }, (_, i) => sy + i);
+  return `EXTRACT(YEAR FROM INVOICEDATE) IN (${years.join(',')})`;
+}
+
+/** Same date range shifted back 1 year (for prior-year comparison) */
+function buildPrevYearCond(startIso, endIso) {
+  const s  = new Date(startIso);
+  const e  = new Date(endIso);
+  const py = s.getFullYear() - 1;
+  const sm = s.getMonth() + 1;
+  const em = e.getMonth() + 1;
+
+  if (sm === 1 && em === 12) {
+    return `EXTRACT(YEAR FROM INVOICEDATE) = ${py}`;
+  }
+  const months = Array.from({ length: em - sm + 1 }, (_, i) => sm + i);
+  if (months.length === 1) {
+    return `EXTRACT(YEAR FROM INVOICEDATE) = ${py} AND EXTRACT(MONTH FROM INVOICEDATE) = ${sm}`;
+  }
+  return `EXTRACT(YEAR FROM INVOICEDATE) = ${py} AND EXTRACT(MONTH FROM INVOICEDATE) IN (${months.join(',')})`;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const today      = new Date();
@@ -145,28 +197,38 @@ export async function GET(request) {
   const endParam   = searchParams.get('endDate')   || today.toISOString().split('T')[0];
 
   try {
-    const startYear = new Date(startParam).getFullYear();
-    const endYear   = new Date(endParam).getFullYear();
-    const prevYear  = startYear - 1;
+    const startDate = new Date(startParam);
+    const endDate   = new Date(endParam);
 
-    const makeYearCond = (yr) => `EXTRACT(YEAR FROM INVOICEDATE) = ${yr}`;
-    const currCond = startYear === endYear
-      ? makeYearCond(startYear)
-      : `EXTRACT(YEAR FROM INVOICEDATE) >= ${startYear} AND EXTRACT(YEAR FROM INVOICEDATE) <= ${endYear}`;
+    // Conditions respect the exact date range chosen in the UI
+    const currCond = buildDateCond(startParam, endParam);
+    const prevCond = buildPrevYearCond(startParam, endParam);
 
-    // ── PHASE 1: headers for BOTH years + current year lines — all parallel ───
+    console.log(`[Ostendo/adv] curr cond: ${currCond}`);
+    console.log(`[Ostendo/adv] prev cond: ${prevCond}`);
+
+    // ── PHASE 1: headers for current period + same-period prior year ──────────
     //
-    // We do NOT fetch prior-year lines — header-level INVOICENETTAMOUNT is
-    // accurate for customer spend, so lines are only needed for product analysis.
+    // Prior-year LINES are not fetched — header INVOICENETTAMOUNT is accurate
+    // for all customer spend calculations (lapsed / at-risk / CLV).
     //
     const [currInvRows, prevInvRows] = await Promise.all([
       safe(() => ostendoFetch('SALESINVOICEHEADER', currCond)),
-      safe(() => ostendoFetch('SALESINVOICEHEADER', makeYearCond(prevYear))),
+      safe(() => ostendoFetch('SALESINVOICEHEADER', prevCond)),
     ]);
-    console.log(`[Ostendo/adv] curr headers: ${currInvRows.length}, prev headers: ${prevInvRows.length}`);
 
-    // ── PHASE 2: current-year lines (parallel chunks) ─────────────────────────
-    const currInvNums = [...new Set(currInvRows.map(r => r.INVOICENUMBER).filter(Boolean))];
+    // JS-side date filter for multi-year fetches that may over-fetch
+    const inRange = (inv) => {
+      const d = parseDate(inv.INVOICEDATE);
+      return d && d >= startDate && d <= endDate;
+    };
+    const filteredCurrInvRows = currInvRows.filter(inRange);
+    // prev rows: already month-filtered by SQL
+    const filteredPrevInvRows = prevInvRows;
+    console.log(`[Ostendo/adv] curr headers: ${filteredCurrInvRows.length}, prev headers: ${filteredPrevInvRows.length}`);
+
+    // ── PHASE 2: current-period lines (parallel chunks) ───────────────────────
+    const currInvNums = [...new Set(filteredCurrInvRows.map(r => r.INVOICENUMBER).filter(Boolean))];
     const currLineRows = await fetchLinesByInvoiceNumbers(currInvNums);
     console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}`);
 
@@ -240,7 +302,7 @@ export async function GET(request) {
     // ── CUSTOMERS — uses header-level INVOICENETTAMOUNT (confirmed accurate) ──
     // Combine curr + prev headers so lapsed 2025 customers appear
     const custMap = {};
-    for (const inv of [...currInvRows, ...prevInvRows]) {
+    for (const inv of [...filteredCurrInvRows, ...filteredPrevInvRows]) {
       const name = inv.CUSTOMER ?? inv.INVOICECUSTOMER;
       if (!name) continue;
       const d   = parseDate(inv.INVOICEDATE);
@@ -361,8 +423,8 @@ export async function GET(request) {
       declining,
       decliningMoM,
       metrics: {
-        totalRevenue:    Math.round(currInvRows.reduce((s, r) => s + parseNum(r.INVOICENETTAMOUNT ?? r.INVOICETOTALAMOUNT), 0)),
-        totalOrders:     currInvRows.length,
+        totalRevenue:    Math.round(filteredCurrInvRows.reduce((s, r) => s + parseNum(r.INVOICENETTAMOUNT ?? r.INVOICETOTALAMOUNT), 0)),
+        totalOrders:     filteredCurrInvRows.length,
         uniqueCustomers: Object.keys(custMap).length,
         lineCount:       currLineRows.length,
         invoiceCount:    currInvNums.length,
