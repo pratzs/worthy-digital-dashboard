@@ -249,10 +249,17 @@ export async function GET(request) {
     const filteredCurrInvRows = currInvRows.filter(inRange);
     // prev rows: already month-filtered by SQL
     const filteredPrevInvRows = prevInvRows;
+    // Log actual field names from first row so we can verify column names
+    if (filteredCurrInvRows.length > 0) {
+      console.log(`[Ostendo/adv] header keys: ${Object.keys(filteredCurrInvRows[0]).join(', ')}`);
+    }
     console.log(`[Ostendo/adv] curr headers: ${filteredCurrInvRows.length}, prev headers: ${filteredPrevInvRows.length}`);
 
     // ── PHASE 2: current-period lines (parallel chunks) ───────────────────────
-    const currInvNums = [...new Set(filteredCurrInvRows.map(r => r.INVOICENUMBER).filter(Boolean))];
+    // SALESINVOICEHEADER may return INVOICENO or INVOICENUMBER depending on version
+    const getInvNum = (r) => r.INVOICENUMBER ?? r.INVOICENO ?? r.InvoiceNumber ?? r.InvoiceNo;
+    const currInvNums = [...new Set(filteredCurrInvRows.map(getInvNum).filter(Boolean))];
+    console.log(`[Ostendo/adv] invoice nums sample: ${currInvNums.slice(0,3).join(', ')}`);
     const currLineRows = await fetchLinesByInvoiceNumbers(currInvNums);
     console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}`);
 
@@ -284,8 +291,9 @@ export async function GET(request) {
     };
 
     const invDateMap = {};
-    for (const inv of currInvRows) {
-      if (inv.INVOICENUMBER) invDateMap[inv.INVOICENUMBER] = parseDate(inv.INVOICEDATE);
+    for (const inv of filteredCurrInvRows) {
+      const n = getInvNum(inv);
+      if (n) invDateMap[n] = parseDate(inv.INVOICEDATE);
     }
 
     const currItemRevMap = buildItemRevMap(currLineRows);
@@ -401,7 +409,7 @@ export async function GET(request) {
     const moMRevMap = (targetMon, lines) => {
       const map = {};
       for (const line of lines) {
-        const d = invDateMap[line.INVOICENUMBER];
+        const d = invDateMap[line.INVOICENUMBER ?? line.INVOICENO];
         if (!d || d.getMonth() !== targetMon) continue;
         const code = line.ITEMCODE;
         if (!code) continue;
