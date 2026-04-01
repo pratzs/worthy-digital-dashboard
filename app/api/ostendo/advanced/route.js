@@ -93,29 +93,22 @@ const fmtInVal = (v) => {
   return /^\d+$/.test(s) ? s : `'${s.replace(/'/g, "''")}'`;
 };
 
-/** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) — parallel chunks */
-async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 50) {
-  if (!invoiceNumbers.length) return [];
-  const chunks = [];
-  for (let i = 0; i < invoiceNumbers.length; i += chunkSize) {
-    chunks.push(invoiceNumbers.slice(i, i + chunkSize));
-  }
-  console.log(`[Ostendo/lines] ${invoiceNumbers.length} invoices → ${chunks.length} chunks`);
-  // Log a sample condition so we can verify the format in Vercel logs
-  if (chunks[0]) {
-    const sample = chunks[0].slice(0, 3).map(fmtInVal).join(',');
-    console.log(`[Ostendo/lines] sample condition: INVOICENUMBER IN (${sample},...)`);
-  }
-  const results = await parallelLimit(
-    chunks.map(chunk => () => {
-      const inList = chunk.map(fmtInVal).join(',');
-      return safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`));
-    }),
-    4
-  );
-  const rows = results.flat();
-  console.log(`[Ostendo/lines] total rows returned: ${rows.length}`);
-  return rows;
+/**
+ * Fetch ALL SALESINVOICELINES in one call (no condition), then filter by
+ * invoice number set in JavaScript. This avoids Ostendo's apparent rejection
+ * of large IN() clause lists on this table.
+ * Uses a 45s timeout — one big response is faster than 100 failing small ones.
+ */
+async function fetchAllLines(validInvNumSet) {
+  console.log(`[Ostendo/lines] fetching ALL lines (no condition), will filter to ${validInvNumSet.size} invoices`);
+  const allRows = await safe(() => ostendoFetch('SALESINVOICELINES', null, 45000));
+  console.log(`[Ostendo/lines] raw rows returned: ${allRows.length}`);
+  const filtered = allRows.filter(r => {
+    const n = r.INVOICENUMBER ?? r.INVOICENO;
+    return n && validInvNumSet.has(String(n));
+  });
+  console.log(`[Ostendo/lines] rows after invoice filter: ${filtered.length}`);
+  return filtered;
 }
 
 /** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks */
@@ -255,12 +248,15 @@ export async function GET(request) {
     }
     console.log(`[Ostendo/adv] curr headers: ${filteredCurrInvRows.length}, prev headers: ${filteredPrevInvRows.length}`);
 
-    // ── PHASE 2: current-period lines (parallel chunks) ───────────────────────
+    // ── PHASE 2: current-period lines ────────────────────────────────────────
     // SALESINVOICEHEADER may return INVOICENO or INVOICENUMBER depending on version
     const getInvNum = (r) => r.INVOICENUMBER ?? r.INVOICENO ?? r.InvoiceNumber ?? r.InvoiceNo;
-    const currInvNums = [...new Set(filteredCurrInvRows.map(getInvNum).filter(Boolean))];
+    const currInvNums    = [...new Set(filteredCurrInvRows.map(getInvNum).filter(Boolean))];
+    const currInvNumSet  = new Set(currInvNums.map(String));
     console.log(`[Ostendo/adv] invoice nums sample: ${currInvNums.slice(0,3).join(', ')}`);
-    const currLineRows = await fetchLinesByInvoiceNumbers(currInvNums);
+
+    // Fetch ALL lines in one request — Ostendo rejects large IN() lists on SALESINVOICELINES
+    const currLineRows = await fetchAllLines(currInvNumSet);
     console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}`);
 
     // ── PHASE 3: item master for sold codes (parallel chunks) ─────────────────
