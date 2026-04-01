@@ -32,7 +32,11 @@ async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
-  const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20')}` : '';
+  // Encode spaces as %20 (Firebird rejects + from URLSearchParams)
+  // Encode single quotes as %27 (bare ' in URL breaks Firebird string literals)
+  const conditionStr = condition
+    ? `&condition=${condition.replace(/ /g, '%20').replace(/'/g, '%27')}`
+    : '';
   const fullPath = `/tabledata?${params.toString()}${conditionStr}`;
 
   return new Promise((resolve, reject) => {
@@ -94,21 +98,22 @@ const fmtInVal = (v) => {
 };
 
 /**
- * Fetch ALL SALESINVOICELINES in one call (no condition), then filter by
- * invoice number set in JavaScript. This avoids Ostendo's apparent rejection
- * of large IN() clause lists on this table.
- * Uses a 45s timeout — one big response is faster than 100 failing small ones.
+ * Fetch SALESINVOICELINES using a Firebird subquery so the DB filters server-side.
+ * Avoids: (1) large IN() lists that Ostendo rejects, (2) full-table "Out of memory".
+ *
+ * condition example:
+ *   INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER
+ *     WHERE EXTRACT(YEAR FROM INVOICEDATE) = 2026
+ *     AND EXTRACT(MONTH FROM INVOICEDATE) IN (1,2,3,4))
+ *
+ * Single quotes in strings are encoded as %27 by ostendoFetch.
  */
-async function fetchAllLines(validInvNumSet) {
-  console.log(`[Ostendo/lines] fetching ALL lines (no condition), will filter to ${validInvNumSet.size} invoices`);
-  const allRows = await safe(() => ostendoFetch('SALESINVOICELINES', null, 45000));
-  console.log(`[Ostendo/lines] raw rows returned: ${allRows.length}`);
-  const filtered = allRows.filter(r => {
-    const n = r.INVOICENUMBER ?? r.INVOICENO;
-    return n && validInvNumSet.has(String(n));
-  });
-  console.log(`[Ostendo/lines] rows after invoice filter: ${filtered.length}`);
-  return filtered;
+async function fetchLinesViaSubquery(headerDateCond) {
+  const cond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${headerDateCond})`;
+  console.log(`[Ostendo/lines] subquery: ${cond}`);
+  const rows = await safe(() => ostendoFetch('SALESINVOICELINES', cond, 45000));
+  console.log(`[Ostendo/lines] subquery rows returned: ${rows.length}`);
+  return rows;
 }
 
 /** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks */
@@ -255,8 +260,9 @@ export async function GET(request) {
     const currInvNumSet  = new Set(currInvNums.map(String));
     console.log(`[Ostendo/adv] invoice nums sample: ${currInvNums.slice(0,3).join(', ')}`);
 
-    // Fetch ALL lines in one request — Ostendo rejects large IN() lists on SALESINVOICELINES
-    const currLineRows = await fetchAllLines(currInvNumSet);
+    // Fetch lines via Firebird subquery — Ostendo rejects large IN() lists and
+    // full-table fetch causes "Out of memory" on the server
+    const currLineRows = await fetchLinesViaSubquery(currCond);
     console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}`);
 
     // ── PHASE 3: item master for sold codes (parallel chunks) ─────────────────
