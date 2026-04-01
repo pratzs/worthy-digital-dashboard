@@ -15,24 +15,19 @@ const agent = new https.Agent({ rejectUnauthorized: false });
  *
  *  SALESINVOICELINES  → INVOICENUMBER (FK), ITEMCODE,
  *                        INVOICEQTY          ← correct (NOT INVOICEDQTY)
- *                        INVOICEUNITPRICE    ← unit sell price
- *                        CUSTOMERUNITPRICE   ← customer-specific price (use this first)
+ *                        INVOICEUNITPRICE    ← unit sell price (ex-tax)
+ *                        CUSTOMERUNITPRICE   ← customer-specific price (use first)
  *                        INVOICEUNITCOST     ← cost per unit
- *                        DISCOUNTAMOUNT      ← line discount
- *                        DISCOUNTPERCENT     ← line discount %
+ *                        DISCOUNTAMOUNT, DISCOUNTPERCENT
  *                        INVOICEUNITTAX      ← unit tax
  *
  *  ITEMMASTER         → ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY,
  *                        ITEMUNIT, ITEMSTATUS,
- *                        ONHANDQTY           ← stock on hand (use for slow-moving)
- *                        STDBUYPRICE         ← standard buy price (capital tied up)
+ *                        ONHANDQTY    ← stock on hand
+ *                        STDBUYPRICE  ← standard buy price (capital tied)
  *                        STDSELLPRICE, STDSELLPRICEINCTAX
- *
- *  CUSTOMERMASTER     → CUSTOMER, CUSTOMEREMAIL, CUSTOMERSTATUS, CUSTOMERTYPE,
- *                        CUSTOMERPHONE, CUSTOMERCITY
  */
 
-// Spaces must be %20 — Firebird treats URLSearchParams '+' as arithmetic operator
 async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
@@ -67,7 +62,7 @@ const normalizeRows = (res) =>
 
 const safe = async (fn) => { try { return normalizeRows(await fn()); } catch { return []; } };
 
-/** Run async tasks with at most `limit` in flight at once */
+/** Run async tasks with at most `limit` concurrent */
 async function parallelLimit(tasks, limit = 4) {
   const results = new Array(tasks.length);
   let next = 0;
@@ -82,7 +77,7 @@ async function parallelLimit(tasks, limit = 4) {
   return results;
 }
 
-/** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) — parallel chunks of 50 */
+/** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) — parallel chunks */
 async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 50) {
   if (!invoiceNumbers.length) return [];
   const chunks = [];
@@ -99,7 +94,7 @@ async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 50) {
   return results.flat();
 }
 
-/** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks of 50 */
+/** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks */
 async function fetchByItemCodes(codes, chunkSize = 50) {
   if (!codes.length) return [];
   const chunks = [];
@@ -130,22 +125,18 @@ const parseDate = (v) => {
 };
 
 /**
- * Line revenue = INVOICEQTY × CUSTOMERUNITPRICE (customer-specific price, incl. any discount)
- * Fall back to INVOICEUNITPRICE if CUSTOMERUNITPRICE not available.
- * Subtract INVOICEUNITTAX to get net (ex-GST) amount per unit.
+ * Line net revenue = INVOICEQTY × (CUSTOMERUNITPRICE or INVOICEUNITPRICE) − tax
+ * CUSTOMERUNITPRICE is the actual price charged to this customer (post-discount).
  */
 const lineNet = (line) => {
   const qty       = parseNum(line.INVOICEQTY);
   const unitPrice = parseNum(line.CUSTOMERUNITPRICE) || parseNum(line.INVOICEUNITPRICE);
   const unitTax   = parseNum(line.INVOICEUNITTAX);
-  return qty * (unitPrice - unitTax);
+  return qty * Math.max(unitPrice - unitTax, 0);
 };
 
-const lineCostTotal = (line) => {
-  const qty      = parseNum(line.INVOICEQTY);
-  const unitCost = parseNum(line.INVOICEUNITCOST);
-  return qty * unitCost;
-};
+const lineCostTotal = (line) =>
+  parseNum(line.INVOICEQTY) * parseNum(line.INVOICEUNITCOST);
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -158,50 +149,39 @@ export async function GET(request) {
     const endYear   = new Date(endParam).getFullYear();
     const prevYear  = startYear - 1;
 
-    // Build year conditions — EXTRACT(YEAR FROM INVOICEDATE) avoids >= / <= encoding issues
     const makeYearCond = (yr) => `EXTRACT(YEAR FROM INVOICEDATE) = ${yr}`;
-    const multiYearCond = startYear === endYear
+    const currCond = startYear === endYear
       ? makeYearCond(startYear)
       : `EXTRACT(YEAR FROM INVOICEDATE) >= ${startYear} AND EXTRACT(YEAR FROM INVOICEDATE) <= ${endYear}`;
 
-    // ── Step 1: Fetch current & previous year invoice headers in parallel ─────
+    // ── PHASE 1: headers for BOTH years + current year lines — all parallel ───
+    //
+    // We do NOT fetch prior-year lines — header-level INVOICENETTAMOUNT is
+    // accurate for customer spend, so lines are only needed for product analysis.
+    //
     const [currInvRows, prevInvRows] = await Promise.all([
-      safe(() => ostendoFetch('SALESINVOICEHEADER', multiYearCond)),
+      safe(() => ostendoFetch('SALESINVOICEHEADER', currCond)),
       safe(() => ostendoFetch('SALESINVOICEHEADER', makeYearCond(prevYear))),
     ]);
     console.log(`[Ostendo/adv] curr headers: ${currInvRows.length}, prev headers: ${prevInvRows.length}`);
 
-    // ── Step 2: Fetch invoice lines for both years in parallel chunks ─────────
+    // ── PHASE 2: current-year lines (parallel chunks) ─────────────────────────
     const currInvNums = [...new Set(currInvRows.map(r => r.INVOICENUMBER).filter(Boolean))];
-    const prevInvNums = [...new Set(prevInvRows.map(r => r.INVOICENUMBER).filter(Boolean))];
-    const allInvNums  = [...new Set([...currInvNums, ...prevInvNums])];
+    const currLineRows = await fetchLinesByInvoiceNumbers(currInvNums);
+    console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}`);
 
-    const allLineRows = await fetchLinesByInvoiceNumbers(allInvNums);
-    console.log(`[Ostendo/adv] total lines: ${allLineRows.length}`);
+    // ── PHASE 3: item master for sold codes (parallel chunks) ─────────────────
+    const soldCodes = [...new Set(currLineRows.map(r => r.ITEMCODE).filter(Boolean))];
+    const itemRows  = await fetchByItemCodes(soldCodes);
+    console.log(`[Ostendo/adv] itemRows: ${itemRows.length}`);
 
-    // Split lines into current / previous sets
-    const currInvNumSet = new Set(currInvNums);
-    const prevInvNumSet = new Set(prevInvNums);
-    const currLineRows  = allLineRows.filter(l => currInvNumSet.has(l.INVOICENUMBER));
-    const prevLineRows  = allLineRows.filter(l => prevInvNumSet.has(l.INVOICENUMBER));
-    console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}, prev lines: ${prevLineRows.length}`);
-
-    // ── Step 3: Fetch item master (sold items + all stocked items) in parallel ─
-    const soldCodes  = [...new Set(allLineRows.map(r => r.ITEMCODE).filter(Boolean))];
-    const [itemRows, stockOnlyRows] = await Promise.all([
-      fetchByItemCodes(soldCodes),
-      safe(() => ostendoFetch('ITEMMASTER', 'ONHANDQTY > 0')),
-    ]);
-
-    // Merge: stockOnlyRows first so sold-item data overwrites if duplicate
     const itemMap = {};
-    for (const it of [...stockOnlyRows, ...itemRows]) {
+    for (const it of itemRows) {
       if (it.ITEMCODE) itemMap[it.ITEMCODE] = it;
     }
-    console.log(`[Ostendo/adv] itemMap size: ${Object.keys(itemMap).length}`);
 
-    // ── Helper: build per-item revenue/qty map from a set of lines ────────────
-    const buildItemMap = (lines) => {
+    // ── BUILD per-item revenue map from current lines ─────────────────────────
+    const buildItemRevMap = (lines) => {
       const map = {};
       for (const line of lines) {
         const code = line.ITEMCODE;
@@ -217,29 +197,18 @@ export async function GET(request) {
       return map;
     };
 
-    const currItemRevMap = buildItemMap(currLineRows);
-    const prevItemRevMap = buildItemMap(prevLineRows);
-
-    // ── Invoice date index for MoM calculations ────────────────────────────────
     const invDateMap = {};
-    for (const inv of [...currInvRows, ...prevInvRows]) {
+    for (const inv of currInvRows) {
       if (inv.INVOICENUMBER) invDateMap[inv.INVOICENUMBER] = parseDate(inv.INVOICEDATE);
     }
 
-    // Same-period prior-year lines (same months as startDate→endDate)
-    const startMon = new Date(startParam).getMonth();
-    const endMon   = new Date(endParam).getMonth();
-    const prevPeriodLines = prevLineRows.filter(l => {
-      const d = invDateMap[l.INVOICENUMBER];
-      return d && d.getMonth() >= startMon && d.getMonth() <= endMon;
-    });
-    const prevPeriodItemRevMap = buildItemMap(prevPeriodLines);
+    const currItemRevMap = buildItemRevMap(currLineRows);
 
-    // ── TOP PRODUCTS (current period) ─────────────────────────────────────────
+    // ── TOP PRODUCTS ──────────────────────────────────────────────────────────
     const products = Object.entries(currItemRevMap)
       .map(([code, v]) => {
-        const it    = itemMap[code] || {};
-        const gp    = v.revenue - v.cost;
+        const it     = itemMap[code] || {};
+        const gp     = v.revenue - v.cost;
         const margin = v.revenue > 0 ? Math.round((gp / v.revenue) * 100) : 0;
         return {
           title:       it.ITEMDESCRIPTION || code,
@@ -268,14 +237,13 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .map(c => ({ ...c, margin: c.revenue > 0 ? Math.round((c.grossProfit / c.revenue) * 100) : 0 }));
 
-    // ── TOP CUSTOMERS (from headers — INVOICENETTAMOUNT confirmed on header) ───
-    // Use BOTH curr + prev rows so we can calculate lifetime spend & last order date
+    // ── CUSTOMERS — uses header-level INVOICENETTAMOUNT (confirmed accurate) ──
+    // Combine curr + prev headers so lapsed 2025 customers appear
     const custMap = {};
     for (const inv of [...currInvRows, ...prevInvRows]) {
       const name = inv.CUSTOMER ?? inv.INVOICECUSTOMER;
       if (!name) continue;
       const d   = parseDate(inv.INVOICEDATE);
-      // Use header-level INVOICENETTAMOUNT for accuracy (confirmed to work)
       const rev = parseNum(inv.INVOICENETTAMOUNT ?? inv.INVOICETOTALAMOUNT ?? inv.INVOICEVALUE);
       if (!custMap[name]) {
         custMap[name] = { customer: name, email: inv.BILLINGEMAIL || '', totalSpend: 0, orderCount: 0, lastOrder: null, firstOrder: null };
@@ -319,67 +287,36 @@ export async function GET(request) {
     const clv     = [...customerList].sort((a, b) => b.totalSpend - a.totalSpend).slice(0, 50);
 
     // ── SLOW-MOVING INVENTORY ─────────────────────────────────────────────────
-    // Items with stock on hand but low/no sales in current period
+    // Use ONHANDQTY + STDBUYPRICE from itemMap (items that appeared in any sale)
     const slowMoving = Object.values(itemMap)
       .filter(it => parseNum(it.ONHANDQTY) > 0)
       .map(it => {
         const code      = it.ITEMCODE;
         const onHand    = parseNum(it.ONHANDQTY);
         const soldQty   = currItemRevMap[code]?.qty || 0;
-        // Use STDBUYPRICE for capital tied (what it cost to buy); fall back to sell price / 1.3
         const buyPrice  = parseNum(it.STDBUYPRICE) ||
                           parseNum(it.ITEMAVERAGECOST) ||
-                          (parseNum(it.STDSELLPRICE) / 1.3);
+                          parseNum(it.STDSELLPRICE) * 0.7;
         const capitalTied = Math.round(onHand * buyPrice);
         if (capitalTied <= 0) return null;
-        // "Slowness" score: capital tied × inverse turnover ratio
         const turnover  = soldQty / Math.max(onHand, 1);
         const slowScore = capitalTied * (1 - Math.min(turnover, 1));
-        return {
-          title:       it.ITEMDESCRIPTION || code,
-          category:    it.ITEMCATEGORY || 'Uncategorised',
-          stockOnHand: Math.round(onHand),
-          soldInPeriod: Math.round(soldQty),
-          capitalTied,
-          slowScore,
-        };
+        return { title: it.ITEMDESCRIPTION || code, category: it.ITEMCATEGORY || 'Uncategorised', stockOnHand: Math.round(onHand), soldInPeriod: Math.round(soldQty), capitalTied, slowScore };
       })
       .filter(Boolean)
       .sort((a, b) => b.slowScore - a.slowScore)
       .slice(0, 20)
-      .map(({ slowScore: _s, ...rest }) => rest); // remove internal sort key
-
-    // ── DECLINING PRODUCTS (YoY — same period prior year) ────────────────────
-    const declining = Object.entries(currItemRevMap)
-      .filter(([code, curr]) => {
-        const prev = prevPeriodItemRevMap[code];
-        return prev && prev.revenue > 100 && curr.revenue < prev.revenue * 0.8;
-      })
-      .map(([code, curr]) => {
-        const prev   = prevPeriodItemRevMap[code];
-        const it     = itemMap[code] || {};
-        const change = Math.round(((curr.revenue - prev.revenue) / prev.revenue) * 100);
-        return {
-          name:        it.ITEMDESCRIPTION || code,
-          revenue:     Math.round(curr.revenue),
-          prevRevenue: Math.round(prev.revenue),
-          change,
-          qtySold:     Math.round(curr.qty),
-          prevQtySold: Math.round(prev.qty),
-        };
-      })
-      .sort((a, b) => a.change - b.change) // worst first
-      .slice(0, 20);
+      .map(({ slowScore: _s, ...rest }) => rest);
 
     // ── DECLINING PRODUCTS (MoM — last complete month vs month before) ────────
-    const lastCompleteMonth = new Date(endParam).getMonth(); // 0-indexed
-    const priorMonth = lastCompleteMonth === 0 ? 11 : lastCompleteMonth - 1;
+    const endMon   = new Date(endParam).getMonth(); // 0-indexed
+    const priorMon = endMon === 0 ? 11 : endMon - 1;
 
-    const moMMap = (targetMonth, lines) => {
+    const moMRevMap = (targetMon, lines) => {
       const map = {};
       for (const line of lines) {
         const d = invDateMap[line.INVOICENUMBER];
-        if (!d || d.getMonth() !== targetMonth) continue;
+        if (!d || d.getMonth() !== targetMon) continue;
         const code = line.ITEMCODE;
         if (!code) continue;
         const rev = lineNet(line);
@@ -391,34 +328,32 @@ export async function GET(request) {
       return map;
     };
 
-    const currMonthMap  = moMMap(lastCompleteMonth,  currLineRows);
-    const priorMonthMap = moMMap(priorMonth, lastCompleteMonth === 0 ? prevLineRows : currLineRows);
+    const currMonMap  = moMRevMap(endMon,   currLineRows);
+    const priorMonMap = moMRevMap(priorMon, currLineRows);
 
-    const decliningMoM = Object.entries(currMonthMap)
+    const decliningMoM = Object.entries(currMonMap)
       .filter(([code, curr]) => {
-        const prev = priorMonthMap[code];
+        const prev = priorMonMap[code];
         return prev && prev.revenue > 50 && curr.revenue < prev.revenue * 0.8;
       })
       .map(([code, curr]) => {
-        const prev   = priorMonthMap[code];
+        const prev   = priorMonMap[code];
         const it     = itemMap[code] || {};
         const change = Math.round(((curr.revenue - prev.revenue) / prev.revenue) * 100);
-        return {
-          name:        it.ITEMDESCRIPTION || code,
-          revenue:     Math.round(curr.revenue),
-          prevRevenue: Math.round(prev.revenue),
-          change,
-          qtySold:     Math.round(curr.qty),
-          prevQtySold: Math.round(prev.qty),
-        };
+        return { name: it.ITEMDESCRIPTION || code, revenue: Math.round(curr.revenue), prevRevenue: Math.round(prev.revenue), change, qtySold: Math.round(curr.qty), prevQtySold: Math.round(prev.qty) };
       })
       .sort((a, b) => a.change - b.change)
       .slice(0, 20);
 
+    // YoY declining: only meaningful if there is prior-year line data.
+    // Since Dutch Rusk started Oct 2025, prior-year product lines are not yet available.
+    // Return empty — will populate once a full year of data exists.
+    const declining = [];
+
     return NextResponse.json({
       products,
       categories,
-      customers:  customerList,
+      customers:   customerList,
       slowMoving,
       churned,
       atRisk,
