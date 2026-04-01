@@ -33,13 +33,14 @@ async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
   const apiKey = process.env.OSTENDO_API_KEY;
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
   const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20')}` : '';
+  const fullPath = `/tabledata?${params.toString()}${conditionStr}`;
 
   return new Promise((resolve, reject) => {
     const urlObj = new URL(base);
     const options = {
       hostname: urlObj.hostname,
       port:     parseInt(urlObj.port) || 443,
-      path:     `/tabledata?${params.toString()}${conditionStr}`,
+      path:     fullPath,
       method:   'GET',
       agent,
     };
@@ -47,8 +48,13 @@ async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
       let raw = '';
       res.on('data', chunk => (raw += chunk));
       res.on('end', () => {
-        try { resolve(JSON.parse(raw)); }
-        catch { resolve([]); }
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          // Log non-JSON response so we can diagnose Firebird/Ostendo errors
+          console.error(`[Ostendo:${tablename}] non-JSON (${raw.length}b): ${raw.substring(0, 300)}`);
+          resolve([]);
+        }
       });
     });
     req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(`timeout:${tablename}`)); });
@@ -77,6 +83,16 @@ async function parallelLimit(tasks, limit = 4) {
   return results;
 }
 
+/**
+ * Format a value for a Firebird IN() clause.
+ * Pure integers → unquoted (avoids type-mismatch if column is INTEGER).
+ * Everything else → single-quoted string.
+ */
+const fmtInVal = (v) => {
+  const s = String(v).trim();
+  return /^\d+$/.test(s) ? s : `'${s.replace(/'/g, "''")}'`;
+};
+
 /** Batch-fetch SALESINVOICELINES by INVOICENUMBER IN (...) — parallel chunks */
 async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 50) {
   if (!invoiceNumbers.length) return [];
@@ -84,14 +100,22 @@ async function fetchLinesByInvoiceNumbers(invoiceNumbers, chunkSize = 50) {
   for (let i = 0; i < invoiceNumbers.length; i += chunkSize) {
     chunks.push(invoiceNumbers.slice(i, i + chunkSize));
   }
+  console.log(`[Ostendo/lines] ${invoiceNumbers.length} invoices → ${chunks.length} chunks`);
+  // Log a sample condition so we can verify the format in Vercel logs
+  if (chunks[0]) {
+    const sample = chunks[0].slice(0, 3).map(fmtInVal).join(',');
+    console.log(`[Ostendo/lines] sample condition: INVOICENUMBER IN (${sample},...)`);
+  }
   const results = await parallelLimit(
     chunks.map(chunk => () => {
-      const inList = chunk.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',');
+      const inList = chunk.map(fmtInVal).join(',');
       return safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`));
     }),
     4
   );
-  return results.flat();
+  const rows = results.flat();
+  console.log(`[Ostendo/lines] total rows returned: ${rows.length}`);
+  return rows;
 }
 
 /** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks */
@@ -103,7 +127,7 @@ async function fetchByItemCodes(codes, chunkSize = 50) {
   }
   const results = await parallelLimit(
     chunks.map(chunk => () => {
-      const inList = chunk.map(c => `'${String(c).replace(/'/g, "''")}'`).join(',');
+      const inList = chunk.map(fmtInVal).join(',');
       return safe(() => ostendoFetch('ITEMMASTER', `ITEMCODE IN (${inList})`));
     }),
     4
