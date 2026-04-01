@@ -265,21 +265,35 @@ export async function GET(request) {
     const currLineRows = await fetchLinesViaSubquery(currCond);
     console.log(`[Ostendo/adv] curr lines: ${currLineRows.length}`);
 
-    // ── PHASE 3: item master for sold codes (parallel chunks) ─────────────────
-    const soldCodes = [...new Set(currLineRows.map(r => r.ITEMCODE).filter(Boolean))];
-    const itemRows  = await fetchByItemCodes(soldCodes);
+    // Log actual column names from the first line row to identify the item code field
+    if (currLineRows.length > 0) {
+      console.log(`[Ostendo/lines] line keys: ${Object.keys(currLineRows[0]).join(', ')}`);
+    }
+
+    // ── PHASE 3: item master for sold codes ───────────────────────────────────
+    // SALESINVOICELINES may use ITEMCODE, DESCRIPTORCODE, or STOCKCODE for the item reference
+    const getItemCode = (r) => r.ITEMCODE ?? r.DESCRIPTORCODE ?? r.STOCKCODE ?? r.PRODUCTCODE ?? r.ITEMNO;
+    const soldCodes   = [...new Set(currLineRows.map(getItemCode).filter(Boolean))];
+    console.log(`[Ostendo/adv] soldCodes count: ${soldCodes.length}, sample: ${soldCodes.slice(0,3).join(', ')}`);
+
+    // Use subquery for ITEMMASTER too — avoids IN() string quoting issues
+    const itemSubqueryCond = `ITEMCODE IN (SELECT DISTINCT ${currLineRows.length > 0 ? (Object.keys(currLineRows[0]).find(k => /^(ITEMCODE|DESCRIPTORCODE|STOCKCODE|PRODUCTCODE)$/i.test(k)) || 'ITEMCODE') : 'ITEMCODE'} FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
+    console.log(`[Ostendo/adv] item subquery: ${itemSubqueryCond}`);
+    const itemRows = await safe(() => ostendoFetch('ITEMMASTER', itemSubqueryCond, 30000));
     console.log(`[Ostendo/adv] itemRows: ${itemRows.length}`);
 
+    // Build item map keyed by both ITEMCODE and DESCRIPTORCODE for flexible lookup
     const itemMap = {};
     for (const it of itemRows) {
-      if (it.ITEMCODE) itemMap[it.ITEMCODE] = it;
+      if (it.ITEMCODE)      itemMap[it.ITEMCODE]      = it;
+      if (it.DESCRIPTORCODE) itemMap[it.DESCRIPTORCODE] = it;
     }
 
     // ── BUILD per-item revenue map from current lines ─────────────────────────
     const buildItemRevMap = (lines) => {
       const map = {};
       for (const line of lines) {
-        const code = line.ITEMCODE;
+        const code = getItemCode(line); // handles ITEMCODE / DESCRIPTORCODE / STOCKCODE
         if (!code) continue;
         const rev  = lineNet(line);
         const qty  = parseNum(line.INVOICEQTY);
