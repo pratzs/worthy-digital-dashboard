@@ -7,25 +7,35 @@ export const maxDuration = 60;
 const agent = new https.Agent({ rejectUnauthorized: false });
 
 /**
- * CONFIRMED column names from Dutch Rusk Ostendo (Table for Queries.rps):
+ * CONFIRMED column names (from Vercel logs + Table for Queries.rps):
  *
- *  SALESINVOICEHEADER → INVOICENUMBER, INVOICEDATE (D/MM/YYYY), CUSTOMER,
+ *  SALESINVOICEHEADER → INVOICENUMBER, INVOICEDATE, CUSTOMER,
  *                        INVOICENETTAMOUNT, INVOICETOTALAMOUNT, INVOICESTATUS,
- *                        INVOICEORCREDIT, LINEDISCOUNTAMOUNT, BILLINGEMAIL
+ *                        INVOICEORCREDIT, LINEDISCOUNTAMOUNT, BILLINGEMAIL,
+ *                        SALESPERSON, CURRENCYCODE, SITENAME, ...
  *
- *  SALESINVOICELINES  → INVOICENUMBER (FK), ITEMCODE,
- *                        INVOICEQTY          ← correct (NOT INVOICEDQTY)
- *                        INVOICEUNITPRICE    ← unit sell price (ex-tax)
- *                        CUSTOMERUNITPRICE   ← customer-specific price (use first)
- *                        INVOICEUNITCOST     ← cost per unit
+ *  SALESINVOICELINES  → INVOICENUMBER (FK),
+ *                        LINECODE          ← item/product code (NOT ITEMCODE)
+ *                        LINEDESCRIPTION   ← product name (direct on line)
+ *                        CATALOGUECATEGORY ← product category (direct on line)
+ *                        INVOICEQTY        ← quantity (NOT INVOICEDQTY)
+ *                        EXTENDEDNETTPRICE ← pre-calculated net line total (most accurate)
+ *                        INVOICEUNITPRICE  ← unit sell price (ex-tax)
+ *                        CUSTOMERUNITPRICE ← customer-specific price
+ *                        INVOICEUNITCOST   ← cost per unit
+ *                        INVOICEUNITTAX    ← unit tax
  *                        DISCOUNTAMOUNT, DISCOUNTPERCENT
- *                        INVOICEUNITTAX      ← unit tax
  *
- *  ITEMMASTER         → ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY,
- *                        ITEMUNIT, ITEMSTATUS,
- *                        ONHANDQTY    ← stock on hand
+ *  ITEMMASTER         → ITEMCODE (= LINECODE from lines), ITEMDESCRIPTION,
+ *                        ITEMCATEGORY, ITEMSUBCATEGORY, ITEMUNIT, ITEMSTATUS,
+ *                        ONHANDQTY    ← stock on hand (slow-moving only)
  *                        STDBUYPRICE  ← standard buy price (capital tied)
- *                        STDSELLPRICE, STDSELLPRICEINCTAX
+ *                        STDSELLPRICE
+ *
+ * Ostendo API (confirmed from official docs):
+ *   GET  /tabledata?tablename=X&apikey=KEY&format=json&condition=SQL_WHERE
+ *   POST /sqlquery?apikey=KEY&format=json   Body = full SQL SELECT text
+ *   Spaces in condition → %20, single quotes → %27
  */
 
 async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
@@ -63,6 +73,50 @@ async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
     });
     req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(`timeout:${tablename}`)); });
     req.on('error', reject);
+    req.end();
+  });
+}
+
+/**
+ * Execute a raw SQL SELECT via the Ostendo sqlquery endpoint (POST).
+ * Confirmed in Ostendo API docs — more reliable than tabledata + condition
+ * for complex multi-level subqueries.
+ * API docs: POST /sqlquery?apikey=...&format=json   Body = SQL SELECT text
+ */
+async function ostendoSqlQuery(sql, timeoutMs = 30000) {
+  const base   = process.env.OSTENDO_BASE_URL;
+  const apiKey = process.env.OSTENDO_API_KEY;
+  const urlObj = new URL(base);
+  const body   = Buffer.from(sql, 'utf8');
+  const fullPath = `/sqlquery?apikey=${encodeURIComponent(apiKey)}&format=json`;
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: urlObj.hostname,
+      port:     parseInt(urlObj.port) || 443,
+      path:     fullPath,
+      method:   'POST',
+      agent,
+      headers: {
+        'Content-Type':   'text/plain',
+        'Content-Length': body.length,
+      },
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => (raw += chunk));
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          console.error(`[Ostendo/sqlquery] non-JSON (${raw.length}b): ${raw.substring(0, 300)}`);
+          resolve([]);
+        }
+      });
+    });
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout:sqlquery')); });
+    req.on('error', reject);
+    req.write(body);
     req.end();
   });
 }
@@ -147,10 +201,12 @@ const parseDate = (v) => {
 };
 
 /**
- * Line net revenue = INVOICEQTY × (CUSTOMERUNITPRICE or INVOICEUNITPRICE) − tax
- * CUSTOMERUNITPRICE is the actual price charged to this customer (post-discount).
+ * Line net revenue — uses EXTENDEDNETTPRICE (pre-calculated by Ostendo, most accurate).
+ * Falls back to INVOICEQTY × (CUSTOMERUNITPRICE or INVOICEUNITPRICE) − tax if absent.
  */
 const lineNet = (line) => {
+  const pre = parseNum(line.EXTENDEDNETTPRICE ?? line.LOCALEXTENDEDNETTPRICE);
+  if (pre !== 0) return pre;
   const qty       = parseNum(line.INVOICEQTY);
   const unitPrice = parseNum(line.CUSTOMERUNITPRICE) || parseNum(line.INVOICEUNITPRICE);
   const unitTax   = parseNum(line.INVOICEUNITTAX);
@@ -271,16 +327,34 @@ export async function GET(request) {
     }
 
     // ── PHASE 3: item master for sold codes ───────────────────────────────────
-    // SALESINVOICELINES may use ITEMCODE, DESCRIPTORCODE, or STOCKCODE for the item reference
-    const getItemCode = (r) => r.ITEMCODE ?? r.DESCRIPTORCODE ?? r.STOCKCODE ?? r.PRODUCTCODE ?? r.ITEMNO;
+    // CONFIRMED from logs: actual column in SALESINVOICELINES is LINECODE (not ITEMCODE).
+    // LINEDESCRIPTION and CATALOGUECATEGORY are also directly on every line row.
+    const getItemCode = (r) => r.LINECODE ?? r.ITEMCODE ?? r.DESCRIPTORCODE ?? r.STOCKCODE ?? r.PRODUCTCODE ?? r.ITEMNO;
     const soldCodes   = [...new Set(currLineRows.map(getItemCode).filter(Boolean))];
     console.log(`[Ostendo/adv] soldCodes count: ${soldCodes.length}, sample: ${soldCodes.slice(0,3).join(', ')}`);
 
-    // Use subquery for ITEMMASTER too — avoids IN() string quoting issues
-    const itemSubqueryCond = `ITEMCODE IN (SELECT DISTINCT ${currLineRows.length > 0 ? (Object.keys(currLineRows[0]).find(k => /^(ITEMCODE|DESCRIPTORCODE|STOCKCODE|PRODUCTCODE)$/i.test(k)) || 'ITEMCODE') : 'ITEMCODE'} FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
-    console.log(`[Ostendo/adv] item subquery: ${itemSubqueryCond}`);
-    const itemRows = await safe(() => ostendoFetch('ITEMMASTER', itemSubqueryCond, 30000));
-    console.log(`[Ostendo/adv] itemRows: ${itemRows.length}`);
+    // ITEMMASTER is used ONLY for ONHANDQTY + STDBUYPRICE (slow-moving inventory).
+    // Products/Categories use LINEDESCRIPTION + CATALOGUECATEGORY directly — no ITEMMASTER needed.
+    //
+    // Strategy:
+    //   1. Try sqlquery POST (most reliable — avoids URL condition encoding issues).
+    //   2. If that returns 0 and we have soldCodes, fallback to chunked IN() fetches.
+    //
+    // LINECODE in SALESINVOICELINES = ITEMCODE in ITEMMASTER (confirmed column mapping).
+    let itemRows = [];
+    if (soldCodes.length > 0) {
+      const itemSql = `SELECT ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY, ONHANDQTY, STDBUYPRICE, STDSELLPRICE FROM ITEMMASTER WHERE ITEMCODE IN (SELECT DISTINCT LINECODE FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
+      console.log(`[Ostendo/adv] item sqlquery: ${itemSql.substring(0, 200)}`);
+      itemRows = normalizeRows(await safe(() => ostendoSqlQuery(itemSql, 30000)));
+      console.log(`[Ostendo/adv] itemRows (sqlquery): ${itemRows.length}`);
+
+      // Fallback: if sqlquery returns nothing, chunk-fetch by the soldCodes we already have
+      if (itemRows.length === 0) {
+        console.log(`[Ostendo/adv] sqlquery returned 0 — falling back to chunked ITEMMASTER fetch`);
+        itemRows = await fetchByItemCodes(soldCodes, 50);
+        console.log(`[Ostendo/adv] itemRows (chunked): ${itemRows.length}`);
+      }
+    }
 
     // Build item map keyed by both ITEMCODE and DESCRIPTORCODE for flexible lookup
     const itemMap = {};
@@ -290,15 +364,25 @@ export async function GET(request) {
     }
 
     // ── BUILD per-item revenue map from current lines ─────────────────────────
+    // LINEDESCRIPTION and CATALOGUECATEGORY are on every line row — use them directly.
+    // This means products/categories populate even if ITEMMASTER returns nothing.
     const buildItemRevMap = (lines) => {
       const map = {};
       for (const line of lines) {
-        const code = getItemCode(line); // handles ITEMCODE / DESCRIPTORCODE / STOCKCODE
+        const code = getItemCode(line); // LINECODE is the confirmed column
         if (!code) continue;
         const rev  = lineNet(line);
         const qty  = parseNum(line.INVOICEQTY);
         const cost = lineCostTotal(line);
-        if (!map[code]) map[code] = { revenue: 0, qty: 0, cost: 0 };
+        if (!map[code]) {
+          map[code] = {
+            revenue:  0,
+            qty:      0,
+            cost:     0,
+            name:     line.LINEDESCRIPTION     || code,      // direct from line
+            category: line.CATALOGUECATEGORY   || 'Uncategorised', // direct from line
+          };
+        }
         map[code].revenue += rev;
         map[code].qty     += qty;
         map[code].cost    += cost;
@@ -315,14 +399,17 @@ export async function GET(request) {
     const currItemRevMap = buildItemRevMap(currLineRows);
 
     // ── TOP PRODUCTS ──────────────────────────────────────────────────────────
+    // Use LINEDESCRIPTION / CATALOGUECATEGORY first (always present on line rows).
+    // Fall back to ITEMMASTER only for any missing fields.
     const products = Object.entries(currItemRevMap)
       .map(([code, v]) => {
         const it     = itemMap[code] || {};
         const gp     = v.revenue - v.cost;
         const margin = v.revenue > 0 ? Math.round((gp / v.revenue) * 100) : 0;
         return {
-          title:       it.ITEMDESCRIPTION || code,
-          category:    it.ITEMCATEGORY || it.ITEMSUBCATEGORY || 'Uncategorised',
+          title:       v.name     || it.ITEMDESCRIPTION || code,
+          category:    (v.category && v.category !== 'Uncategorised') ? v.category
+                        : (it.ITEMCATEGORY || it.ITEMSUBCATEGORY || 'Uncategorised'),
           revenue:     Math.round(v.revenue),
           unitsSold:   Math.round(v.qty),
           grossProfit: Math.round(gp),
@@ -427,7 +514,7 @@ export async function GET(request) {
       for (const line of lines) {
         const d = invDateMap[line.INVOICENUMBER ?? line.INVOICENO];
         if (!d || d.getMonth() !== targetMon) continue;
-        const code = line.ITEMCODE;
+        const code = getItemCode(line); // FIXED: use LINECODE via getItemCode
         if (!code) continue;
         const rev = lineNet(line);
         const qty = parseNum(line.INVOICEQTY);
@@ -449,8 +536,9 @@ export async function GET(request) {
       .map(([code, curr]) => {
         const prev   = priorMonMap[code];
         const it     = itemMap[code] || {};
+        const rv     = currItemRevMap[code] || {};
         const change = Math.round(((curr.revenue - prev.revenue) / prev.revenue) * 100);
-        return { name: it.ITEMDESCRIPTION || code, revenue: Math.round(curr.revenue), prevRevenue: Math.round(prev.revenue), change, qtySold: Math.round(curr.qty), prevQtySold: Math.round(prev.qty) };
+        return { name: rv.name || it.ITEMDESCRIPTION || code, revenue: Math.round(curr.revenue), prevRevenue: Math.round(prev.revenue), change, qtySold: Math.round(curr.qty), prevQtySold: Math.round(prev.qty) };
       })
       .sort((a, b) => a.change - b.change)
       .slice(0, 20);
