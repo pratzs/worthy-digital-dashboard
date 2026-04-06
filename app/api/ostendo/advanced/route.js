@@ -142,25 +142,20 @@ async function parallelLimit(tasks, limit = 4) {
 }
 
 /**
- * Format a value for a Firebird IN() clause.
- * Pure integers → unquoted (avoids type-mismatch if column is INTEGER).
- * Everything else → single-quoted string.
+ * Format a value for a Firebird IN() clause — ALWAYS as a single-quoted string.
+ *
+ * IMPORTANT: Do NOT use unquoted integers even for numeric-looking codes.
+ * SALESINVOICELINES.LINECODE (and ITEMMASTER.ITEMCODE) are VARCHAR fields.
+ * Mixing unquoted integers like 278241 with quoted strings like 'PEZSWT'
+ * in the same IN() list causes Firebird to attempt integer coercion of ALL
+ * values → "conversion error from string PEZSWT".
+ * Always quoting everything as strings avoids this completely.
  */
-const fmtInVal = (v) => {
-  const s = String(v).trim();
-  return /^\d+$/.test(s) ? s : `'${s.replace(/'/g, "''")}'`;
-};
+const fmtInVal = (v) => `'${String(v).trim().replace(/'/g, "''")}'`;
 
 /**
  * Fetch SALESINVOICELINES using a Firebird subquery so the DB filters server-side.
  * Avoids: (1) large IN() lists that Ostendo rejects, (2) full-table "Out of memory".
- *
- * condition example:
- *   INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER
- *     WHERE EXTRACT(YEAR FROM INVOICEDATE) = 2026
- *     AND EXTRACT(MONTH FROM INVOICEDATE) IN (1,2,3,4))
- *
- * Single quotes in strings are encoded as %27 by ostendoFetch.
  */
 async function fetchLinesViaSubquery(headerDateCond) {
   const cond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${headerDateCond})`;
@@ -170,7 +165,10 @@ async function fetchLinesViaSubquery(headerDateCond) {
   return rows;
 }
 
-/** Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks */
+/**
+ * Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks, all values quoted as strings.
+ * ITEMMASTER.ITEMCODE is VARCHAR — always use string literals in the IN() list.
+ */
 async function fetchByItemCodes(codes, chunkSize = 50) {
   if (!codes.length) return [];
   const chunks = [];
@@ -330,29 +328,58 @@ export async function GET(request) {
     // CONFIRMED from logs: actual column in SALESINVOICELINES is LINECODE (not ITEMCODE).
     // LINEDESCRIPTION and CATALOGUECATEGORY are also directly on every line row.
     const getItemCode = (r) => r.LINECODE ?? r.ITEMCODE ?? r.DESCRIPTORCODE ?? r.STOCKCODE ?? r.PRODUCTCODE ?? r.ITEMNO;
-    const soldCodes   = [...new Set(currLineRows.map(getItemCode).filter(Boolean))];
-    console.log(`[Ostendo/adv] soldCodes count: ${soldCodes.length}, sample: ${soldCodes.slice(0,3).join(', ')}`);
+
+    // Log the unique CODETYPEs present so we know which to include
+    const codeTypeSet = new Set(currLineRows.map(r => r.CODETYPE).filter(Boolean));
+    console.log(`[Ostendo/adv] CODETYPE values: ${[...codeTypeSet].join(', ')}`);
+
+    // Filter to only stock/catalogue item lines for ITEMMASTER lookup.
+    // Common Ostendo CODETYPEs: 'Stock', 'Descriptor', 'Comment', 'Service'.
+    // We include any line that has a non-empty LINECODE — ITEMMASTER will simply
+    // return nothing for codes that don't exist (credits, adjustments, etc.).
+    const soldCodes = [...new Set(
+      currLineRows
+        .map(getItemCode)
+        .filter(Boolean)
+        .filter(c => c.length <= 30) // skip suspiciously long codes (line notes, etc.)
+    )];
+    console.log(`[Ostendo/adv] soldCodes count: ${soldCodes.length}, sample: ${soldCodes.slice(0,5).join(', ')}`);
 
     // ITEMMASTER is used ONLY for ONHANDQTY + STDBUYPRICE (slow-moving inventory).
     // Products/Categories use LINEDESCRIPTION + CATALOGUECATEGORY directly — no ITEMMASTER needed.
     //
     // Strategy:
     //   1. Try sqlquery POST (most reliable — avoids URL condition encoding issues).
-    //   2. If that returns 0 and we have soldCodes, fallback to chunked IN() fetches.
-    //
-    // LINECODE in SALESINVOICELINES = ITEMCODE in ITEMMASTER (confirmed column mapping).
+    //      Requires "SQL Allowed" to be ticked in Ostendo API Security for the API key.
+    //   2. If sqlquery returns 0, fallback to chunked ITEMCODE IN (...) fetches.
+    //      All values are quoted as strings — ITEMMASTER.ITEMCODE is VARCHAR.
     let itemRows = [];
     if (soldCodes.length > 0) {
-      const itemSql = `SELECT ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY, ONHANDQTY, STDBUYPRICE, STDSELLPRICE FROM ITEMMASTER WHERE ITEMCODE IN (SELECT DISTINCT LINECODE FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
-      console.log(`[Ostendo/adv] item sqlquery: ${itemSql.substring(0, 200)}`);
-      itemRows = normalizeRows(await safe(() => ostendoSqlQuery(itemSql, 30000)));
-      console.log(`[Ostendo/adv] itemRows (sqlquery): ${itemRows.length}`);
+      // Primary: POST /sqlquery with full SQL — avoids URL encoding quirks
+      try {
+        const itemSql = `SELECT ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY, ONHANDQTY, STDBUYPRICE, STDSELLPRICE FROM ITEMMASTER WHERE ITEMCODE IN (SELECT DISTINCT LINECODE FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
+        console.log(`[Ostendo/adv] item sqlquery: ${itemSql.substring(0, 220)}`);
+        const sqlRes = await ostendoSqlQuery(itemSql, 30000);
+        itemRows = normalizeRows(sqlRes);
+        console.log(`[Ostendo/adv] itemRows (sqlquery): ${itemRows.length}, raw type: ${typeof sqlRes}, isArray: ${Array.isArray(sqlRes)}`);
+        if (itemRows.length === 0 && sqlRes && !Array.isArray(sqlRes)) {
+          // Log unexpected shape so we can diagnose auth / format issues
+          console.log(`[Ostendo/adv] sqlquery raw keys: ${Object.keys(sqlRes).join(', ')}`);
+        }
+      } catch (e) {
+        console.error(`[Ostendo/adv] sqlquery error: ${e.message}`);
+      }
 
-      // Fallback: if sqlquery returns nothing, chunk-fetch by the soldCodes we already have
+      // Fallback: chunked ITEMCODE IN ('code1','code2',...) — all quoted as strings
       if (itemRows.length === 0) {
-        console.log(`[Ostendo/adv] sqlquery returned 0 — falling back to chunked ITEMMASTER fetch`);
+        console.log(`[Ostendo/adv] falling back to chunked ITEMMASTER fetch (${soldCodes.length} codes)`);
         itemRows = await fetchByItemCodes(soldCodes, 50);
         console.log(`[Ostendo/adv] itemRows (chunked): ${itemRows.length}`);
+        if (itemRows.length === 0 && soldCodes.length > 0) {
+          // Last resort: fetch first chunk alone to log the actual Ostendo error
+          const sample = soldCodes.slice(0, 5).map(fmtInVal).join(',');
+          console.log(`[Ostendo/adv] sample ITEMMASTER condition: ITEMCODE IN (${sample})`);
+        }
       }
     }
 
