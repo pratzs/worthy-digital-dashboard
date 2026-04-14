@@ -411,11 +411,13 @@ export default function EcommerceDashboard() {
         convRate: m.convRate ? +((m.convRate * 100).toFixed(2)) : 0,
       })) : generateEmptyYear());
       cacheRef.current[key] = {
-        all:         convert(json.monthly),
-        pos:         convert(json.monthlyPos),
-        online:      convert(json.monthlyOnline),
-        weekly:      json.weekly || [],
-        salespeople: json.salespeople || [],
+        all:          convert(json.monthly),
+        pos:          convert(json.monthlyPos),
+        online:       convert(json.monthlyOnline),
+        weekly:       json.weekly       || [],
+        weeklyPos:    json.weeklyPos    || [],
+        weeklyOnline: json.weeklyOnline || [],
+        salespeople:  json.salespeople  || [],
       };
       // Explicitly update salespeople state so the table re-renders
       if (year === selectedYear) setSalespeopleData(json.salespeople || []);
@@ -494,7 +496,11 @@ export default function EcommerceDashboard() {
   };
   const getWeekly = () => {
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
-    return cached?.weekly || [];
+    if (!cached) return [];
+    if (activeStore.id !== "worthy") return cached.weekly || [];
+    if (channelTab === "pos")    return cached.weeklyPos    || [];
+    if (channelTab === "online") return cached.weeklyOnline || [];
+    return cached.weekly || [];
   };
   const getSalespeople = () => {
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];

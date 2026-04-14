@@ -128,8 +128,8 @@ export async function GET(request) {
     }));
     const allB = mkB(), posB = mkB(), onlineB = mkB();
 
-    // Weekly buckets: key = "${monthIdx}_${weekNum}" (weekNum 1-5)
-    const weeklyBuckets = {};
+    // Weekly buckets split by channel (mirrors allB/posB/onlineB)
+    const weeklyAllB = {}, weeklyPosB = {}, weeklyOnlineB = {};
 
     allOrders.forEach(order => {
       const orderDate = new Date(order.createdAt);
@@ -165,13 +165,16 @@ export async function GET(request) {
         if (isNew) b[i].newCustomers += 1;
       });
 
-      // Accumulate weekly (all-channel combined)
+      // Accumulate weekly — all, pos, online separately
       const wkey = `${i}_${weekNum}`;
-      if (!weeklyBuckets[wkey]) weeklyBuckets[wkey] = { month: i, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0 };
-      weeklyBuckets[wkey].revenue        += rev;
-      weeklyBuckets[wkey].orders         += 1;
-      weeklyBuckets[wkey].totalDiscounts += disc;
-      if (isNew) weeklyBuckets[wkey].newCustomers += 1;
+      const mkW  = () => ({ month: i, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0 });
+      [weeklyAllB, isPos ? weeklyPosB : weeklyOnlineB].forEach(wb => {
+        if (!wb[wkey]) wb[wkey] = mkW();
+        wb[wkey].revenue        += rev;
+        wb[wkey].orders         += 1;
+        wb[wkey].totalDiscounts += disc;
+        if (isNew) wb[wkey].newCustomers += 1;
+      });
     });
 
     // ── Convert buckets → monthly arrays ────────────────────────────────────
@@ -202,28 +205,34 @@ export async function GET(request) {
         };
       });
 
-    // ── Build weekly array ────────────────────────────────────────────────────
+    // ── Build weekly arrays (all / pos / online) ─────────────────────────────
     const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-    const weekly = [];
-    for (let mi = 0; mi < 12; mi++) {
-      for (let w = 1; w <= 5; w++) {
-        const b = weeklyBuckets[`${mi}_${w}`];
-        const startDay = (w - 1) * 7 + 1;
-        const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
-        if (startDay > getDaysInMonth(year, mi)) continue; // week doesn't exist for this month
-        weekly.push({
-          label:         `${MONTHS[mi]} W${w}`,
-          month:         mi,
-          week:          w,
-          dateRange:     `${startDay}–${endDay} ${MONTHS[mi]}`,
-          revenue:       b ? Math.round(b.revenue)        : 0,
-          orders:        b ? b.orders                     : 0,
-          aov:           b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
-          totalDiscounts:b ? Math.round(b.totalDiscounts) : 0,
-          newCustomers:  b ? b.newCustomers               : 0,
-        });
+    const buildWeekly = (buckets) => {
+      const arr = [];
+      for (let mi = 0; mi < 12; mi++) {
+        for (let w = 1; w <= 5; w++) {
+          const startDay = (w - 1) * 7 + 1;
+          const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
+          if (startDay > getDaysInMonth(year, mi)) continue;
+          const b = buckets[`${mi}_${w}`];
+          arr.push({
+            label:         `${MONTHS[mi]} W${w}`,
+            month:         mi,
+            week:          w,
+            dateRange:     `${startDay}–${endDay} ${MONTHS[mi]}`,
+            revenue:       b ? Math.round(b.revenue)        : 0,
+            orders:        b ? b.orders                     : 0,
+            aov:           b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
+            totalDiscounts:b ? Math.round(b.totalDiscounts) : 0,
+            newCustomers:  b ? b.newCustomers               : 0,
+          });
+        }
       }
-    }
+      return arr;
+    };
+    const weekly       = buildWeekly(weeklyAllB);
+    const weeklyPos    = buildWeekly(weeklyPosB);
+    const weeklyOnline = buildWeekly(weeklyOnlineB);
 
     return NextResponse.json({
       year,
@@ -233,6 +242,8 @@ export async function GET(request) {
       monthlyPos:   toMonthly(posB,    false),  // POS only, no web sessions
       monthlyOnline:toMonthly(onlineB, true),   // online only + web sessions
       weekly,
+      weeklyPos,
+      weeklyOnline,
       salespeople: salespeopleFromAnalytics,
     });
 
