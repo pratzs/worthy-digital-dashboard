@@ -11,18 +11,16 @@ const agent = new https.Agent({ rejectUnauthorized: false });
 
 /**
  * Fetch a table from the Ostendo REST API.
- * Column names confirmed from Dutch Rusk Ostendo schema:
- *   SALESINVOICEHEADER → INVOICEDATE, INVOICENUMBER, INVOICECUSTOMER,
- *                         INVOICENETTAMOUNT, INVOICETOTALAMOUNT, DISCOUNTAMOUNT
- *   SALESINVOICELINES  → INVOICENUMBER (FK), INVOICEQTY, INVOICEUNITCOST,
- *                         EXTENDEDNETTPRICE, INVOICEUNITPRICE
+ * GET /tabledata?tablename=TABLE&apikey=KEY&format=json[&condition=SQL_WHERE]
  */
 async function ostendoFetch(tablename, condition = null, timeoutMs = 25000) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
 
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
-  const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20').replace(/'/g, '%27')}` : '';
+  const conditionStr = condition
+    ? `&condition=${condition.replace(/ /g, '%20').replace(/'/g, '%27')}`
+    : '';
 
   return new Promise((resolve, reject) => {
     const urlObj = new URL(base);
@@ -67,25 +65,14 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const year = parseInt(searchParams.get('year') || new Date().getFullYear());
 
-  const yearCond    = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
-  const lineSubCond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE EXTRACT(YEAR FROM INVOICEDATE) = ${year})`;
-
   try {
-    // ── Fetch headers + lines in parallel ───────────────────────────────────
-    const [rawHeaders, rawLines] = await Promise.all([
-      ostendoFetch('SALESINVOICEHEADER', yearCond, 30000),
-      ostendoFetch('SALESINVOICELINES',  lineSubCond, 45000).catch(e => {
-        console.warn('[Ostendo] Lines fetch failed (margins will be unavailable):', e.message);
-        return [];
-      }),
-    ]);
-
+    // ── Step 1: Fetch SALESINVOICEHEADER (same as original — sequential, safe) ─
+    const yearCond = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
+    const rawHeaders = await ostendoFetch('SALESINVOICEHEADER', yearCond, 30000);
     const headerRows = normalizeRows(rawHeaders);
-    const lineRows   = normalizeRows(rawLines);
+    console.log(`[Ostendo/monthly] headers: ${headerRows.length}`);
 
-    console.log(`[Ostendo/monthly] headers: ${headerRows.length}, lines: ${lineRows.length}`);
-
-    // ── Build invoice → date map from headers ────────────────────────────────
+    // ── Step 2: Build invoice → date map ─────────────────────────────────────
     const invDateMap = {};
     for (const row of headerRows) {
       const d   = parseDate(row.INVOICEDATE);
@@ -93,23 +80,32 @@ export async function GET(request) {
       if (d && num) invDateMap[num] = d;
     }
 
-    // ── Aggregate cost per month and week from lines ──────────────────────────
-    // INVOICEUNITCOST × INVOICEQTY = line cost (confirmed column names from advanced route)
+    // ── Step 3: Try to fetch SALESINVOICELINES for cost data (non-fatal) ─────
+    // INVOICEUNITCOST × INVOICEQTY = line cost (confirmed column from advanced route)
+    let lineRows = [];
+    try {
+      const lineCond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE EXTRACT(YEAR FROM INVOICEDATE) = ${year})`;
+      const rawLines = await ostendoFetch('SALESINVOICELINES', lineCond, 40000);
+      lineRows = normalizeRows(rawLines);
+      console.log(`[Ostendo/monthly] lines: ${lineRows.length}`);
+    } catch (e) {
+      console.warn('[Ostendo/monthly] Lines fetch failed — margins will show as N/A:', e.message);
+    }
+
+    // ── Step 4: Aggregate cost per month and week from lines ─────────────────
     const monthlyCost    = Array(12).fill(0);
     const monthlyHasCost = Array(12).fill(false);
     const weeklyCostMap  = {}; // key `${mi}_${weekNum}` → total cost
 
     for (const line of lineRows) {
-      const invNum = String(line.INVOICENUMBER ?? line.INVOICENO ?? '');
-      const d = invDateMap[invNum];
+      const invNum  = String(line.INVOICENUMBER ?? line.INVOICENO ?? '');
+      const d       = invDateMap[invNum];
       if (!d || d.getFullYear() !== year) continue;
-
       const mi      = d.getMonth();
       const weekNum = Math.ceil(d.getDate() / 7);
       const qty     = parseNum(line.INVOICEQTY);
       const unitCost= parseNum(line.INVOICEUNITCOST);
       const cost    = qty * unitCost;
-
       if (unitCost > 0) {
         monthlyCost[mi]    += cost;
         monthlyHasCost[mi]  = true;
@@ -118,20 +114,18 @@ export async function GET(request) {
       }
     }
 
-    // ── Aggregate monthly from headers ───────────────────────────────────────
+    // ── Step 5: Aggregate monthly revenue from headers ───────────────────────
     const monthly = MONTH_NAMES.map(m => ({
       month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null,
       orders: 0, returns: 0, sessions: 0, totalDiscounts: 0,
       aov: 0, convRate: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0,
     }));
 
-    // Weekly revenue buckets: key = "${monthIdx}_${weekNum}"
-    const weeklyRevBuckets = {};
+    const weeklyRevBuckets = {}; // key `${mi}_${weekNum}` → { revenue, orders, totalDiscounts }
 
     for (const row of headerRows) {
       const d = parseDate(row.INVOICEDATE);
       if (!d || d.getFullYear() !== year) continue;
-
       const mi      = d.getMonth();
       const weekNum = Math.ceil(d.getDate() / 7);
       const rev     = parseNum(row.INVOICENETTAMOUNT ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
@@ -148,23 +142,23 @@ export async function GET(request) {
       weeklyRevBuckets[wkey].totalDiscounts += disc;
     }
 
-    // ── Compute monthly totals with margin ───────────────────────────────────
+    // ── Step 6: Finalise monthly (with cost/margin where available) ──────────
     for (let mi = 0; mi < 12; mi++) {
       const m   = monthly[mi];
       const cst = monthlyCost[mi];
-      m.aov            = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
       m.revenue        = Math.round(m.revenue);
       m.totalDiscounts = Math.round(m.totalDiscounts);
+      m.aov            = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
       m.totalCost      = Math.round(cst);
       m.hasCostData    = monthlyHasCost[mi];
       if (m.hasCostData && m.revenue > 0) {
-        m.grossProfit      = Math.round(m.revenue - cst);
-        m.marginPct        = Math.round(((m.revenue - cst) / m.revenue) * 100);
-        m.marginableRevenue= m.revenue;
+        m.grossProfit       = Math.round(m.revenue - cst);
+        m.marginPct         = Math.round(((m.revenue - cst) / m.revenue) * 100);
+        m.marginableRevenue = m.revenue;
       }
     }
 
-    // ── Build weekly array ────────────────────────────────────────────────────
+    // ── Step 7: Build weekly array ────────────────────────────────────────────
     const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
     const weekly = [];
     for (let mi = 0; mi < 12; mi++) {
@@ -172,13 +166,13 @@ export async function GET(request) {
         const startDay = (w - 1) * 7 + 1;
         const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
         if (startDay > getDaysInMonth(year, mi)) continue;
-        const wkey   = `${mi}_${w}`;
-        const b      = weeklyRevBuckets[wkey];
-        const wCost  = weeklyCostMap[wkey] || 0;
-        const wRev   = b ? b.revenue : 0;
-        const hasCost= wCost > 0;
-        const gp     = hasCost ? Math.round(wRev - wCost) : null;
-        const margin = hasCost && wRev > 0 ? Math.round(((wRev - wCost) / wRev) * 100) : null;
+        const wkey    = `${mi}_${w}`;
+        const b       = weeklyRevBuckets[wkey];
+        const wCost   = weeklyCostMap[wkey] || 0;
+        const wRev    = b ? b.revenue : 0;
+        const hasCost = wCost > 0;
+        const gp      = hasCost ? Math.round(wRev - wCost) : null;
+        const margin  = hasCost && wRev > 0 ? Math.round(((wRev - wCost) / wRev) * 100) : null;
         weekly.push({
           label:          `${MONTH_NAMES[mi]} W${w}`,
           month:          mi,
