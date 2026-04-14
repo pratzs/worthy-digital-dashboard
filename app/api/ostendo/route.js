@@ -11,20 +11,18 @@ const agent = new https.Agent({ rejectUnauthorized: false });
 
 /**
  * Fetch a table from the Ostendo REST API.
- * GET /tabledata?tablename=TABLE&apikey=KEY&format=json[&condition=SQL_WHERE]
- *
- * Column names confirmed from Dutch Rusk Ostendo schema (Table for Queries.rps):
- *   SALESINVOICEHEADER → INVOICEDATE, INVOICENO, INVOICECUSTOMER,
+ * Column names confirmed from Dutch Rusk Ostendo schema:
+ *   SALESINVOICEHEADER → INVOICEDATE, INVOICENUMBER, INVOICECUSTOMER,
  *                         INVOICENETTAMOUNT, INVOICETOTALAMOUNT, DISCOUNTAMOUNT
+ *   SALESINVOICELINES  → INVOICENUMBER (FK), INVOICEQTY, INVOICEUNITCOST,
+ *                         EXTENDEDNETTPRICE, INVOICEUNITPRICE
  */
-async function ostendoFetch(tablename, condition = null) {
+async function ostendoFetch(tablename, condition = null, timeoutMs = 25000) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
 
-  // URLSearchParams for safe params only; condition appended manually with %20
-  // Ostendo's Firebird parser requires %20 for spaces — URLSearchParams uses + which breaks SQL
   const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
-  const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20')}` : '';
+  const conditionStr = condition ? `&condition=${condition.replace(/ /g, '%20').replace(/'/g, '%27')}` : '';
 
   return new Promise((resolve, reject) => {
     const urlObj = new URL(base);
@@ -43,7 +41,7 @@ async function ostendoFetch(tablename, condition = null) {
         catch { resolve([]); }
       });
     });
-    req.setTimeout(25000, () => { req.destroy(); reject(new Error('Ostendo timeout')); });
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(`Ostendo timeout: ${tablename}`)); });
     req.on('error', reject);
     req.end();
   });
@@ -56,9 +54,7 @@ const parseNum = (v) => (v === null || v === undefined) ? 0 : parseFloat(v) || 0
 const parseDate = (v) => {
   if (!v) return null;
   const s = String(v).trim();
-  // YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10));
-  // D/MM/YYYY or DD/MM/YYYY (Ostendo format e.g. "3/03/2025")
   if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
     const [d, m, y] = s.split('/');
     return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
@@ -71,52 +67,101 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const year = parseInt(searchParams.get('year') || new Date().getFullYear());
 
-  const yearStart = `${year}-01-01`;
-  const yearEnd   = `${year}-12-31`;
+  const yearCond    = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
+  const lineSubCond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE EXTRACT(YEAR FROM INVOICEDATE) = ${year})`;
 
   try {
-    // ── Fetch SALESINVOICEHEADER for the year ────────────────────────────────
-    // Use EXTRACT() to avoid >= / <= encoding issues with Ostendo's Firebird SQL parser
-    const condition = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
-    const raw = await ostendoFetch('SALESINVOICEHEADER', condition);
-    const rows = normalizeRows(raw);
+    // ── Fetch headers + lines in parallel ───────────────────────────────────
+    const [rawHeaders, rawLines] = await Promise.all([
+      ostendoFetch('SALESINVOICEHEADER', yearCond, 30000),
+      ostendoFetch('SALESINVOICELINES',  lineSubCond, 45000).catch(e => {
+        console.warn('[Ostendo] Lines fetch failed (margins will be unavailable):', e.message);
+        return [];
+      }),
+    ]);
 
-    // ── Aggregate by month ───────────────────────────────────────────────────
+    const headerRows = normalizeRows(rawHeaders);
+    const lineRows   = normalizeRows(rawLines);
+
+    console.log(`[Ostendo/monthly] headers: ${headerRows.length}, lines: ${lineRows.length}`);
+
+    // ── Build invoice → date map from headers ────────────────────────────────
+    const invDateMap = {};
+    for (const row of headerRows) {
+      const d   = parseDate(row.INVOICEDATE);
+      const num = String(row.INVOICENUMBER ?? row.INVOICENO ?? '');
+      if (d && num) invDateMap[num] = d;
+    }
+
+    // ── Aggregate cost per month and week from lines ──────────────────────────
+    // INVOICEUNITCOST × INVOICEQTY = line cost (confirmed column names from advanced route)
+    const monthlyCost    = Array(12).fill(0);
+    const monthlyHasCost = Array(12).fill(false);
+    const weeklyCostMap  = {}; // key `${mi}_${weekNum}` → total cost
+
+    for (const line of lineRows) {
+      const invNum = String(line.INVOICENUMBER ?? line.INVOICENO ?? '');
+      const d = invDateMap[invNum];
+      if (!d || d.getFullYear() !== year) continue;
+
+      const mi      = d.getMonth();
+      const weekNum = Math.ceil(d.getDate() / 7);
+      const qty     = parseNum(line.INVOICEQTY);
+      const unitCost= parseNum(line.INVOICEUNITCOST);
+      const cost    = qty * unitCost;
+
+      if (unitCost > 0) {
+        monthlyCost[mi]    += cost;
+        monthlyHasCost[mi]  = true;
+        const wkey = `${mi}_${weekNum}`;
+        weeklyCostMap[wkey] = (weeklyCostMap[wkey] || 0) + cost;
+      }
+    }
+
+    // ── Aggregate monthly from headers ───────────────────────────────────────
     const monthly = MONTH_NAMES.map(m => ({
       month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null,
       orders: 0, returns: 0, sessions: 0, totalDiscounts: 0,
       aov: 0, convRate: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0,
     }));
 
-    // Weekly buckets: key = "${monthIdx}_${weekNum}" (weekNum 1-5)
-    const weeklyBuckets = {};
+    // Weekly revenue buckets: key = "${monthIdx}_${weekNum}"
+    const weeklyRevBuckets = {};
 
-    for (const row of rows) {
+    for (const row of headerRows) {
       const d = parseDate(row.INVOICEDATE);
       if (!d || d.getFullYear() !== year) continue;
 
       const mi      = d.getMonth();
-      const day     = d.getDate();
-      const weekNum = Math.ceil(day / 7);
-      // INVOICENETTAMOUNT = excl. tax  |  fallback to INVOICETOTALAMOUNT
-      const rev  = parseNum(row.INVOICENETTAMOUNT ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
-      const disc = parseNum(row.LINEDISCOUNTAMOUNT ?? row.DISCOUNTAMOUNT);
+      const weekNum = Math.ceil(d.getDate() / 7);
+      const rev     = parseNum(row.INVOICENETTAMOUNT ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
+      const disc    = parseNum(row.LINEDISCOUNTAMOUNT ?? row.DISCOUNTAMOUNT);
 
       monthly[mi].revenue        += rev;
       monthly[mi].totalDiscounts += disc;
       monthly[mi].orders         += 1;
 
       const wkey = `${mi}_${weekNum}`;
-      if (!weeklyBuckets[wkey]) weeklyBuckets[wkey] = { month: mi, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0 };
-      weeklyBuckets[wkey].revenue        += rev;
-      weeklyBuckets[wkey].orders         += 1;
-      weeklyBuckets[wkey].totalDiscounts += disc;
+      if (!weeklyRevBuckets[wkey]) weeklyRevBuckets[wkey] = { revenue: 0, orders: 0, totalDiscounts: 0 };
+      weeklyRevBuckets[wkey].revenue        += rev;
+      weeklyRevBuckets[wkey].orders         += 1;
+      weeklyRevBuckets[wkey].totalDiscounts += disc;
     }
 
-    for (const m of monthly) {
-      m.aov = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
-      m.revenue = Math.round(m.revenue);
+    // ── Compute monthly totals with margin ───────────────────────────────────
+    for (let mi = 0; mi < 12; mi++) {
+      const m   = monthly[mi];
+      const cst = monthlyCost[mi];
+      m.aov            = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
+      m.revenue        = Math.round(m.revenue);
       m.totalDiscounts = Math.round(m.totalDiscounts);
+      m.totalCost      = Math.round(cst);
+      m.hasCostData    = monthlyHasCost[mi];
+      if (m.hasCostData && m.revenue > 0) {
+        m.grossProfit      = Math.round(m.revenue - cst);
+        m.marginPct        = Math.round(((m.revenue - cst) / m.revenue) * 100);
+        m.marginableRevenue= m.revenue;
+      }
     }
 
     // ── Build weekly array ────────────────────────────────────────────────────
@@ -127,28 +172,31 @@ export async function GET(request) {
         const startDay = (w - 1) * 7 + 1;
         const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
         if (startDay > getDaysInMonth(year, mi)) continue;
-        const b = weeklyBuckets[`${mi}_${w}`];
+        const wkey   = `${mi}_${w}`;
+        const b      = weeklyRevBuckets[wkey];
+        const wCost  = weeklyCostMap[wkey] || 0;
+        const wRev   = b ? b.revenue : 0;
+        const hasCost= wCost > 0;
+        const gp     = hasCost ? Math.round(wRev - wCost) : null;
+        const margin = hasCost && wRev > 0 ? Math.round(((wRev - wCost) / wRev) * 100) : null;
         weekly.push({
           label:          `${MONTH_NAMES[mi]} W${w}`,
           month:          mi,
           week:           w,
           dateRange:      `${startDay}–${endDay} ${MONTH_NAMES[mi]}`,
-          revenue:        b ? Math.round(b.revenue)        : 0,
-          orders:         b ? b.orders                     : 0,
-          aov:            b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
-          totalCost:      0,
-          grossProfit:    null,
-          marginPct:      null,
-          hasCostData:    false,
+          revenue:        Math.round(wRev),
+          orders:         b ? b.orders : 0,
+          aov:            b && b.orders > 0 ? Math.round(wRev / b.orders) : 0,
+          totalCost:      Math.round(wCost),
+          grossProfit:    gp,
+          marginPct:      margin,
+          hasCostData:    hasCost,
           totalDiscounts: b ? Math.round(b.totalDiscounts) : 0,
           newCustomers:   0,
         });
       }
     }
 
-    // ── Salespeople: group by INVOICECUSTOMER or agent if available ──────────
-    // Ostendo doesn't always store rep on invoice — return empty array for now;
-    // the Advanced route handles rep aggregation if the data is available.
     const salespeople = [];
 
     return NextResponse.json({
@@ -167,7 +215,7 @@ export async function GET(request) {
       aov: 0, convRate: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0,
     }));
     return NextResponse.json({
-      monthly: empty, monthlyPos: empty, monthlyOnline: empty, salespeople: [],
+      monthly: empty, monthlyPos: empty, monthlyOnline: empty, weekly: [], salespeople: [],
       error: err.message,
     });
   }
