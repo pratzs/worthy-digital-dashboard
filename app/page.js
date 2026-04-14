@@ -15,9 +15,9 @@ const BRAND = {
 };
 
 const STORES = [
-  { id: "worthy", name: "Worthy Products North", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
-  { id: "luxe",   name: "Worthy Products South", color: BRAND.products.mid, accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
-  { id: "nova",   name: "Worthy Oceania (Coming Soon)", color: BRAND.oceania.mid, accent2: BRAND.oceania.light, dark: BRAND.oceania.primary, logo: "oceania", currency: "NZD" },
+  { id: "worthy", name: "Worthy Products North", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD", odooCompanyId: 4 },
+  { id: "luxe",   name: "Worthy Products South", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
+  { id: "nova",   name: "Worthy Oceania",         color: BRAND.oceania.mid,   accent2: BRAND.oceania.light,  dark: BRAND.oceania.primary,  logo: "oceania",  currency: "NZD", odooCompanyId: 1 },
 ];
 
 const ALL_YEARS = [2022, 2023, 2024, 2025, 2026];
@@ -384,7 +384,7 @@ export default function EcommerceDashboard() {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading,   setAdvLoading]   = useState(false);
-  const [channelTab,     setChannelTab]     = useState("online");
+  const [channelTab,     setChannelTab]     = useState("odoo");
   const [categoryModal,  setCategoryModal]  = useState(null);
   const [decliningMode,  setDecliningMode]  = useState("yoy");
   const [darkMode,       setDarkMode]       = useState(true);
@@ -485,17 +485,56 @@ export default function EcommerceDashboard() {
     }
   };
 
+  const fetchOdoo = async (companyId, year) => {
+    const key = `odoo:${companyId}:${year}`;
+    if (cacheRef.current[key] || loadingRef.current[key]) return;
+    loadingRef.current[key] = true;
+    forceUpdate();
+    try {
+      const r    = await fetch(`/api/odoo?year=${year}&company=${companyId}`);
+      const json = await r.json();
+      if (json.error) throw new Error(json.error);
+      const convert = (arr) => (arr?.length > 0 ? arr : generateEmptyYear());
+      cacheRef.current[key] = {
+        all:    convert(json.monthly),
+        weekly: json.weekly || [],
+      };
+    } catch {
+      const empty = generateEmptyYear();
+      cacheRef.current[key] = { all: empty, weekly: [] };
+    }
+    loadingRef.current[key] = false;
+    forceUpdate();
+  };
+
   // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
-    if (activeStore.id !== "worthy" && activeStore.id !== "luxe") return;
+    if (activeStore.id !== "worthy" && activeStore.id !== "luxe" && activeStore.id !== "nova") return;
     const storeId = activeStore.id; // capture so async closure stays correct
     advStoreRef.current = storeId;  // mark this store as the active advanced fetch
     const load = async () => {
       setAdvancedData({});          // clear old store data immediately
       setAdvLoading(true);
+
+      // Nova store — Odoo only, no advanced analytics
+      if (storeId === "nova") {
+        const companyId = activeStore.odooCompanyId || 1;
+        await Promise.all([
+          fetchOdoo(companyId, selectedYear),
+          fetchOdoo(companyId, selectedYear - 1),
+        ]);
+        if (advStoreRef.current === storeId) setAdvLoading(false);
+        return;
+      }
+
       await Promise.all([
         fetchYear(storeId, selectedYear),
         fetchYear(storeId, selectedYear - 1),
+        // Worthy North also has Odoo Sales tab
+        ...(storeId === "worthy" ? [
+          fetchOdoo(4, selectedYear),
+          fetchOdoo(4, selectedYear - 1),
+        ] : []),
       ]);
       // After revenue data is cached, fetch cost/margin data for South (non-blocking)
       if (storeId === "luxe") {
@@ -518,7 +557,7 @@ export default function EcommerceDashboard() {
           const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: c.firstOrder || null }));
           setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], metrics: data.metrics || {} }, prev: {} });
         } else {
-          const channelParam = `&channel=${channelTab}`;
+          const channelParam = channelTab !== "odoo" ? `&channel=${channelTab}` : "";
           const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
           const data = await res.json();
           if (advStoreRef.current !== storeId) return; // stale — discard
@@ -536,15 +575,32 @@ export default function EcommerceDashboard() {
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
-    if (view === "yoy" && (activeStore.id === "worthy" || activeStore.id === "luxe")) {
-      Promise.all(ALL_YEARS.map(yr => fetchYear(activeStore.id, yr)));
+    if (view === "yoy") {
+      if (activeStore.id === "worthy" || activeStore.id === "luxe") {
+        Promise.all(ALL_YEARS.map(yr => fetchYear(activeStore.id, yr)));
+      }
+      if (activeStore.id === "worthy") {
+        Promise.all(ALL_YEARS.map(yr => fetchOdoo(4, yr)));
+      }
+      if (activeStore.id === "nova") {
+        Promise.all(ALL_YEARS.map(yr => fetchOdoo(1, yr)));
+      }
     }
   }, [activeStore.id, view]); // eslint-disable-line
 
   const getMonthly = (year) => {
+    // Nova store — always Odoo
+    if (activeStore.id === "nova") {
+      const cached = cacheRef.current[`odoo:1:${year}`];
+      return cached?.all || generateEmptyYear();
+    }
+    // Worthy North — Odoo tab
+    if (activeStore.id === "worthy" && channelTab === "odoo") {
+      const cached = cacheRef.current[`odoo:4:${year}`];
+      return cached?.all || generateEmptyYear();
+    }
     const cached = cacheRef.current[activeStore.id + ":" + year];
     if (!cached) {
-      // Show sample data only for stores not yet connected (nova), loading state for luxe/worthy
       if (activeStore.id === "luxe") return generateEmptyYear();
       return generateMonthlyData(activeStore.id, year);
     }
@@ -556,6 +612,12 @@ export default function EcommerceDashboard() {
     return cached.all || generateEmptyYear();
   };
   const getWeekly = () => {
+    if (activeStore.id === "nova") {
+      return cacheRef.current[`odoo:1:${selectedYear}`]?.weekly || [];
+    }
+    if (activeStore.id === "worthy" && channelTab === "odoo") {
+      return cacheRef.current[`odoo:4:${selectedYear}`]?.weekly || [];
+    }
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
     if (!cached) return [];
     if (activeStore.id !== "worthy") return cached.weekly || [];
@@ -567,8 +629,16 @@ export default function EcommerceDashboard() {
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
     return cached?.salespeople || [];
   };
-  const isLoading  = (year) => !!loadingRef.current[activeStore.id + ":" + year];
-  const hasData    = (year) => (activeStore.id !== "worthy" && activeStore.id !== "luxe") || !!cacheRef.current[activeStore.id + ":" + year];
+  const isLoading = (year) => {
+    if (activeStore.id === "nova") return !!loadingRef.current[`odoo:1:${year}`];
+    if (activeStore.id === "worthy" && channelTab === "odoo") return !!loadingRef.current[`odoo:4:${year}`];
+    return !!loadingRef.current[activeStore.id + ":" + year];
+  };
+  const hasData = (year) => {
+    if (activeStore.id === "nova") return !!cacheRef.current[`odoo:1:${year}`];
+    if (activeStore.id === "worthy" && channelTab === "odoo") return !!cacheRef.current[`odoo:4:${year}`];
+    return (activeStore.id !== "worthy" && activeStore.id !== "luxe") || !!cacheRef.current[activeStore.id + ":" + year];
+  };
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
 
   const curr       = getMonthly(selectedYear);
@@ -794,7 +864,7 @@ export default function EcommerceDashboard() {
               {anyLoading && <div style={{ fontSize: 10, color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: "2px 8px", borderRadius: 20 }}>LOADING…</div>}
             </div>
             <div style={{ fontSize: 10, color: T.textSub, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-              {activeStore.id === "worthy" ? "Live Shopify Data" : activeStore.id === "luxe" ? "Live Ostendo Data" : "Sample Data"} · Performance Overview
+              {activeStore.id === "worthy" ? "Live Shopify + Odoo Data" : activeStore.id === "luxe" ? "Live Ostendo Data" : "Live Odoo Data"} · Performance Overview
             </div>
           </div>
         </div>
@@ -821,13 +891,19 @@ export default function EcommerceDashboard() {
         </div>
       </div>
 
-      {/* CHANNEL SUB-TABS — only shown for Worthy North (live store) */}
-      {activeStore.id === "worthy" && (
+      {/* CHANNEL SUB-TABS — shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
+      {(activeStore.id === "worthy" || activeStore.id === "nova") && (
         <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4 }}>
-          {[
-            { id: "online", label: "🌐  Online Sales" },
-            { id: "pos",    label: "🏪  POS Sales" },
-          ].map(tab => (
+          {(activeStore.id === "worthy"
+            ? [
+                { id: "odoo",   label: "☁️  Odoo Sales" },
+                { id: "online", label: "🌐  Online Sales" },
+                { id: "pos",    label: "🏪  POS Sales" },
+              ]
+            : [
+                { id: "odoo",   label: "☁️  Odoo Sales" },
+              ]
+          ).map(tab => (
             <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
               padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
               border: "none", borderBottom: channelTab === tab.id ? `2px solid ${accent}` : "2px solid transparent",
@@ -838,7 +914,9 @@ export default function EcommerceDashboard() {
             </button>
           ))}
           <div style={{ marginLeft: "auto", fontSize: 10, color: T.textLabel, paddingRight: 8 }}>
-            {channelTab === "pos" ? "In-person POS orders only" : "Online store orders · includes sessions & conv rate"}
+            {channelTab === "odoo"   ? "Odoo ERP invoices · ex-tax revenue" :
+             channelTab === "pos"    ? "In-person POS orders only" :
+                                      "Online store orders · includes sessions & conv rate"}
           </div>
         </div>
       )}
@@ -1181,8 +1259,8 @@ export default function EcommerceDashboard() {
           </>
         )}
 
-        {/* ADVANCED ANALYTICS */}
-        {(activeStore.id === "worthy" || activeStore.id === "luxe") && (
+        {/* ADVANCED ANALYTICS — not shown for Odoo tab (Shopify-based) or nova */}
+        {(activeStore.id === "luxe" || (activeStore.id === "worthy" && channelTab !== "odoo")) && (
           <>
             {/* Category drill-down modal */}
             <CategoryModal
