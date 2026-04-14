@@ -389,6 +389,7 @@ export default function EcommerceDashboard() {
   const [decliningMode,  setDecliningMode]  = useState("yoy");
   const [darkMode,       setDarkMode]       = useState(true);
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
+  const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef      = useRef({});
@@ -413,6 +414,7 @@ export default function EcommerceDashboard() {
         all:         convert(json.monthly),
         pos:         convert(json.monthlyPos),
         online:      convert(json.monthlyOnline),
+        weekly:      json.weekly || [],
         salespeople: json.salespeople || [],
       };
       // Explicitly update salespeople state so the table re-renders
@@ -489,6 +491,10 @@ export default function EcommerceDashboard() {
     if (channelTab === "pos")    return cached.pos    || generateEmptyYear();
     if (channelTab === "online") return cached.online || generateEmptyYear();
     return cached.all || generateEmptyYear();
+  };
+  const getWeekly = () => {
+    const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
+    return cached?.weekly || [];
   };
   const getSalespeople = () => {
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
@@ -772,7 +778,7 @@ export default function EcommerceDashboard() {
       <div style={{ padding: "32px 32px 0" }}>
         {/* View toggle */}
         <div style={{ display: "flex", gap: 4, marginBottom: 28, background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)", borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, width: "fit-content" }}>
-          {[["monthly","Monthly Performance"],["yoy","Year over Year"]].map(([v, lbl]) => (
+          {[["monthly","Monthly Performance"],["weekly","Weekly Breakdown"],["yoy","Year over Year"]].map(([v, lbl]) => (
             <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : T.textMuted, boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
           ))}
         </div>
@@ -898,6 +904,133 @@ export default function EcommerceDashboard() {
               </div>
             </div>
           </>
+        ) : view === "weekly" ? (
+          /* WEEKLY VIEW */
+          (() => {
+            const allWeekly  = getWeekly();
+            const weeklyData = allWeekly.filter(w => w.month === weeklyMonth);
+            const wTotalRev  = weeklyData.reduce((s, w) => s + w.revenue, 0);
+            const wTotalOrd  = weeklyData.reduce((s, w) => s + w.orders, 0);
+            const wTotalDisc = weeklyData.reduce((s, w) => s + w.totalDiscounts, 0);
+            const wTotalNewC = weeklyData.reduce((s, w) => s + w.newCustomers, 0);
+            const wAvgAOV    = wTotalOrd > 0 ? Math.round(wTotalRev / wTotalOrd) : 0;
+            return (
+              <>
+                {/* Month selector */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
+                  {MONTH_NAMES.map((mn, mi) => (
+                    <button key={mn} onClick={() => setWeeklyMonth(mi)} style={{
+                      padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                      border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
+                      background: weeklyMonth === mi ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"),
+                      color: weeklyMonth === mi ? accent : T.textMuted,
+                      cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.05em", textTransform: "uppercase",
+                    }}>{mn}</button>
+                  ))}
+                </div>
+
+                {/* Weekly bar chart */}
+                <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>
+                        Weekly Revenue — {MONTH_NAMES[weeklyMonth]} {selectedYear}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#4a4030", marginTop: 3 }}>Week-by-week sales breakdown</div>
+                    </div>
+                    {wTotalRev > 0 && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 11, color: T.textLabel }}>Month Total</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: accent }}>{fmtK(wTotalRev, activeStore.currency)}</div>
+                      </div>
+                    )}
+                  </div>
+                  {weeklyData.length > 0 && wTotalRev > 0 ? (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={weeklyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
+                        <defs>
+                          <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={accent} stopOpacity={0.9} />
+                            <stop offset="100%" stopColor={accent} stopOpacity={0.5} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#6a5a40" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false}
+                          tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
+                        <Bar dataKey="revenue" name="Revenue" fill="url(#wg)" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: T.textLabel, fontSize: 13 }}>
+                      {anyLoading ? "Loading weekly data…" : `No sales recorded in ${MONTH_NAMES[weeklyMonth]} ${selectedYear}`}
+                    </div>
+                  )}
+                </div>
+
+                {/* Weekly table */}
+                <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
+                      Weekly Breakdown — {MONTH_NAMES[weeklyMonth]} {selectedYear}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#5a4030" }}>{activeStore.currency}</div>
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead>
+                        <tr>
+                          {["Week","Date Range","Revenue","Orders","AOV","Discounts","New Cust.","vs Prev Week"].map(h => (
+                            <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {weeklyData.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} style={{ padding: "28px 8px", color: T.textLabel, textAlign: "center" }}>
+                              {anyLoading ? "Loading…" : "No weekly data available for this month"}
+                            </td>
+                          </tr>
+                        ) : weeklyData.map((row, i) => {
+                          const prevW = weeklyData[i - 1];
+                          const wGrowth = prevW ? calcGrowth(row.revenue, prevW.revenue) : null;
+                          const has = row.revenue > 0;
+                          return (
+                            <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", background: hoveredMonth === 100 + i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
+                              onMouseEnter={() => setHoveredMonth(100 + i)} onMouseLeave={() => setHoveredMonth(null)}>
+                              <td style={{ padding: "10px 8px", color: accent, fontWeight: 700, fontSize: 12 }}>Week {row.week}</td>
+                              <td style={{ padding: "10px 8px", color: "#7a6850", fontSize: 10 }}>{row.dateRange}</td>
+                              <td style={{ padding: "10px 8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#aa8a6a" }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px" }}><GrowthBadge value={wGrowth} /></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      {weeklyData.length > 0 && wTotalRev > 0 && (
+                        <tfoot>
+                          <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                            <td colSpan={2} style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>MONTH TOTAL</td>
+                            <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(wTotalRev, activeStore.currency)}</td>
+                            <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{wTotalOrd}</td>
+                            <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{fmtK(wAvgAOV, activeStore.currency)}</td>
+                            <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{wTotalDisc > 0 ? fmtK(wTotalDisc, activeStore.currency) : "—"}</td>
+                            <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{wTotalNewC || "—"}</td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()
         ) : (
           /* YOY VIEW */
           <>

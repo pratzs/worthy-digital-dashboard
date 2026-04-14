@@ -128,8 +128,14 @@ export async function GET(request) {
     }));
     const allB = mkB(), posB = mkB(), onlineB = mkB();
 
+    // Weekly buckets: key = "${monthIdx}_${weekNum}" (weekNum 1-5)
+    const weeklyBuckets = {};
+
     allOrders.forEach(order => {
-      const i       = new Date(order.createdAt).getMonth();
+      const orderDate = new Date(order.createdAt);
+      const i       = orderDate.getMonth();
+      const day     = orderDate.getDate();
+      const weekNum = Math.ceil(day / 7); // 1=days1-7, 2=8-14, 3=15-21, 4=22-28, 5=29-31
       const rev     = parseFloat(order.totalPriceSet?.shopMoney?.amount     || 0);
       const disc    = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
       const appName = (order.app?.name || "").toLowerCase();
@@ -158,6 +164,14 @@ export async function GET(request) {
         if (hasCD) b[i].hasCostData  = true;
         if (isNew) b[i].newCustomers += 1;
       });
+
+      // Accumulate weekly (all-channel combined)
+      const wkey = `${i}_${weekNum}`;
+      if (!weeklyBuckets[wkey]) weeklyBuckets[wkey] = { month: i, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0 };
+      weeklyBuckets[wkey].revenue        += rev;
+      weeklyBuckets[wkey].orders         += 1;
+      weeklyBuckets[wkey].totalDiscounts += disc;
+      if (isNew) weeklyBuckets[wkey].newCustomers += 1;
     });
 
     // ── Convert buckets → monthly arrays ────────────────────────────────────
@@ -188,6 +202,29 @@ export async function GET(request) {
         };
       });
 
+    // ── Build weekly array ────────────────────────────────────────────────────
+    const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+    const weekly = [];
+    for (let mi = 0; mi < 12; mi++) {
+      for (let w = 1; w <= 5; w++) {
+        const b = weeklyBuckets[`${mi}_${w}`];
+        const startDay = (w - 1) * 7 + 1;
+        const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
+        if (startDay > getDaysInMonth(year, mi)) continue; // week doesn't exist for this month
+        weekly.push({
+          label:         `${MONTHS[mi]} W${w}`,
+          month:         mi,
+          week:          w,
+          dateRange:     `${startDay}–${endDay} ${MONTHS[mi]}`,
+          revenue:       b ? Math.round(b.revenue)        : 0,
+          orders:        b ? b.orders                     : 0,
+          aov:           b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
+          totalDiscounts:b ? Math.round(b.totalDiscounts) : 0,
+          newCustomers:  b ? b.newCustomers               : 0,
+        });
+      }
+    }
+
     return NextResponse.json({
       year,
       totalOrders:  allOrders.length,
@@ -195,6 +232,7 @@ export async function GET(request) {
       monthly:      toMonthly(allB,    true),   // all orders + web sessions
       monthlyPos:   toMonthly(posB,    false),  // POS only, no web sessions
       monthlyOnline:toMonthly(onlineB, true),   // online only + web sessions
+      weekly,
       salespeople: salespeopleFromAnalytics,
     });
 

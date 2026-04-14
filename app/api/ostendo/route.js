@@ -88,11 +88,16 @@ export async function GET(request) {
       aov: 0, convRate: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0,
     }));
 
+    // Weekly buckets: key = "${monthIdx}_${weekNum}" (weekNum 1-5)
+    const weeklyBuckets = {};
+
     for (const row of rows) {
       const d = parseDate(row.INVOICEDATE);
       if (!d || d.getFullYear() !== year) continue;
 
-      const mi  = d.getMonth();
+      const mi      = d.getMonth();
+      const day     = d.getDate();
+      const weekNum = Math.ceil(day / 7);
       // INVOICENETTAMOUNT = excl. tax  |  fallback to INVOICETOTALAMOUNT
       const rev  = parseNum(row.INVOICENETTAMOUNT ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
       const disc = parseNum(row.LINEDISCOUNTAMOUNT ?? row.DISCOUNTAMOUNT);
@@ -100,12 +105,41 @@ export async function GET(request) {
       monthly[mi].revenue        += rev;
       monthly[mi].totalDiscounts += disc;
       monthly[mi].orders         += 1;
+
+      const wkey = `${mi}_${weekNum}`;
+      if (!weeklyBuckets[wkey]) weeklyBuckets[wkey] = { month: mi, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0 };
+      weeklyBuckets[wkey].revenue        += rev;
+      weeklyBuckets[wkey].orders         += 1;
+      weeklyBuckets[wkey].totalDiscounts += disc;
     }
 
     for (const m of monthly) {
       m.aov = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
       m.revenue = Math.round(m.revenue);
       m.totalDiscounts = Math.round(m.totalDiscounts);
+    }
+
+    // ── Build weekly array ────────────────────────────────────────────────────
+    const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+    const weekly = [];
+    for (let mi = 0; mi < 12; mi++) {
+      for (let w = 1; w <= 5; w++) {
+        const startDay = (w - 1) * 7 + 1;
+        const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
+        if (startDay > getDaysInMonth(year, mi)) continue;
+        const b = weeklyBuckets[`${mi}_${w}`];
+        weekly.push({
+          label:         `${MONTH_NAMES[mi]} W${w}`,
+          month:         mi,
+          week:          w,
+          dateRange:     `${startDay}–${endDay} ${MONTH_NAMES[mi]}`,
+          revenue:       b ? Math.round(b.revenue)        : 0,
+          orders:        b ? b.orders                     : 0,
+          aov:           b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
+          totalDiscounts:b ? Math.round(b.totalDiscounts) : 0,
+          newCustomers:  0,
+        });
+      }
     }
 
     // ── Salespeople: group by INVOICECUSTOMER or agent if available ──────────
@@ -117,6 +151,7 @@ export async function GET(request) {
       monthly,
       monthlyPos:    monthly,
       monthlyOnline: monthly,
+      weekly,
       salespeople,
     });
 
