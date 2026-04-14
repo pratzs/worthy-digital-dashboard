@@ -429,6 +429,62 @@ export default function EcommerceDashboard() {
     forceUpdate();
   };
 
+  // Fetch monthly/weekly cost (margins) for Ostendo South from dedicated endpoint
+  // Runs AFTER the main fetchYear so revenue is never blocked by cost fetch
+  const fetchMargins = async (storeId, year) => {
+    if (storeId !== "luxe") return;
+    const mkey = `margins:${storeId}:${year}`;
+    if (cacheRef.current[mkey]) return; // already fetched or in-flight
+    cacheRef.current[mkey] = "loading";
+    try {
+      const r    = await fetch(`/api/ostendo/margins?year=${year}`);
+      const json = await r.json();
+      if (json.error || (!json.monthly?.length && !json.weekly?.length)) {
+        cacheRef.current[mkey] = "error"; return;
+      }
+      const cached = cacheRef.current[`${storeId}:${year}`];
+      if (!cached) { cacheRef.current[mkey] = "error"; return; }
+
+      // Build month-name → cost map
+      const mCostMap = {};
+      (json.monthly || []).forEach(m => { if (m.hasCostData) mCostMap[m.month] = m.totalCost; });
+
+      // Merge cost into monthly arrays (all / pos / online are same for Ostendo)
+      const mergeMonthly = (arr) => arr.map(m => {
+        const cost = mCostMap[m.month];
+        if (cost == null || cost === 0) return m;
+        const gp     = Math.round(m.revenue - cost);
+        const margin = m.revenue > 0 ? Math.round((gp / m.revenue) * 100) : 0;
+        return { ...m, totalCost: cost, grossProfit: gp, marginPct: margin, hasCostData: true, marginableRevenue: m.revenue };
+      });
+      cached.all    = mergeMonthly(cached.all    || []);
+      cached.pos    = mergeMonthly(cached.pos    || []);
+      cached.online = mergeMonthly(cached.online || []);
+
+      // Build week key → cost map
+      const wCostMap = {};
+      (json.weekly || []).forEach(w => { if (w.hasCostData) wCostMap[`${w.month}_${w.week}`] = w.totalCost; });
+
+      // Merge cost into weekly arrays
+      const mergeWeekly = (arr) => arr.map(w => {
+        const cost = wCostMap[`${w.month}_${w.week}`];
+        if (!cost) return w;
+        const gp     = Math.round(w.revenue - cost);
+        const margin = w.revenue > 0 ? Math.round((gp / w.revenue) * 100) : 0;
+        return { ...w, totalCost: cost, grossProfit: gp, marginPct: margin, hasCostData: true };
+      });
+      cached.weekly       = mergeWeekly(cached.weekly       || []);
+      cached.weeklyPos    = mergeWeekly(cached.weeklyPos    || []);
+      cached.weeklyOnline = mergeWeekly(cached.weeklyOnline || []);
+
+      cacheRef.current[mkey] = "done";
+      forceUpdate();
+    } catch (e) {
+      console.warn("[fetchMargins] failed:", e.message);
+      cacheRef.current[mkey] = "error";
+    }
+  };
+
   // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
     if (activeStore.id !== "worthy" && activeStore.id !== "luxe") return;
@@ -441,6 +497,11 @@ export default function EcommerceDashboard() {
         fetchYear(storeId, selectedYear),
         fetchYear(storeId, selectedYear - 1),
       ]);
+      // After revenue data is cached, fetch cost/margin data for South (non-blocking)
+      if (storeId === "luxe") {
+        fetchMargins(storeId, selectedYear);
+        fetchMargins(storeId, selectedYear - 1);
+      }
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       try {
         if (storeId === "luxe") {
