@@ -129,15 +129,19 @@ export async function GET(request) {
         if (startDay > getDaysInMonth(year, mi)) continue;
         const b = weeklyBuckets[`${mi}_${w}`];
         weekly.push({
-          label:         `${MONTH_NAMES[mi]} W${w}`,
-          month:         mi,
-          week:          w,
-          dateRange:     `${startDay}–${endDay} ${MONTH_NAMES[mi]}`,
-          revenue:       b ? Math.round(b.revenue)        : 0,
-          orders:        b ? b.orders                     : 0,
-          aov:           b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
-          totalDiscounts:b ? Math.round(b.totalDiscounts) : 0,
-          newCustomers:  0,
+          label:          `${MONTH_NAMES[mi]} W${w}`,
+          month:          mi,
+          week:           w,
+          dateRange:      `${startDay}–${endDay} ${MONTH_NAMES[mi]}`,
+          revenue:        b ? Math.round(b.revenue)        : 0,
+          orders:         b ? b.orders                     : 0,
+          aov:            b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
+          totalCost:      0,
+          grossProfit:    null,
+          marginPct:      null,
+          hasCostData:    false,
+          totalDiscounts: b ? Math.round(b.totalDiscounts) : 0,
+          newCustomers:   0,
         });
       }
     }

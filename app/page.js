@@ -650,7 +650,8 @@ export default function EcommerceDashboard() {
   const categoryColumns = [
     { key: "name",    label: "Category",   color: T.text },
     { key: "qty",     label: "Units Sold", align: "right" },
-    { key: "revenue", label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+    { key: "revenue", label: "Revenue",    align: "right", color: accent,    format: (v, c) => fmtK(v, c) },
+    { key: "margin",  label: "Margin",     align: "right", color: "#C97C9E", format: v => v != null ? `${v}%` : "—" },
   ];
   const slowMovingColumns = [
     { key: "name",          label: "Product",      color: T.text },
@@ -920,6 +921,10 @@ export default function EcommerceDashboard() {
             const wTotalDisc = weeklyData.reduce((s, w) => s + w.totalDiscounts, 0);
             const wTotalNewC = weeklyData.reduce((s, w) => s + w.newCustomers, 0);
             const wAvgAOV    = wTotalOrd > 0 ? Math.round(wTotalRev / wTotalOrd) : 0;
+            const wHasCost   = weeklyData.some(w => w.hasCostData);
+            const wTotalCost = weeklyData.reduce((s, w) => s + (w.totalCost || 0), 0);
+            const wTotalGP   = wHasCost ? wTotalRev - wTotalCost : null;
+            const wMarginPct = wHasCost && wTotalRev > 0 ? Math.round(((wTotalRev - wTotalCost) / wTotalRev) * 100) : null;
             return (
               <>
                 {/* Month selector */}
@@ -987,7 +992,7 @@ export default function EcommerceDashboard() {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead>
                         <tr>
-                          {["Week","Date Range","Revenue","Orders","AOV","Discounts","New Cust.","vs Prev Week"].map(h => (
+                          {["Week","Date Range","Revenue","Gross Profit","Margin","Orders","AOV","Discounts","New Cust.","vs Prev Week"].map(h => (
                             <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{h}</th>
                           ))}
                         </tr>
@@ -995,7 +1000,7 @@ export default function EcommerceDashboard() {
                       <tbody>
                         {weeklyData.length === 0 ? (
                           <tr>
-                            <td colSpan={8} style={{ padding: "28px 8px", color: T.textLabel, textAlign: "center" }}>
+                            <td colSpan={10} style={{ padding: "28px 8px", color: T.textLabel, textAlign: "center" }}>
                               {anyLoading ? "Loading…" : "No weekly data available for this month"}
                             </td>
                           </tr>
@@ -1009,6 +1014,8 @@ export default function EcommerceDashboard() {
                               <td style={{ padding: "10px 8px", color: accent, fontWeight: 700, fontSize: 12 }}>Week {row.week}</td>
                               <td style={{ padding: "10px 8px", color: "#7a6850", fontSize: 10 }}>{row.dateRange}</td>
                               <td style={{ padding: "10px 8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px" }}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px", color: "#aa8a6a" }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
@@ -1023,6 +1030,8 @@ export default function EcommerceDashboard() {
                           <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
                             <td colSpan={2} style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>MONTH TOTAL</td>
                             <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(wTotalRev, activeStore.currency)}</td>
+                            <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "—"}</td>
+                            <td style={{ padding: "10px 8px" }}>{wMarginPct != null ? <MarginBar value={wMarginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{wTotalOrd}</td>
                             <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{fmtK(wAvgAOV, activeStore.currency)}</td>
                             <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{wTotalDisc > 0 ? fmtK(wTotalDisc, activeStore.currency) : "—"}</td>
@@ -1091,15 +1100,13 @@ export default function EcommerceDashboard() {
                         <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{fmt(yr.revenue, activeStore.currency)}</div>
                         {rg !== null && <div style={{ fontSize: 11, color: rg >= 0 ? "#4ade80" : "#f87171", marginTop: 2, fontWeight: 600 }}>{fmtPct(rg)} vs {p.year}</div>}
                       </div>
-                      {yr.grossProfit !== null && (
-                        <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Gross Profit</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#C97C9E" }}>
-                            {fmt(yr.grossProfit, activeStore.currency)}
-                            {yr.margin !== null && <span style={{ fontSize: 10, color: "#7a5a6a", marginLeft: 5 }}>{yr.margin}%</span>}
-                          </div>
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Gross Profit</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#C97C9E" }}>
+                          {yr.grossProfit !== null ? fmt(yr.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}
+                          {yr.margin !== null && <span style={{ fontSize: 10, color: "#7a5a6a", marginLeft: 5 }}>{yr.margin}%</span>}
                         </div>
-                      )}
+                      </div>
                       <div>
                         <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Orders</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#8a9aaa" }}>{yr.orders.toLocaleString()}</div>

@@ -165,14 +165,17 @@ export async function GET(request) {
         if (isNew) b[i].newCustomers += 1;
       });
 
-      // Accumulate weekly — all, pos, online separately
+      // Accumulate weekly — all, pos, online separately (including cost for margin)
       const wkey = `${i}_${weekNum}`;
-      const mkW  = () => ({ month: i, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0 });
+      const mkW  = () => ({ month: i, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0, totalCost: 0, marginableRevenue: 0, hasCostData: false });
       [weeklyAllB, isPos ? weeklyPosB : weeklyOnlineB].forEach(wb => {
         if (!wb[wkey]) wb[wkey] = mkW();
-        wb[wkey].revenue        += rev;
-        wb[wkey].orders         += 1;
-        wb[wkey].totalDiscounts += disc;
+        wb[wkey].revenue           += rev;
+        wb[wkey].orders            += 1;
+        wb[wkey].totalDiscounts    += disc;
+        wb[wkey].totalCost         += lineCost;
+        wb[wkey].marginableRevenue += lineMargRev;
+        if (hasCD) wb[wkey].hasCostData = true;
         if (isNew) wb[wkey].newCustomers += 1;
       });
     });
@@ -215,16 +218,24 @@ export async function GET(request) {
           const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
           if (startDay > getDaysInMonth(year, mi)) continue;
           const b = buckets[`${mi}_${w}`];
+          const gp     = b?.hasCostData ? Math.round(b.marginableRevenue - b.totalCost) : null;
+          const margin = b?.hasCostData && b.marginableRevenue > 0
+            ? Math.round(((b.marginableRevenue - b.totalCost) / b.marginableRevenue) * 100)
+            : null;
           arr.push({
-            label:         `${MONTHS[mi]} W${w}`,
-            month:         mi,
-            week:          w,
-            dateRange:     `${startDay}–${endDay} ${MONTHS[mi]}`,
-            revenue:       b ? Math.round(b.revenue)        : 0,
-            orders:        b ? b.orders                     : 0,
-            aov:           b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
-            totalDiscounts:b ? Math.round(b.totalDiscounts) : 0,
-            newCustomers:  b ? b.newCustomers               : 0,
+            label:          `${MONTHS[mi]} W${w}`,
+            month:          mi,
+            week:           w,
+            dateRange:      `${startDay}–${endDay} ${MONTHS[mi]}`,
+            revenue:        b ? Math.round(b.revenue)        : 0,
+            orders:         b ? b.orders                     : 0,
+            aov:            b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
+            totalCost:      b ? Math.round(b.totalCost)      : 0,
+            grossProfit:    gp,
+            marginPct:      margin,
+            hasCostData:    b?.hasCostData || false,
+            totalDiscounts: b ? Math.round(b.totalDiscounts) : 0,
+            newCustomers:   b ? b.newCustomers               : 0,
           });
         }
       }
