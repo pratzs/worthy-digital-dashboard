@@ -170,19 +170,19 @@ async function fetchLinesViaSubquery(headerDateCond) {
  * Used when the subquery returns nothing (Firebird sometimes can't optimise
  * the join, or the lines table is too large for a single response).
  */
-async function fetchLinesByInvoiceNums(invoiceNums, chunkSize = 100) {
+async function fetchLinesByInvoiceNums(invoiceNums, chunkSize = 60) {
   if (!invoiceNums.length) return [];
   const chunks = [];
   for (let i = 0; i < invoiceNums.length; i += chunkSize) {
     chunks.push(invoiceNums.slice(i, i + chunkSize));
   }
-  console.log(`[Ostendo/lines] chunked fallback: ${chunks.length} chunks × ${chunkSize}`);
+  console.log(`[Ostendo/lines] chunked fetch: ${chunks.length} chunks × ${chunkSize}, parallel=10`);
   const results = await parallelLimit(
     chunks.map(chunk => () => {
       const inList = chunk.map(fmtInVal).join(',');
-      return safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`, 30000));
+      return safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`, 20000));
     }),
-    5
+    10
   );
   return results.flat();
 }
@@ -336,17 +336,12 @@ export async function GET(request) {
     const currInvNumSet  = new Set(currInvNums.map(String));
     console.log(`[Ostendo/adv] invoice nums sample: ${currInvNums.slice(0,3).join(', ')}`);
 
-    // Fetch lines via Firebird subquery first (single query, server-side filter).
-    // If that returns nothing (Firebird sometimes can't plan it, or the response
-    // exceeds a size limit) fall back to chunked INVOICENUMBER IN (...) parallel
+    // Skip the subquery path — on production it returns 0 rows for years with
+    // 9k+ invoices (Firebird response size limit / planner issue) and just
+    // burns the 60s Vercel budget. Go straight to chunked INVOICENUMBER IN
     // fetches using the invoice numbers we already have from headers.
-    let currLineRows = await fetchLinesViaSubquery(currCond);
-    console.log(`[Ostendo/adv] curr lines via subquery: ${currLineRows.length}`);
-    if (currLineRows.length === 0 && currInvNums.length > 0) {
-      console.log(`[Ostendo/adv] subquery empty — falling back to chunked fetch over ${currInvNums.length} invoice numbers`);
-      currLineRows = await fetchLinesByInvoiceNums(currInvNums, 100);
-      console.log(`[Ostendo/adv] curr lines via chunked fetch: ${currLineRows.length}`);
-    }
+    const currLineRows = await fetchLinesByInvoiceNums(currInvNums, 60);
+    console.log(`[Ostendo/adv] curr lines via chunked fetch: ${currLineRows.length} (from ${currInvNums.length} invoices)`);
 
     // Log actual column names from the first line row to identify the item code field
     if (currLineRows.length > 0) {

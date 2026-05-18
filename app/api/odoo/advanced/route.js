@@ -40,11 +40,18 @@ export async function GET(request) {
     const uid = authJson.result;
     if (!uid) throw new Error('Authentication failed');
 
+    // Pin the call context to the target company so Odoo's record rules don't
+    // cross-pollute multi-company access. Fixes the "expected str instance,
+    // bool found" Python error we saw on company 1 (Worthy Oceania) which
+    // was caused by record-rule evaluation against an unintended company.
+    const ctx = { allowed_company_ids: [companyId], force_company: companyId };
+
     const exec = async (model, method, args, kwargs = {}, timeout = 40000) => {
+      const mergedKwargs = { ...kwargs, context: { ...(kwargs.context || {}), ...ctx } };
       const j = await odooCall(url, {
         jsonrpc: '2.0', method: 'call', id: Math.floor(Math.random() * 1e6),
         params: { service: 'object', method: 'execute_kw',
-                  args: [db, uid, password, model, method, args, kwargs] },
+                  args: [db, uid, password, model, method, args, mergedKwargs] },
       }, timeout);
       if (j.error) throw new Error(j.error.data?.message || j.error.message || `${model}.${method} failed`);
       return j.result;
@@ -96,11 +103,12 @@ export async function GET(request) {
                         'quantity', 'price_subtotal'];
     let lines = [];
     try {
-      const idChunks = chunkArray(invoiceIds, 2000);
+      const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
+      const idChunks = chunkArray(sanitizedIds, 1000);
       const chunkResults = await Promise.all(idChunks.map(c =>
         exec('account.move.line', 'search_read',
           [[['move_id', 'in', c]]],
-          { fields: lineFields, limit: 60000 },
+          { fields: lineFields, limit: 50000 },
           45000
         ).catch(e => {
           console.error(`[Odoo/adv] line chunk failed: ${e.message}`);

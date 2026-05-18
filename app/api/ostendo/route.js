@@ -80,24 +80,16 @@ export async function GET(request) {
   const year = parseInt(searchParams.get('year') || new Date().getFullYear());
 
   try {
-    // ── Headers + lines (via subquery) ────────────────────────────────────────
+    // Headers only — line-level cost is sourced from /api/ostendo/margins,
+    // which runs as a separate request and merges into the monthly buckets
+    // on the client. Fetching lines here was returning 0 rows (Firebird
+    // subquery hits a response size limit on years with 9k+ invoices) and
+    // adding 30–40s to this route's wall time for nothing.
     const yearCond = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
-    const lineCond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond})`;
-
-    const [rawHeaders, rawLines] = await Promise.all([
-      ostendoFetch('SALESINVOICEHEADER', yearCond, 30000).catch(() => []),
-      ostendoFetch('SALESINVOICELINES', lineCond, 45000).catch(() => []),
-    ]);
+    const rawHeaders = await ostendoFetch('SALESINVOICEHEADER', yearCond, 30000).catch(() => []);
     const rows  = normalizeRows(rawHeaders);
-    const lines = normalizeRows(rawLines);
-    console.log(`[Ostendo/main] year=${year} headers=${rows.length} lines=${lines.length}`);
-
-    // Build invoice→date map for line lookup
-    const invDateMap = {};
-    for (const r of rows) {
-      const num = r.INVOICENUMBER ?? r.INVOICENO;
-      if (num) invDateMap[String(num).trim()] = parseDate(r.INVOICEDATE);
-    }
+    const lines = [];
+    console.log(`[Ostendo/main] year=${year} headers=${rows.length} (lines skipped — /margins owns cost)`);
 
     // ── Aggregate by month + week ─────────────────────────────────────────────
     const monthly = MONTH_NAMES.map(m => ({
