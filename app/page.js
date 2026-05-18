@@ -497,16 +497,6 @@ export default function EcommerceDashboard() {
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
   const [selectedYear, setSelectedYear] = useState(2026);
 
-  // Advanced table dates auto-sync to the selected view + period
-  const _thisYear    = new Date().getFullYear();
-  const _todayStr    = new Date().toISOString().split('T')[0];
-  const advStartDate = view === "weekly"
-    ? `${selectedYear}-${String(weeklyMonth + 1).padStart(2, '0')}-01`
-    : `${selectedYear}-01-01`;
-  const advEndDate = view === "weekly"
-    ? new Date(selectedYear, weeklyMonth + 1, 0).toISOString().split('T')[0]
-    : (selectedYear === _thisYear ? _todayStr : `${selectedYear}-12-31`);
-
   const [view,         setView]         = useState("monthly");
   const [animated,     setAnimated]     = useState(true);
   const [activeMetric, setActiveMetric] = useState("revenue");
@@ -519,6 +509,16 @@ export default function EcommerceDashboard() {
   const [darkMode,       setDarkMode]       = useState(false);
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
+
+  // Advanced table dates auto-sync to the selected view + period
+  const _thisYear    = new Date().getFullYear();
+  const _todayStr    = new Date().toISOString().split('T')[0];
+  const advStartDate = view === "weekly"
+    ? `${selectedYear}-${String(weeklyMonth + 1).padStart(2, '0')}-01`
+    : `${selectedYear}-01-01`;
+  const advEndDate = view === "weekly"
+    ? new Date(selectedYear, weeklyMonth + 1, 0).toISOString().split('T')[0]
+    : (selectedYear === _thisYear ? _todayStr : `${selectedYear}-12-31`);
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const cacheRef      = useRef({});
