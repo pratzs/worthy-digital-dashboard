@@ -369,71 +369,122 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
   );
 };
 
-// ── Sales Rep Breakdown (Monthly pivot + Weekly pivot) ────────────────────────
+// ── Sales Rep Breakdown — ONE table with annual/monthly/weekly toggle ─────────
 const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, loading, currency, weeklyMonth, onWeeklyMonthChange, T, accent }) => {
-  const repSummary = salespeople.map(s => ({ ...s, revenue: Math.round(s.revenue), aov: s.orders > 0 ? Math.round(s.revenue / s.orders) : 0 }));
+  const [repView, setRepView] = useState("annual");
 
-  // Monthly pivot: rows = reps, cols = Jan–Dec + Total
-  const monthlyPivot = salespeopleMonthly;
+  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev > 0 ? 600 : 400 });
+  const repCellStyle = { padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" };
+  const headStyle    = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
+  const numStyle     = (v) => ({ padding: "10px 12px", textAlign: "right", color: T.textSub, fontSize: 12, whiteSpace: "nowrap" });
 
-  // Weekly pivot for selected month: rows = reps, cols = W1–W5
+  // Annual rows (summary)
+  const annualRows = (salespeople || []).map(s => ({
+    name:    s.name,
+    orders:  s.orders,
+    revenue: Math.round(s.revenue),
+    aov:     s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
+  }));
+
+  // Monthly pivot rows: cols = Jan..Dec + Total
+  const monthlyPivot = salespeopleMonthly || [];
+
+  // Weekly pivot rows for selectedMonth: cols = W1..W5 + Month Total
   const maxWeeks = 5;
-  const weeklyPivot = salespeopleWeekly.map(rep => ({
-    name: rep.name,
+  const weeklyPivot = (salespeopleWeekly || []).map(rep => ({
+    name:  rep.name,
     weeks: Array.from({ length: maxWeeks }, (_, wi) => {
       const w = rep.weekly.find(x => x.month === weeklyMonth && x.week === wi + 1);
       return w || { revenue: 0, orders: 0 };
     }),
     monthTotal: rep.weekly.filter(x => x.month === weeklyMonth).reduce((s, x) => s + x.revenue, 0),
-  })).filter(rep => rep.monthTotal > 0 || salespeopleWeekly.length <= 3);
+  })).filter(rep => rep.monthTotal > 0 || (salespeopleWeekly || []).length <= 3);
 
-  const cellStyle = (rev) => ({ padding: "9px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev > 0 ? 600 : 400 });
-  const repCellStyle = { padding: "9px 12px", color: T.textHead, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" };
-  const headStyle = { padding: "8px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
+  const pillBtn = (active) => ({
+    padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
+    border: active ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
+    background: active ? `${accent}18` : "transparent",
+    color: active ? accent : T.textMuted, transition: "all 0.15s",
+  });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 28 }}>
-      {/* Summary table */}
-      <AdvancedTable theme={T} title="👤 Sales by Rep" subtitle={`Annual totals — ${currency}`}
-        loading={loading} currency={currency} data={repSummary}
-        columns={[
-          { key: "name",    label: "Sales Rep",  color: T.text },
-          { key: "orders",  label: "Orders",     align: "right", color: "#7C9EC9" },
-          { key: "revenue", label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(Math.round(v), c) },
-          { key: "aov",     label: "Avg Order",  align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-        ]}
-        aiContext="sales rep performance"
-        aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size."
-      />
-
-      {/* Monthly breakdown by rep (pivot) */}
-      {monthlyPivot.length > 0 && (
-        <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>
-            Monthly Breakdown by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginTop: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: T.textHead, fontWeight: 700 }}>
+            👤 Sales by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
           </div>
-          <div style={{ fontSize: 10, color: T.textSub, marginBottom: 16 }}>Revenue per salesperson per month · {currency}</div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
-                  {MONTH_NAMES.map(m => <th key={m} style={headStyle}>{m}</th>)}
-                  <th style={{ ...headStyle, color: accent }}>Total</th>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>
+            {repView === "annual"  ? `Annual totals — ${currency}` :
+             repView === "monthly" ? `Monthly breakdown by rep — ${currency}` :
+                                     `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} — ${currency}`}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setRepView("annual")}  style={pillBtn(repView === "annual")}>Annual</button>
+          <button onClick={() => setRepView("monthly")} style={pillBtn(repView === "monthly")}>Monthly</button>
+          <button onClick={() => setRepView("weekly")}  style={pillBtn(repView === "weekly")}>Weekly</button>
+        </div>
+      </div>
+
+      {/* Annual view */}
+      {repView === "annual" && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ ...headStyle, textAlign: "left" }}>Sales Rep</th>
+                <th style={headStyle}>Orders</th>
+                <th style={headStyle}>Revenue</th>
+                <th style={headStyle}>Avg Order</th>
+              </tr>
+            </thead>
+            <tbody>
+              {annualRows.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                  {loading ? "Loading…" : "No sales rep data"}
+                </td></tr>
+              ) : annualRows.map((r, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                  <td style={repCellStyle}>{r.name}</td>
+                  <td style={numStyle()}>{r.orders.toLocaleString()}</td>
+                  <td style={{ ...cellStyle(r.revenue), color: accent, fontWeight: 700 }}>{fmtK(r.revenue, currency)}</td>
+                  <td style={cellStyle(r.aov)}>{fmtK(r.aov, currency)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {monthlyPivot.map((rep, i) => {
-                  const total = rep.months.reduce((s, m) => s + m.revenue, 0);
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                      <td style={repCellStyle}>{rep.name}</td>
-                      {rep.months.map((m, mi) => <td key={mi} style={cellStyle(m.revenue)}>{m.revenue > 0 ? fmtK(m.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                      <td style={{ ...cellStyle(total), color: accent, fontWeight: 700 }}>{fmtK(Math.round(total), currency)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Monthly view */}
+      {repView === "monthly" && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
+                {MONTH_NAMES.map(m => <th key={m} style={headStyle}>{m}</th>)}
+                <th style={{ ...headStyle, color: accent }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyPivot.length === 0 ? (
+                <tr><td colSpan={14} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                  {loading ? "Loading…" : "No monthly data"}
+                </td></tr>
+              ) : monthlyPivot.map((rep, i) => {
+                const total = rep.months.reduce((s, m) => s + m.revenue, 0);
+                return (
+                  <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                    <td style={repCellStyle}>{rep.name}</td>
+                    {rep.months.map((m, mi) => <td key={mi} style={cellStyle(m.revenue)}>{m.revenue > 0 ? fmtK(m.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
+                    <td style={{ ...cellStyle(total), color: accent, fontWeight: 700 }}>{fmtK(Math.round(total), currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {monthlyPivot.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: `1px solid ${T.border}` }}>
                   <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
@@ -444,51 +495,50 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{fmtK(Math.round(monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0)), currency)}</td>
                 </tr>
               </tfoot>
-            </table>
-          </div>
+            )}
+          </table>
         </div>
       )}
 
-      {/* Weekly breakdown by rep for selected month */}
-      <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 12 }}>
-          Weekly Breakdown by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
-        </div>
-        <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
-          {MONTH_NAMES.map((mn, mi) => (
-            <button key={mn} onClick={() => onWeeklyMonthChange(mi)} style={{
-              padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
-              border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
-              background: weeklyMonth === mi ? `${accent}15` : "transparent",
-              color: weeklyMonth === mi ? accent : T.textMuted, transition: "all 0.2s",
-            }}>{mn}</button>
-          ))}
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
-                {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}</th>)}
-                <th style={{ ...headStyle, color: accent }}>Month Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {weeklyPivot.length === 0 ? (
-                <tr><td colSpan={maxWeeks + 2} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
-                  {loading ? "Loading…" : `No data for ${MONTH_NAMES[weeklyMonth]}`}
-                </td></tr>
-              ) : weeklyPivot.map((rep, i) => (
-                <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                  <td style={repCellStyle}>{rep.name}</td>
-                  {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? fmtK(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                  <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{fmtK(rep.monthTotal, currency)}</td>
+      {/* Weekly view */}
+      {repView === "weekly" && (
+        <>
+          <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
+            {MONTH_NAMES.map((mn, mi) => (
+              <button key={mn} onClick={() => onWeeklyMonthChange(mi)} style={{
+                padding: "5px 11px", borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
+                background: weeklyMonth === mi ? `${accent}15` : "transparent",
+                color: weeklyMonth === mi ? accent : T.textMuted, transition: "all 0.15s",
+              }}>{mn}</button>
+            ))}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
+                  {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}</th>)}
+                  <th style={{ ...headStyle, color: accent }}>Month Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody>
+                {weeklyPivot.length === 0 ? (
+                  <tr><td colSpan={maxWeeks + 2} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                    {loading ? "Loading…" : `No data for ${MONTH_NAMES[weeklyMonth]}`}
+                  </td></tr>
+                ) : weeklyPivot.map((rep, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                    <td style={repCellStyle}>{rep.name}</td>
+                    {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? fmtK(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
+                    <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{fmtK(rep.monthTotal, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -768,6 +818,12 @@ export default function EcommerceDashboard() {
   const getOdooSalespeopleMonthly = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeopleMonthly || [];
   const getOdooSalespeopleWeekly  = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeopleWeekly  || [];
   const getOdooCustomers = () => cacheRef.current[`odoo:4:${selectedYear}`]?.customers || [];
+  const getOdooAtRisk        = () => cacheRef.current[`odoo:4:${selectedYear}`]?.atRisk        || [];
+  const getOdooLapsed        = () => cacheRef.current[`odoo:4:${selectedYear}`]?.lapsed        || [];
+  const getOdooTopProducts   = () => cacheRef.current[`odoo:4:${selectedYear}`]?.topProducts   || [];
+  const getOdooTopCategories = () => cacheRef.current[`odoo:4:${selectedYear}`]?.topCategories || [];
+  const getOdooFastMoving    = () => cacheRef.current[`odoo:4:${selectedYear}`]?.fastMoving    || [];
+  const getOdooSlowMoving    = () => cacheRef.current[`odoo:4:${selectedYear}`]?.slowMoving    || [];
   const getLuxeSalespeopleMonthly = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly || [];
   const getLuxeSalespeopleWeekly  = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleWeekly  || [];
   const isLoading = (year) => {
@@ -1398,41 +1454,125 @@ export default function EcommerceDashboard() {
         {/* ODOO ADVANCED SECTION — Worthy North Odoo tab */}
         {activeStore.id === "worthy" && channelTab === "odoo" && (
           <>
-            {/* Odoo top customers + at-risk */}
+            {/* Odoo: top customers, at-risk, lapsed */}
             {(() => {
-              const odooCusts = getOdooCustomers();
-              const odooTopCusts = odooCusts.map(c => ({ ...c, status: c.status })).slice(0, 20);
-              const odooAtRisk   = odooCusts.filter(c => c.status === "At Risk").slice(0, 20);
-              const odooChrn     = odooCusts.filter(c => c.status === "Lapsed").slice(0, 20);
-              return odooCusts.length > 0 ? (
+              const odooCusts    = getOdooCustomers();
+              const odooTopCusts = odooCusts.slice(0, 20);
+              const odooAtRisk   = getOdooAtRisk().slice(0, 20);
+              const odooChrn     = getOdooLapsed().slice(0, 20);
+              if (odooCusts.length === 0) return null;
+              return (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
-                  <AdvancedTable theme={T} title="Top Customers — Odoo" subtitle="Ranked by invoice revenue"
+                  <AdvancedTable theme={T} title="🏆 Top Customers — Odoo" subtitle="Ranked by net invoice revenue (customers only — suppliers excluded)"
                     loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooTopCusts}
                     columns={[
-                      { key: "name",          label: "Customer",   color: T.text },
-                      { key: "orders",        label: "Orders",     align: "center", color: "#7C9EC9" },
-                      { key: "revenue",       label: "Revenue",    align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                      { key: "status",        label: "Status",     align: "center", format: v => renderStatus(v) },
+                      { key: "name",    label: "Customer", color: T.text },
+                      { key: "orders",  label: "Orders",   align: "center", color: "#7C9EC9" },
+                      { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                      { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+                      { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
                     ]}
                     aiContext="Odoo top customers"
-                    aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status."
+                    aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status — call them this week."
                   />
                   {odooAtRisk.length > 0 && (
-                    <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for reorder"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooAtRisk}
+                    <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 days)" subtitle="Overdue for reorder — call before they lapse"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooAtRisk.map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orders }))}
                       columns={atRiskColumns} aiContext="at-risk Odoo customers"
+                      aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
                     />
                   )}
                   {odooChrn.length > 0 && (
-                    <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 Days)" subtitle="Stopped ordering"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooChrn}
+                    <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 days)" subtitle="Stopped ordering — win-back priority"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooChrn.map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orders }))}
                       columns={churnedColumns} aiContext="lapsed Odoo customers"
+                      aiExtra="Likely lost to DKSH, Gilmours, or Stock4Shop. Recommend a visit + offer for the top 5 by revenue."
                     />
                   )}
                 </div>
-              ) : null;
+              );
             })()}
-            {/* Odoo salesperson breakdown */}
+
+            {/* Odoo: top products + top categories */}
+            {(() => {
+              const odooProducts   = getOdooTopProducts();
+              const odooCategories = getOdooTopCategories();
+              if (odooProducts.length === 0 && odooCategories.length === 0) return null;
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+                  {odooCategories.length > 0 && (
+                    <AdvancedTable theme={T} title="📂 Top Categories — Odoo" subtitle="Where the revenue actually comes from"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooCategories.slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
+                      columns={[
+                        { key: "name",         label: "Category",     color: T.text },
+                        { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
+                        { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
+                        { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                        { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                      ]}
+                      aiContext="top Odoo categories"
+                      aiExtra="Which categories drive the business? Flag any with margin < 15% — those need a price review."
+                    />
+                  )}
+                  {odooProducts.length > 0 && (
+                    <AdvancedTable theme={T} title="🥇 Top Products — Odoo" subtitle="High performers by net revenue"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooProducts.slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                      columns={[
+                        { key: "name",     label: "Product",  color: T.text },
+                        { key: "category", label: "Category", color: T.textMuted },
+                        { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
+                        { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                        { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                      ]}
+                      aiContext="top Odoo products"
+                      aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
+                    />
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Odoo: fast & slow movers */}
+            {(() => {
+              const fast = getOdooFastMoving();
+              const slow = getOdooSlowMoving();
+              if (fast.length === 0 && slow.length === 0) return null;
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+                  {fast.length > 0 && (
+                    <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs — Odoo" subtitle="Highest velocity — keep stocked & push wider"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={fast.slice(0, 20)}
+                      columns={[
+                        { key: "name",         label: "Product",     color: T.text },
+                        { key: "category",     label: "Category",    color: T.textMuted },
+                        { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
+                        { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
+                        { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                        { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                      ]}
+                      aiContext="fast-moving Odoo SKUs"
+                      aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
+                    />
+                  )}
+                  {slow.length > 0 && (
+                    <AdvancedTable theme={T} title="🐌 Slow-Moving SKUs — Odoo" subtitle="Capital sitting on the shelf — clear, bundle, or discontinue"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={slow.slice(0, 20)}
+                      columns={[
+                        { key: "name",          label: "Product",       color: T.text },
+                        { key: "category",      label: "Category",      color: T.textMuted },
+                        { key: "currentStock",  label: "On Hand",       align: "right", color: T.textSub },
+                        { key: "qtySold",       label: "Units Sold",    align: "right", color: T.textMuted },
+                        { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
+                      ]}
+                      aiContext="slow-moving Odoo SKUs"
+                      aiExtra="Top 3 by capital tied — recommend specific clearance pricing or rep push. Anything with an expiry risk?"
+                    />
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Odoo salesperson breakdown — single table with view toggle */}
             <SalesRepBreakdown
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
@@ -1513,6 +1653,19 @@ export default function EcommerceDashboard() {
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+              <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs" subtitle="Highest velocity by units sold — keep stocked & push wider"
+                loading={advLoading} currency={activeStore.currency}
+                data={(advancedData.curr?.topProducts || []).slice().sort((a, b) => (b.unitsSold || 0) - (a.unitsSold || 0)).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                columns={[
+                  { key: "name",      label: "Product",    color: T.text },
+                  { key: "category",  label: "Category",   color: T.textMuted },
+                  { key: "unitsSold", label: "Units Sold", align: "right", color: "#16a34a" },
+                  { key: "revenue",   label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                  { key: "margin",    label: "Margin",     align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                ]}
+                aiContext="fast-moving SKUs"
+                aiExtra="Ensure 6+ weeks of cover on these. Flag any close to stockout — these drive the business."
+              />
               <AdvancedTable theme={T} title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
                 aiExtra="Pay special attention to imported products — slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
               <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
