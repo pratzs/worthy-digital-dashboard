@@ -27,13 +27,12 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Odoo env vars not configured' }, { status: 500 });
   }
 
-  const emptyResp = (err) => ({
+  const emptyResp = (err, diag = {}) => ({
     topProducts: [], topCategories: [], fastMoving: [], slowMoving: [],
-    diagnostics: { invoiceCount: 0, lineCount: 0, productCount: 0, error: err || null },
+    diagnostics: { error: err || null, ...diag },
   });
 
   try {
-    // Auth
     const authJson = await odooCall(url, {
       jsonrpc: '2.0', method: 'call', id: 1,
       params: { service: 'common', method: 'authenticate', args: [db, username, password, {}] },
@@ -57,67 +56,87 @@ export async function GET(request) {
       return out;
     };
 
-    // ── Strategy: fetch invoice lines via search_read in one go using domain ──
-    // This is much faster than fetching invoices first then reading lines by ID,
-    // because we go directly to the lines table with a date+company filter.
-    const lineDomain = [
-      ['move_id.company_id',    '=',  companyId],
-      ['move_id.move_type',     'in', ['out_invoice', 'out_refund']],
-      ['move_id.state',         '=',  'posted'],
-      ['move_id.invoice_date',  '>=', `${year}-01-01`],
-      ['move_id.invoice_date',  '<=', `${year}-12-31`],
-      ['display_type',          '=',  false],   // exclude section/note/tax-only lines
-      ['product_id',            '!=', false],   // only lines with a product
+    // ── PHASE 1: invoice IDs ──────────────────────────────────────────────────
+    // search() is much lighter than search_read — just returns IDs.
+    const invDomain = [
+      ['company_id',    '=',  companyId],
+      ['move_type',     'in', ['out_invoice', 'out_refund']],
+      ['state',         '=',  'posted'],
+      ['invoice_date',  '>=', `${year}-01-01`],
+      ['invoice_date',  '<=', `${year}-12-31`],
     ];
+    let invoiceIds = [];
+    try {
+      invoiceIds = await exec('account.move', 'search', [invDomain], { limit: 20000 }, 25000);
+    } catch (e) {
+      console.error(`[Odoo/adv] invoice search failed: ${e.message}`);
+      return NextResponse.json(emptyResp(`Invoice search failed: ${e.message}`));
+    }
+    console.log(`[Odoo/adv] cid=${companyId} year=${year} invoiceIds=${invoiceIds.length}`);
+    if (invoiceIds.length === 0) {
+      return NextResponse.json(emptyResp(null, { invoiceCount: 0, lineCount: 0, year, companyId }));
+    }
 
+    // Also fetch move_type per invoice so we can sign credit notes correctly later
+    let moveTypeById = {};
+    try {
+      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type', 'invoice_date'] }, 30000);
+      for (const m of moves) moveTypeById[m.id] = m.move_type;
+    } catch (e) {
+      console.error(`[Odoo/adv] move_type read failed (continuing): ${e.message}`);
+    }
+
+    // ── PHASE 2: invoice lines via move_id IN (chunked) ───────────────────────
+    // No dot-notation traversal. Filter at line level for product_id != false.
+    const lineFields = ['id', 'move_id', 'date', 'product_id', 'quantity', 'price_subtotal'];
     let lines = [];
     try {
-      lines = await exec('account.move.line', 'search_read', [lineDomain], {
-        fields: ['id', 'move_id', 'date', 'product_id', 'quantity', 'price_subtotal'],
-        limit: 100000,
-      }, 50000);
+      const idChunks = chunkArray(invoiceIds, 2000);
+      const chunkResults = await Promise.all(idChunks.map(c =>
+        exec('account.move.line', 'search_read',
+          [[['move_id', 'in', c], ['product_id', '!=', false]]],
+          { fields: lineFields, limit: 60000 },
+          45000
+        ).catch(e => {
+          console.error(`[Odoo/adv] line chunk failed: ${e.message}`);
+          return [];
+        })
+      ));
+      lines = chunkResults.flat();
     } catch (e) {
-      console.error(`[Odoo/adv] line search_read failed: ${e.message}`);
-      return NextResponse.json(emptyResp(`Lines fetch failed: ${e.message}`));
+      console.error(`[Odoo/adv] lines fetch failed: ${e.message}`);
+      return NextResponse.json(emptyResp(`Lines fetch failed: ${e.message}`, { invoiceCount: invoiceIds.length }));
     }
     console.log(`[Odoo/adv] lines fetched: ${lines.length}`);
 
     if (lines.length === 0) {
-      return NextResponse.json(emptyResp('No invoice lines returned'));
+      return NextResponse.json(emptyResp('No invoice lines returned (lines query worked but matched nothing — try a different year)', {
+        invoiceCount: invoiceIds.length, lineCount: 0, year, companyId,
+      }));
     }
 
-    // ── Fetch product details in parallel chunks ──────────────────────────────
+    // ── PHASE 3: product master ───────────────────────────────────────────────
     const productIds = [...new Set(lines.map(l => l.product_id && l.product_id[0]).filter(Boolean))];
-    const fetchProductsChunked = async () => {
-      if (productIds.length === 0) return [];
-      const chunks = chunkArray(productIds, 500);
-      const results = await Promise.all(chunks.map(c =>
-        exec('product.product', 'read', [c], {
-          fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
-                   'standard_price', 'list_price', 'type'],
-        }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
-      ));
-      return results.flat();
-    };
-
-    const products = await fetchProductsChunked();
+    let products = [];
+    try {
+      if (productIds.length > 0) {
+        const chunks = chunkArray(productIds, 500);
+        const results = await Promise.all(chunks.map(c =>
+          exec('product.product', 'read', [c], {
+            fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
+                     'standard_price', 'list_price', 'type'],
+          }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
+        ));
+        products = results.flat();
+      }
+    } catch (e) {
+      console.error(`[Odoo/adv] products fetch failed (continuing): ${e.message}`);
+    }
     const productById = {};
     for (const p of products) productById[p.id] = p;
     console.log(`[Odoo/adv] products fetched: ${products.length}/${productIds.length}`);
 
-    // We need move_type per line for credit-note sign. The line.date is on the
-    // line itself; for credit detection look up the invoice move_type by move_id.
-    // Cheaper: fetch only move_id → move_type for unique move ids.
-    const moveIds = [...new Set(lines.map(l => l.move_id && l.move_id[0]).filter(Boolean))];
-    let moveTypeById = {};
-    try {
-      const moves = await exec('account.move', 'read', [moveIds], { fields: ['id', 'move_type'] }, 30000);
-      for (const m of moves) moveTypeById[m.id] = m.move_type;
-    } catch (e) {
-      console.error(`[Odoo/adv] move_type fetch failed: ${e.message} — assuming all out_invoice`);
-    }
-
-    // ── Aggregate per product ─────────────────────────────────────────────────
+    // ── PHASE 4: aggregate per product ────────────────────────────────────────
     const prodAgg = {};
     for (const line of lines) {
       const d = line.date ? new Date(line.date) : null;
@@ -175,7 +194,6 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 50);
 
-    // Top categories
     const catMap = {};
     for (const p of allProducts) {
       const c = p.category;
@@ -189,7 +207,6 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .map(c => ({ ...c, margin: c.revenue > 0 ? Math.round((c.grossProfit / c.revenue) * 100) : 0 }));
 
-    // Fast = top by units sold
     const fastMoving = [...allProducts]
       .filter(p => p.unitsSold > 0)
       .sort((a, b) => b.unitsSold - a.unitsSold)
@@ -204,7 +221,6 @@ export async function GET(request) {
         currentStock: p.qtyAvailable,
       }));
 
-    // Slow = products with on-hand stock but very few units sold (capital tied up)
     const slowMoving = allProducts
       .filter(p => p.qtyAvailable > 0 && p.type !== 'service')
       .map(p => {
@@ -229,6 +245,7 @@ export async function GET(request) {
     return NextResponse.json({
       topProducts, topCategories, fastMoving, slowMoving,
       diagnostics: {
+        invoiceCount: invoiceIds.length,
         lineCount:    lines.length,
         productCount: products.length,
         productIds:   productIds.length,
@@ -237,7 +254,7 @@ export async function GET(request) {
     });
 
   } catch (err) {
-    console.error(`[Odoo/adv] company=${companyId} year=${year} error:`, err.message);
+    console.error(`[Odoo/adv] cid=${companyId} year=${year} error:`, err.message, err.stack);
     return NextResponse.json(emptyResp(err.message), { status: 200 });
   }
 }
