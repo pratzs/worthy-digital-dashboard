@@ -80,7 +80,7 @@ export async function GET(request) {
         params: {
           service: 'object', method: 'execute_kw',
           args: [db, uid, password, 'account.move', 'search_read', [domain], {
-            fields: ['invoice_date', 'amount_untaxed', 'amount_total', 'move_type', 'invoice_line_ids', 'invoice_user_id'],
+            fields: ['invoice_date', 'amount_untaxed', 'amount_total', 'move_type', 'invoice_line_ids', 'invoice_user_id', 'partner_id'],
             limit:  5000,
           }],
         },
@@ -199,7 +199,40 @@ export async function GET(request) {
       return { name, weekly: wkly };
     }).sort((a, b) => b.weekly.reduce((s, w) => s + w.revenue, 0) - a.weekly.reduce((s, w) => s + w.revenue, 0));
 
-    return NextResponse.json({ year, company: companyId, monthly, weekly, salespeople, salespeopleMonthly, salespeopleWeekly });
+    // ── 6. Top customers ──────────────────────────────────────────────────────
+    const custData = {};
+    const todayMs = Date.now();
+    for (const inv of invoices) {
+      if (!inv.invoice_date) continue;
+      const d = new Date(inv.invoice_date);
+      if (d.getFullYear() !== year) continue;
+      const isCredit = inv.move_type === 'out_refund';
+      const rev = parseFloat(inv.amount_untaxed || 0) * (isCredit ? -1 : 1);
+      const custName = (inv.partner_id && inv.partner_id[1]) ? inv.partner_id[1] : 'Unknown';
+      if (!custData[custName]) custData[custName] = { name: custName, revenue: 0, orders: 0, lastOrderDate: null };
+      custData[custName].revenue += rev;
+      if (!isCredit) custData[custName].orders++;
+      if (!custData[custName].lastOrderDate || d > new Date(custData[custName].lastOrderDate))
+        custData[custName].lastOrderDate = inv.invoice_date;
+    }
+    const customers = Object.values(custData)
+      .filter(c => c.revenue > 0)
+      .map(c => {
+        const daysSince = c.lastOrderDate ? Math.floor((todayMs - new Date(c.lastOrderDate).getTime()) / 86400000) : null;
+        return {
+          name: c.name,
+          revenue: Math.round(c.revenue),
+          orders: c.orders,
+          aov: c.orders > 0 ? Math.round(c.revenue / c.orders) : 0,
+          lastOrderDate: c.lastOrderDate,
+          daysSince,
+          status: daysSince === null ? 'Unknown' : daysSince > 90 ? 'Lapsed' : daysSince > 45 ? 'At Risk' : 'Active',
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 50);
+
+    return NextResponse.json({ year, company: companyId, monthly, weekly, salespeople, salespeopleMonthly, salespeopleWeekly, customers });
 
   } catch (err) {
     console.error(`[Odoo] company=${companyId} year=${year} error:`, err.message);

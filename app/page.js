@@ -81,13 +81,13 @@ const MarginBar = ({ value, accent = "#3f7bdd" }) => {
 const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f7bdd" }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "rgba(10,12,18,0.97)", border: `1px solid ${accent}50`, borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "#e8e0d0", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>
-      <div style={{ fontFamily: "'Cinzel',serif", color: accent, marginBottom: 8, fontSize: 13 }}>{label}</div>
+    <div style={{ background: "#1e293b", border: `1px solid ${accent}60`, borderRadius: 12, padding: "12px 16px", fontSize: 12, color: "#e2e8f0", boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", color: accent, marginBottom: 8, fontSize: 13, fontWeight: 700 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, display: "inline-block" }} />
-          <span style={{ color: "#a09070" }}>{p.name}:</span>
-          <span style={{ color: "#f0f0f0", fontWeight: 600 }}>
+          <span style={{ color: "#94a3b8" }}>{p.name}:</span>
+          <span style={{ color: "#f8fafc", fontWeight: 600 }}>
             {["Revenue","AOV","Gross Profit"].includes(p.name) ? fmt(p.value, currency) : p.name === "Growth" ? fmtPct(p.value) : String(p.value?.toLocaleString?.() ?? p.value)}
           </span>
         </div>
@@ -99,10 +99,10 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f
 const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true }) => {
   const [display, setDisplay] = useState(0);
   const isPos = !growth || growth >= 0;
-  const textHead = darkMode ? "#f0e8d8" : "#1a120a";
-  const textMuted = darkMode ? "#6b6050" : "#7a6050";
-  const cardBg = darkMode ? "linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))" : "linear-gradient(135deg,rgba(255,255,255,0.95),rgba(255,255,255,0.8))";
-  const cardBorder = darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.1)";
+  const textHead = darkMode ? "#f0e8d8" : "#0f172a";
+  const textMuted = darkMode ? "#6b6050" : "#6b7280";
+  const cardBg = darkMode ? "linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))" : "#ffffff";
+  const cardBorder = darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,30,100,0.12)";
   useEffect(() => {
     const t = value || 0;
     if (!animated || t === 0) { setDisplay(t); return; }
@@ -119,7 +119,7 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
           {growth === null ? "No prior yr" : `${isPos ? "▲" : "▼"} ${Math.abs(growth)}%`}
         </div>
       </div>
-      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
         {sub === "currency" ? fmtK(display, currency) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
       </div>
       <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
@@ -256,10 +256,10 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
       <div style={{ background: "#0d0f18", border: `1px solid ${accent}50`, borderRadius: 20, padding: 28, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <div style={{ fontFamily: "'Cinzel',serif", fontSize: 16, color: accent, fontWeight: 700 }}>{category}</div>
-            <div style={{ fontSize: 11, color: "#5a4030", marginTop: 4 }}>{(products||[]).length} products · click outside to close</div>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 16, color: accent, fontWeight: 700 }}>{category}</div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{(products||[]).length} products · click outside to close</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a4030", fontSize: 20, cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 20, cursor: "pointer" }}>✕</button>
         </div>
 
         {top.length > 0 && (
@@ -306,7 +306,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
         )}
 
         {top.length === 0 && declining.length === 0 && (
-          <div style={{ textAlign: "center", color: "#5a4030", padding: 20 }}>No product data for this category in the selected period.</div>
+          <div style={{ textAlign: "center", color: T.textMuted, padding: 20 }}>No product data for this category in the selected period.</div>
         )}
 
         <AIInsights data={products} context={`${category} category products`} currency={currency} />
@@ -327,7 +327,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
   <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
           {title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
         </div>
         {headerExtra}
@@ -335,7 +335,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
       {subtitle && <div style={{ fontSize: 10, color: T.textSub, marginTop: 4 }}>{subtitle}</div>}
     </div>
     <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}>
           <tr>
             {columns.map((col, i) => (
@@ -387,9 +387,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
     monthTotal: rep.weekly.filter(x => x.month === weeklyMonth).reduce((s, x) => s + x.revenue, 0),
   })).filter(rep => rep.monthTotal > 0 || salespeopleWeekly.length <= 3);
 
-  const cellStyle = (rev) => ({ padding: "8px 10px", textAlign: "right", color: rev > 0 ? "#9EC97C" : "#3a4060", fontSize: 11, whiteSpace: "nowrap" });
-  const repCellStyle = { padding: "8px 10px", color: T.text, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" };
-  const headStyle = { padding: "8px 10px", textAlign: "right", color: T.textLabel, fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.borderFaint}` };
+  const cellStyle = (rev) => ({ padding: "9px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev > 0 ? 600 : 400 });
+  const repCellStyle = { padding: "9px 12px", color: T.textHead, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" };
+  const headStyle = { padding: "8px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 28 }}>
@@ -409,12 +409,12 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
       {/* Monthly breakdown by rep (pivot) */}
       {monthlyPivot.length > 0 && (
         <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-          <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>
             Monthly Breakdown by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
           </div>
           <div style={{ fontSize: 10, color: T.textSub, marginBottom: 16 }}>Revenue per salesperson per month · {currency}</div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
                   <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
@@ -451,7 +451,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
 
       {/* Weekly breakdown by rep for selected month */}
       <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 12 }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 12 }}>
           Weekly Breakdown by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
         </div>
         <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
@@ -465,7 +465,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
           ))}
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
@@ -497,10 +497,15 @@ export default function EcommerceDashboard() {
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
   const [selectedYear, setSelectedYear] = useState(2026);
 
-  const todayStr    = new Date().toISOString().split('T')[0];
-  const firstOfYear = `${new Date().getFullYear()}-01-01`;
-  const [startDate, setStartDate] = useState(firstOfYear);
-  const [endDate,   setEndDate]   = useState(todayStr);
+  // Advanced table dates auto-sync to the selected view + period
+  const _thisYear    = new Date().getFullYear();
+  const _todayStr    = new Date().toISOString().split('T')[0];
+  const advStartDate = view === "weekly"
+    ? `${selectedYear}-${String(weeklyMonth + 1).padStart(2, '0')}-01`
+    : `${selectedYear}-01-01`;
+  const advEndDate = view === "weekly"
+    ? new Date(selectedYear, weeklyMonth + 1, 0).toISOString().split('T')[0]
+    : (selectedYear === _thisYear ? _todayStr : `${selectedYear}-12-31`);
 
   const [view,         setView]         = useState("monthly");
   const [animated,     setAnimated]     = useState(true);
@@ -511,7 +516,7 @@ export default function EcommerceDashboard() {
   const [channelTab,     setChannelTab]     = useState("odoo");
   const [categoryModal,  setCategoryModal]  = useState(null);
   const [decliningMode,  setDecliningMode]  = useState("yoy");
-  const [darkMode,       setDarkMode]       = useState(true);
+  const [darkMode,       setDarkMode]       = useState(false);
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
 
@@ -627,6 +632,7 @@ export default function EcommerceDashboard() {
         salespeople:        json.salespeople         || [],
         salespeopleMonthly: json.salespeopleMonthly  || [],
         salespeopleWeekly:  json.salespeopleWeekly   || [],
+        customers:          json.customers           || [],
       };
     } catch {
       const empty = generateEmptyYear();
@@ -673,7 +679,7 @@ export default function EcommerceDashboard() {
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       try {
         if (storeId === "luxe") {
-          const res  = await fetch(`/api/ostendo/advanced?startDate=${startDate}&endDate=${endDate}`, { cache: "no-store" });
+          const res  = await fetch(`/api/ostendo/advanced?startDate=${advStartDate}&endDate=${advEndDate}`, { cache: "no-store" });
           const data = await res.json();
           if (advStoreRef.current !== storeId) return; // stale — discard
           // Map Ostendo field names → Shopify-compatible names used by display columns
@@ -687,7 +693,7 @@ export default function EcommerceDashboard() {
           setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], metrics: data.metrics || {} }, prev: {} });
         } else {
           const channelParam = channelTab !== "odoo" ? `&channel=${channelTab}` : "";
-          const res  = await fetch(`/api/shopify/advanced?startDate=${startDate}&endDate=${endDate}${channelParam}`, { cache: "no-store" });
+          const res  = await fetch(`/api/shopify/advanced?startDate=${advStartDate}&endDate=${advEndDate}${channelParam}`, { cache: "no-store" });
           const data = await res.json();
           if (advStoreRef.current !== storeId) return; // stale — discard
           setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
@@ -700,7 +706,7 @@ export default function EcommerceDashboard() {
       if (advStoreRef.current === storeId) setAdvLoading(false);
     };
     load();
-  }, [activeStore.id, selectedYear, startDate, endDate, channelTab]); // eslint-disable-line
+  }, [activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
@@ -761,6 +767,7 @@ export default function EcommerceDashboard() {
   const getOdooSalespeople = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeople || [];
   const getOdooSalespeopleMonthly = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeopleMonthly || [];
   const getOdooSalespeopleWeekly  = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeopleWeekly  || [];
+  const getOdooCustomers = () => cacheRef.current[`odoo:4:${selectedYear}`]?.customers || [];
   const getLuxeSalespeopleMonthly = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly || [];
   const getLuxeSalespeopleWeekly  = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleWeekly  || [];
   const isLoading = (year) => {
@@ -841,24 +848,24 @@ export default function EcommerceDashboard() {
     scrollThumb: isOceania ? "#3a1a08" : "#1a2448",
     shadow:      "0 4px 24px rgba(0,0,0,0.4)",
   } : {
-    bg:          isOceania ? "#FDF8F4" : "#F4F7FF",
-    bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.95),rgba(255,255,255,0.75))",
-    bgHeader:    "rgba(255,255,255,0.95)",
-    bgInput:     "#ffffff",
-    bgTableHead: isOceania ? "#fdf4ee" : "#f0f4ff",
+    bg:          isOceania ? "#fdf7f4" : "#f6f8ff",
+    bgCard:      "#ffffff",
+    bgHeader:    "rgba(255,255,255,0.98)",
+    bgInput:     isOceania ? "#fdf0e8" : "#eef2ff",
+    bgTableHead: isOceania ? "#fdf0e8" : "#f0f4ff",
     bgModal:     "#ffffff",
-    border:      isOceania ? "rgba(177,57,36,0.15)" : "rgba(34,86,194,0.15)",
-    borderFaint: isOceania ? "rgba(177,57,36,0.08)" : "rgba(34,86,194,0.08)",
-    borderAccent:isOceania ? "rgba(177,57,36,0.12)" : "rgba(34,86,194,0.1)",
-    text:        isOceania ? "#2a1005" : "#0a1a3a",
-    textHead:    isOceania ? "#1a0a02" : "#081228",
-    textMuted:   isOceania ? "#9a6040" : "#6080b0",
-    textSub:     isOceania ? "#8a5030" : "#4870a8",
-    textRow:     isOceania ? "#5a3820" : "#2a5090",
-    textLabel:   isOceania ? "#b07050" : "#8090c0",
-    scrollTrack: isOceania ? "#f0e4d8" : "#e4ecff",
-    scrollThumb: isOceania ? "#e08060" : "#7daffe",
-    shadow:      "0 4px 24px rgba(0,0,0,0.1)",
+    border:      isOceania ? "rgba(177,57,36,0.14)" : "rgba(33,86,194,0.14)",
+    borderFaint: isOceania ? "rgba(177,57,36,0.07)" : "rgba(33,86,194,0.07)",
+    borderAccent:isOceania ? "rgba(177,57,36,0.10)" : "rgba(33,86,194,0.10)",
+    text:        "#111827",
+    textHead:    "#0f172a",
+    textMuted:   "#6b7280",
+    textSub:     "#9ca3af",
+    textRow:     "#1e293b",
+    textLabel:   "#4b5563",
+    scrollTrack: isOceania ? "#fceee8" : "#e8edff",
+    scrollThumb: isOceania ? "#d97444" : "#6b8ef5",
+    shadow:      "0 2px 16px rgba(0,0,50,0.08)",
   };
   // Inject accent into T so sub-components can access it
   T.accent = accent;
@@ -977,7 +984,7 @@ export default function EcommerceDashboard() {
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", color: T.text, paddingBottom: 40, transition: "background 0.3s, color 0.3s" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:${T.scrollTrack}}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:4px}
         input[type="date"]::-webkit-calendar-picker-indicator { filter: ${darkMode ? "invert(1) opacity(0.4)" : "opacity(0.5)"}; }
@@ -994,11 +1001,11 @@ export default function EcommerceDashboard() {
           />
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontFamily: "'Cinzel',serif", fontSize: 15, fontWeight: 600, color: T.textHead, letterSpacing: "0.05em" }}>{activeStore.name}</div>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: T.textHead, letterSpacing: "0.05em" }}>{activeStore.name}</div>
               {anyLoading && <div style={{ fontSize: 10, color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: "2px 8px", borderRadius: 20 }}>LOADING…</div>}
             </div>
-            <div style={{ fontSize: 10, color: T.textSub, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-              {activeStore.id === "worthy" ? "Live Shopify + Odoo Data" : activeStore.id === "luxe" ? "Live Ostendo Data" : "Live Odoo Data"} · Performance Overview
+            <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.04em", marginTop: 2 }}>
+              {activeStore.id === "worthy" ? "Live Shopify + Odoo" : activeStore.id === "luxe" ? "Live Ostendo" : "Live Odoo"} · Performance Overview
             </div>
           </div>
         </div>
@@ -1017,11 +1024,6 @@ export default function EcommerceDashboard() {
               </button>
             );
           })}
-          {/* Dark / Light toggle */}
-          <button onClick={() => setDarkMode(d => !d)} title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            style={{ marginLeft: 4, padding: "6px 12px", borderRadius: 8, fontSize: 16, border: `1px solid ${T.border}`, background: darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", cursor: "pointer", transition: "all 0.2s", lineHeight: 1 }}>
-            {darkMode ? "☀️" : "🌙"}
-          </button>
         </div>
       </div>
 
@@ -1081,11 +1083,11 @@ export default function EcommerceDashboard() {
             </div>
 
             {/* Area chart */}
-            <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 24 }}>
+            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {selectedYear}</div>
-                  <div style={{ fontSize: 11, color: "#4a4030", marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {selectedYear}</div>
+                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#5a5040" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 3, borderRadius: 2, background: accent, display: "inline-block" }} />{selectedYear}</span>
@@ -1100,9 +1102,9 @@ export default function EcommerceDashboard() {
                       <stop offset="95%" stopColor={accent} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#4a4030" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false}
+                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "aov" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "convRate" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
                   <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                   <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
@@ -1113,12 +1115,12 @@ export default function EcommerceDashboard() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 2.2fr", gap: 20, marginBottom: 24 }}>
               {/* YoY bar chart */}
-              <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
-                <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 18 }}>% vs same month {selectedYear - 1}</div>
+              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
+                <div style={{ fontSize: 11, color: T.textSub, marginBottom: 18 }}>% vs same month {selectedYear - 1}</div>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={momData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#4a4030" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
                     <Tooltip content={<CustomTooltip accent={accent} />} />
@@ -1129,19 +1131,19 @@ export default function EcommerceDashboard() {
               </div>
 
               {/* Monthly table */}
-              <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
+              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
                     {hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr>
                         {["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
-                          <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{h}</th>
+                          <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1149,7 +1151,7 @@ export default function EcommerceDashboard() {
                       {momData.map((row, i) => {
                         const has = row.revenue > 0;
                         return (
-                          <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
+                          <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
                             <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
                             <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
@@ -1166,7 +1168,7 @@ export default function EcommerceDashboard() {
                       })}
                     </tbody>
                     <tfoot>
-                      <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                      <tr style={{ borderTop: `1px solid ${T.border}` }}>
                         <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
                         <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(totalRev, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? fmtK(totalCost, activeStore.currency) : "—"}</td>
@@ -1214,13 +1216,13 @@ export default function EcommerceDashboard() {
                 </div>
 
                 {/* Weekly bar chart */}
-                <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 24 }}>
+                <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                     <div>
-                      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>
+                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>
                         Weekly Revenue — {MONTH_NAMES[weeklyMonth]} {selectedYear}
                       </div>
-                      <div style={{ fontSize: 11, color: "#4a4030", marginTop: 3 }}>Week-by-week sales breakdown</div>
+                      <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>Week-by-week sales breakdown</div>
                     </div>
                     {wTotalRev > 0 && (
                       <div style={{ textAlign: "right" }}>
@@ -1238,9 +1240,9 @@ export default function EcommerceDashboard() {
                             <stop offset="100%" stopColor={accent} stopOpacity={0.5} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#6a5a40" }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false}
+                        <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 12, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
                           tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
                         <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                         <Bar dataKey="revenue" name="Revenue" fill="url(#wg)" radius={[6, 6, 0, 0]} />
@@ -1254,19 +1256,19 @@ export default function EcommerceDashboard() {
                 </div>
 
                 {/* Weekly table */}
-                <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
+                <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                    <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
+                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
                       Weekly Breakdown — {MONTH_NAMES[weeklyMonth]} {selectedYear}
                     </div>
-                    <div style={{ fontSize: 10, color: "#5a4030" }}>{activeStore.currency}</div>
+                    <div style={{ fontSize: 10, color: T.textMuted }}>{activeStore.currency}</div>
                   </div>
                   <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
                         <tr>
                           {["Week","Date Range","Revenue","Gross Profit","Margin","Orders","AOV","Discounts","New Cust.","vs Prev Week"].map(h => (
-                            <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.05)", whiteSpace: "nowrap" }}>{h}</th>
+                            <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1282,10 +1284,10 @@ export default function EcommerceDashboard() {
                           const wGrowth = prevW ? calcGrowth(row.revenue, prevW.revenue) : null;
                           const has = row.revenue > 0;
                           return (
-                            <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", background: hoveredMonth === 100 + i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
+                            <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === 100 + i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                               onMouseEnter={() => setHoveredMonth(100 + i)} onMouseLeave={() => setHoveredMonth(null)}>
                               <td style={{ padding: "10px 8px", color: accent, fontWeight: 700, fontSize: 12 }}>Week {row.week}</td>
-                              <td style={{ padding: "10px 8px", color: "#7a6850", fontSize: 10 }}>{row.dateRange}</td>
+                              <td style={{ padding: "10px 8px", color: T.textSub, fontSize: 10 }}>{row.dateRange}</td>
                               <td style={{ padding: "10px 8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px" }}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
@@ -1300,7 +1302,7 @@ export default function EcommerceDashboard() {
                       </tbody>
                       {weeklyData.length > 0 && wTotalRev > 0 && (
                         <tfoot>
-                          <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                          <tr style={{ borderTop: `1px solid ${T.border}` }}>
                             <td colSpan={2} style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>MONTH TOTAL</td>
                             <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(wTotalRev, activeStore.currency)}</td>
                             <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "—"}</td>
@@ -1323,29 +1325,29 @@ export default function EcommerceDashboard() {
           /* YOY VIEW */
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-              <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Annual Revenue</div>
-                <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 20 }}>Year-over-Year</div>
+              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Annual Revenue</div>
+                <div style={{ fontSize: 11, color: T.textSub, marginBottom: 20 }}>Year-over-Year</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                     <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent} stopOpacity={1} /><stop offset="100%" stopColor={accent} stopOpacity={0.5} /></linearGradient></defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: darkMode ? "#6a5a40" : "#7090c0", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: T.textMuted, fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
                     <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                     <Bar dataKey="revenue" name="Revenue" fill="url(#bg)" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Orders & AOV Trend</div>
-                <div style={{ fontSize: 11, color: "#4a4030", marginBottom: 20 }}>Volume and value evolution</div>
+              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Orders & AOV Trend</div>
+                <div style={{ fontSize: 11, color: T.textSub, marginBottom: 20 }}>Volume and value evolution</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: darkMode ? "#6a5a40" : "#7090c0", fontFamily: "'Cinzel',serif" }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: T.textMuted, fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
                     <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                     <Bar yAxisId="l" dataKey="orders" name="Orders" fill="#7C9EC960" radius={[6, 6, 0, 0]} />
                     <Line yAxisId="r" type="monotone" dataKey="aov" name="AOV" stroke="#9EC97C" strokeWidth={3} dot={{ fill: "#9EC97C", r: 6, stroke: "#080A10", strokeWidth: 2 }} />
@@ -1354,8 +1356,8 @@ export default function EcommerceDashboard() {
               </div>
             </div>
 
-            <div style={{ background: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-              <div style={{ fontFamily: "'Cinzel',serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 20 }}>Year-over-Year Summary</div>
+            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 20 }}>Year-over-Year Summary</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
                 {yoyData.map((yr, i) => {
                   const p   = yoyData[i - 1];
@@ -1365,7 +1367,7 @@ export default function EcommerceDashboard() {
                   return (
                     <div key={yr.year} style={{ borderRadius: 14, padding: "18px 20px", border: `1px solid ${isCur ? accent + "40" : "rgba(255,255,255,0.06)"}`, background: isCur ? `${accent}08` : "rgba(255,255,255,0.01)", opacity: yr.loaded ? 1 : 0.3, transition: "opacity 0.4s" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 18, color: isCur ? accent : "#6a5a40", fontWeight: 700 }}>{yr.year}</div>
+                        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, color: isCur ? accent : "#6a5a40", fontWeight: 700 }}>{yr.year}</div>
                         {isLoading(parseInt(yr.year)) && <span style={{ fontSize: 9, color: accent }}>…</span>}
                       </div>
                       <div style={{ marginBottom: 8 }}>
@@ -1393,18 +1395,55 @@ export default function EcommerceDashboard() {
           </>
         )}
 
-        {/* SALESPERSON BREAKDOWN — Odoo tab (Worthy North) */}
+        {/* ODOO ADVANCED SECTION — Worthy North Odoo tab */}
         {activeStore.id === "worthy" && channelTab === "odoo" && (
-          <SalesRepBreakdown
-            salespeople={getOdooSalespeople()}
-            salespeopleMonthly={getOdooSalespeopleMonthly()}
-            salespeopleWeekly={getOdooSalespeopleWeekly()}
-            loading={isLoading(selectedYear)}
-            currency={activeStore.currency}
-            weeklyMonth={weeklyMonth}
-            onWeeklyMonthChange={setWeeklyMonth}
-            T={T} accent={accent}
-          />
+          <>
+            {/* Odoo top customers + at-risk */}
+            {(() => {
+              const odooCusts = getOdooCustomers();
+              const odooTopCusts = odooCusts.map(c => ({ ...c, status: c.status })).slice(0, 20);
+              const odooAtRisk   = odooCusts.filter(c => c.status === "At Risk").slice(0, 20);
+              const odooChrn     = odooCusts.filter(c => c.status === "Lapsed").slice(0, 20);
+              return odooCusts.length > 0 ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
+                  <AdvancedTable theme={T} title="Top Customers — Odoo" subtitle="Ranked by invoice revenue"
+                    loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooTopCusts}
+                    columns={[
+                      { key: "name",          label: "Customer",   color: T.text },
+                      { key: "orders",        label: "Orders",     align: "center", color: "#7C9EC9" },
+                      { key: "revenue",       label: "Revenue",    align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                      { key: "status",        label: "Status",     align: "center", format: v => renderStatus(v) },
+                    ]}
+                    aiContext="Odoo top customers"
+                    aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status."
+                  />
+                  {odooAtRisk.length > 0 && (
+                    <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for reorder"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooAtRisk}
+                      columns={atRiskColumns} aiContext="at-risk Odoo customers"
+                    />
+                  )}
+                  {odooChrn.length > 0 && (
+                    <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 Days)" subtitle="Stopped ordering"
+                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooChrn}
+                      columns={churnedColumns} aiContext="lapsed Odoo customers"
+                    />
+                  )}
+                </div>
+              ) : null;
+            })()}
+            {/* Odoo salesperson breakdown */}
+            <SalesRepBreakdown
+              salespeople={getOdooSalespeople()}
+              salespeopleMonthly={getOdooSalespeopleMonthly()}
+              salespeopleWeekly={getOdooSalespeopleWeekly()}
+              loading={isLoading(selectedYear)}
+              currency={activeStore.currency}
+              weeklyMonth={weeklyMonth}
+              onWeeklyMonthChange={setWeeklyMonth}
+              T={T} accent={accent}
+            />
+          </>
         )}
 
         {/* ADVANCED ANALYTICS — not shown for Odoo tab (Shopify-based) or nova */}
@@ -1419,16 +1458,23 @@ export default function EcommerceDashboard() {
               accent={accent}
             />
 
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 40, marginBottom: 16, padding: "16px 24px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16 }}>
-              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Advanced Table Date Filter:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: `1px solid ${accent}50`, padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
-                <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                  style={{ background: T.bgInput, color: darkMode ? "#c0a870" : "#6a5040", border: `1px solid ${accent}50`, padding: "6px 12px", borderRadius: 6, fontSize: 12, outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 40, marginBottom: 16, padding: "14px 20px", background: T.bgCard, border: `1px solid ${accent}30`, borderRadius: 12, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 18 }}>📊</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.textHead }}>
+                    {view === "weekly"
+                      ? `${MONTH_NAMES[weeklyMonth]} ${selectedYear} — Week by Week`
+                      : view === "yoy"
+                      ? `All Years — Year on Year`
+                      : `${selectedYear} — Jan to ${MONTH_NAMES[new Date().getMonth()]}`}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>Advanced analytics auto-synced to selected period</div>
+                </div>
               </div>
-              <div style={{ fontSize: 10, color: T.textSub, marginLeft: "auto" }}>Filters Top Products, Customers, Categories & Inventory below.</div>
+              <span style={{ fontSize: 11, color: accent, fontWeight: 600, background: `${accent}12`, padding: "4px 12px", borderRadius: 20 }}>
+                {advStartDate} → {advEndDate}
+              </span>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
@@ -1511,7 +1557,7 @@ export default function EcommerceDashboard() {
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 10, color: T.textLabel, letterSpacing: "0.08em" }}>WORTHY PRODUCTS · SHOPIFY ANALYTICS · FY{selectedYear}</div>
+          <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.06em" }}>WORTHY PRODUCTS · FY{selectedYear}</div>
         </div>
       </div>
     </div>
