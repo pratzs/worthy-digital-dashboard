@@ -87,14 +87,19 @@ export async function GET(request) {
     }
 
     // ── PHASE 2: invoice lines via move_id IN (chunked) ───────────────────────
-    // No dot-notation traversal. Filter at line level for product_id != false.
-    const lineFields = ['id', 'move_id', 'date', 'product_id', 'quantity', 'price_subtotal'];
+    // No dot-notation traversal. Don't filter on product_id — some companies
+    // (e.g. Oceania) enter invoice lines with a description but no product
+    // selected. We aggregate those by line.name as a fallback. We DO exclude
+    // section / note display rows and require a non-zero subtotal so the table
+    // doesn't fill with empty payment / receivable lines.
+    const lineFields = ['id', 'move_id', 'date', 'name', 'product_id',
+                        'quantity', 'price_subtotal'];
     let lines = [];
     try {
       const idChunks = chunkArray(invoiceIds, 2000);
       const chunkResults = await Promise.all(idChunks.map(c =>
         exec('account.move.line', 'search_read',
-          [[['move_id', 'in', c], ['product_id', '!=', false]]],
+          [[['move_id', 'in', c]]],
           { fields: lineFields, limit: 60000 },
           45000
         ).catch(e => {
@@ -107,7 +112,13 @@ export async function GET(request) {
       console.error(`[Odoo/adv] lines fetch failed: ${e.message}`);
       return NextResponse.json(emptyResp(`Lines fetch failed: ${e.message}`, { invoiceCount: invoiceIds.length }));
     }
-    console.log(`[Odoo/adv] lines fetched: ${lines.length}`);
+
+    // Drop lines with no economic value (tax / receivable / payment lines have 0 subtotal).
+    lines = lines.filter(l => {
+      const sub = parseFloat(l.price_subtotal || 0);
+      return sub !== 0;
+    });
+    console.log(`[Odoo/adv] lines fetched (non-zero subtotal): ${lines.length}`);
 
     if (lines.length === 0) {
       return NextResponse.json(emptyResp('No invoice lines returned (lines query worked but matched nothing — try a different year)', {
@@ -136,40 +147,56 @@ export async function GET(request) {
     for (const p of products) productById[p.id] = p;
     console.log(`[Odoo/adv] products fetched: ${products.length}/${productIds.length}`);
 
-    // ── PHASE 4: aggregate per product ────────────────────────────────────────
+    // ── PHASE 4: aggregate per product (with description fallback) ────────────
+    // Lines without product_id are aggregated by line.name so manual-entry
+    // invoices still surface as rows in Top Products. They land in an
+    // 'Other / Manual' category and have no margin (no cost source).
     const prodAgg = {};
+    let linesWithProduct = 0, linesWithoutProduct = 0;
     for (const line of lines) {
       const d = line.date ? new Date(line.date) : null;
       if (!d || d.getFullYear() !== year) continue;
-      const pid = line.product_id && line.product_id[0];
-      if (!pid) continue;
-
       const moveType = moveTypeById[line.move_id && line.move_id[0]];
       const sign = moveType === 'out_refund' ? -1 : 1;
 
-      const prod = productById[pid] || {};
+      const pid = line.product_id && line.product_id[0];
+      let key, name, code, category, qtyAvailable, stdC, type;
+
+      if (pid) {
+        linesWithProduct++;
+        const prod = productById[pid] || {};
+        key  = `p:${pid}`;
+        name = prod.name || (line.product_id && line.product_id[1]) || `Product ${pid}`;
+        code = prod.default_code || '';
+        category = (prod.categ_id && prod.categ_id[1]) ? prod.categ_id[1] : 'Uncategorised';
+        qtyAvailable = parseFloat(prod.qty_available || 0);
+        stdC = parseFloat(prod.standard_price || 0);
+        type = prod.type || 'product';
+      } else {
+        linesWithoutProduct++;
+        const raw = (line.name || 'Manual entry').toString().trim().replace(/\s+/g, ' ');
+        const short = raw.length > 80 ? raw.slice(0, 80) + '…' : raw;
+        key  = `n:${short.toLowerCase()}`;
+        name = short;
+        code = '';
+        category = 'Other / Manual';
+        qtyAvailable = 0;
+        stdC = 0;
+        type = 'product';
+      }
+
       const rev  = parseFloat(line.price_subtotal || 0) * sign;
       const qty  = parseFloat(line.quantity || 0) * sign;
-      const stdC = parseFloat(prod.standard_price || 0);
       const cost = stdC * qty;
-      const catName = (prod.categ_id && prod.categ_id[1]) ? prod.categ_id[1] : 'Uncategorised';
 
-      if (!prodAgg[pid]) {
-        prodAgg[pid] = {
-          id: pid,
-          name: prod.name || (line.product_id && line.product_id[1]) || `Product ${pid}`,
-          code: prod.default_code || '',
-          category: catName,
-          revenue: 0, qty: 0, cost: 0,
-          qtyAvailable: parseFloat(prod.qty_available || 0),
-          stdPrice: stdC,
-          type: prod.type || 'product',
-        };
+      if (!prodAgg[key]) {
+        prodAgg[key] = { id: key, name, code, category, revenue: 0, qty: 0, cost: 0, qtyAvailable, stdPrice: stdC, type };
       }
-      prodAgg[pid].revenue += rev;
-      prodAgg[pid].qty     += qty;
-      prodAgg[pid].cost    += cost;
+      prodAgg[key].revenue += rev;
+      prodAgg[key].qty     += qty;
+      prodAgg[key].cost    += cost;
     }
+    console.log(`[Odoo/adv] line breakdown — withProduct=${linesWithProduct} withoutProduct=${linesWithoutProduct}`);
 
     const allProducts = Object.values(prodAgg)
       .filter(p => p.revenue > 0)
@@ -245,10 +272,12 @@ export async function GET(request) {
     return NextResponse.json({
       topProducts, topCategories, fastMoving, slowMoving,
       diagnostics: {
-        invoiceCount: invoiceIds.length,
-        lineCount:    lines.length,
-        productCount: products.length,
-        productIds:   productIds.length,
+        invoiceCount:        invoiceIds.length,
+        lineCount:           lines.length,
+        linesWithProduct,
+        linesWithoutProduct,
+        productCount:        products.length,
+        productIds:          productIds.length,
         year, companyId,
       },
     });
