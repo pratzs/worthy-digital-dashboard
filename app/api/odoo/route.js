@@ -64,87 +64,51 @@ export async function GET(request) {
     ];
     const invoices = await exec('account.move', 'search_read', [invDomain], {
       fields: ['id', 'invoice_date', 'amount_untaxed', 'amount_total', 'move_type',
-               'invoice_line_ids', 'invoice_user_id', 'partner_id'],
+               'invoice_user_id', 'partner_id'],
       limit:  10000,
     });
     console.log(`[Odoo] company=${companyId} year=${year} invoices=${invoices.length}`);
 
-    // Run heavy fetches in parallel; each stage fails independently so a slow/failed
-    // products call doesn't kill customers (and vice versa).
     const chunkArray = (arr, size) => {
       const out = [];
       for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
       return out;
     };
 
-    // ── 3. Fetch invoice lines (parallel chunks) ──────────────────────────────
-    const lineIds = [...new Set(invoices.flatMap(i => i.invoice_line_ids || []))];
-    const lineFields = ['id', 'move_id', 'date', 'product_id', 'product_uom_id',
-                        'quantity', 'price_subtotal', 'price_unit', 'price_total'];
-    let lines = [];
-    try {
-      if (lineIds.length > 0) {
-        const chunks = chunkArray(lineIds, 3000);
-        const results = await Promise.all(chunks.map(c =>
-          exec('account.move.line', 'read', [c], { fields: lineFields }, 40000).catch(e => {
-            console.error(`[Odoo] line chunk failed: ${e.message}`); return [];
-          })
-        ));
-        lines = results.flat();
-      }
-    } catch (e) {
-      console.error(`[Odoo] lines fetch failed: ${e.message}`);
-    }
-    console.log(`[Odoo] lines fetched: ${lines.length}/${lineIds.length}`);
+    // Lines + product analytics now live in /api/odoo/advanced — keeps this
+    // route fast (just invoice headers + partner filter for customers/reps).
 
-    // ── 4 + 5. Fetch products + partners in parallel ──────────────────────────
-    const productIds = [...new Set(lines.map(l => l.product_id && l.product_id[0]).filter(Boolean))];
+    // ── 3. Fetch partner records (for supplier vs customer filter) ────────────
     const partnerIds = [...new Set(invoices.map(i => i.partner_id && i.partner_id[0]).filter(Boolean))];
-
-    const fetchProducts = async () => {
-      if (productIds.length === 0) return [];
-      const chunks = chunkArray(productIds, 500);
-      const results = await Promise.all(chunks.map(c =>
-        exec('product.product', 'read', [c], {
-          fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
-                   'standard_price', 'list_price', 'type'],
-        }, 30000).catch(e => { console.error(`[Odoo] product chunk failed: ${e.message}`); return []; })
-      ));
-      return results.flat();
-    };
-
-    const fetchPartners = async () => {
-      if (partnerIds.length === 0) return [];
-      const chunks = chunkArray(partnerIds, 500);
-      const results = await Promise.all(chunks.map(async c => {
-        try {
-          return await exec('res.partner', 'read', [c], {
-            fields: ['id', 'name', 'customer_rank', 'supplier_rank', 'email', 'phone'],
-          }, 30000);
-        } catch (e) {
+    let partners = [];
+    try {
+      if (partnerIds.length > 0) {
+        const chunks = chunkArray(partnerIds, 500);
+        const results = await Promise.all(chunks.map(async c => {
           try {
             return await exec('res.partner', 'read', [c], {
-              fields: ['id', 'name', 'email', 'phone'],
-            }, 30000);
-          } catch (e2) {
-            console.error(`[Odoo] partner chunk failed: ${e2.message}`);
-            return [];
+              fields: ['id', 'name', 'customer_rank', 'supplier_rank', 'email', 'phone'],
+            }, 25000);
+          } catch (e) {
+            try {
+              return await exec('res.partner', 'read', [c], {
+                fields: ['id', 'name', 'email', 'phone'],
+              }, 25000);
+            } catch (e2) {
+              console.error(`[Odoo] partner chunk failed: ${e2.message}`);
+              return [];
+            }
           }
-        }
-      }));
-      return results.flat();
-    };
+        }));
+        partners = results.flat();
+      }
+    } catch (e) {
+      console.error(`[Odoo] partners fetch failed: ${e.message}`);
+    }
 
-    const [products, partners] = await Promise.all([
-      fetchProducts().catch(e => { console.error(`[Odoo] products fetch failed: ${e.message}`); return []; }),
-      fetchPartners().catch(e => { console.error(`[Odoo] partners fetch failed: ${e.message}`); return []; }),
-    ]);
-
-    const productById = {};
-    for (const p of products) productById[p.id] = p;
     const partnerById = {};
     for (const p of partners) partnerById[p.id] = p;
-    console.log(`[Odoo] products=${products.length}/${productIds.length} partners=${partners.length}/${partnerIds.length}`);
+    console.log(`[Odoo] partners=${partners.length}/${partnerIds.length}`);
 
     // A partner is a real customer if customer_rank > 0,
     // OR if customer_rank field unavailable (older Odoo) AND not pure supplier.
@@ -161,21 +125,7 @@ export async function GET(request) {
       return true;
     };
 
-    // ── 6. Build invoice → date map ───────────────────────────────────────────
-    const invById = {};
-    for (const inv of invoices) invById[inv.id] = inv;
-
-    const getMoveDate = (line) => {
-      if (line.date) return new Date(line.date);
-      const inv = invById[line.move_id && line.move_id[0]];
-      return inv?.invoice_date ? new Date(inv.invoice_date) : null;
-    };
-    const getMoveType = (line) => {
-      const inv = invById[line.move_id && line.move_id[0]];
-      return inv?.move_type;
-    };
-
-    // ── 7. Aggregate monthly + weekly with cost from line.product.standard_price ──
+    // ── 4. Aggregate monthly + weekly (revenue/orders/returns only) ───────────
     const monthly          = emptyYear();
     const weeklyRevBuckets = {};
 
@@ -193,42 +143,17 @@ export async function GET(request) {
       if (isCredit) monthly[mi].returns++; else monthly[mi].orders++;
 
       const wkey = `${mi}_${weekNum}`;
-      if (!weeklyRevBuckets[wkey]) weeklyRevBuckets[wkey] = { revenue: 0, orders: 0, cost: 0 };
+      if (!weeklyRevBuckets[wkey]) weeklyRevBuckets[wkey] = { revenue: 0, orders: 0 };
       weeklyRevBuckets[wkey].revenue += rev;
       if (!isCredit) weeklyRevBuckets[wkey].orders++;
     }
 
-    // Aggregate cost per month/week from invoice lines
-    for (const line of lines) {
-      const d = getMoveDate(line);
-      if (!d || d.getFullYear() !== year) continue;
-      const mi      = d.getMonth();
-      const weekNum = Math.ceil(d.getDate() / 7);
-      const isCredit = getMoveType(line) === 'out_refund';
-      const prod    = productById[line.product_id && line.product_id[0]];
-      const stdCost = prod ? parseFloat(prod.standard_price || 0) : 0;
-      const qty     = parseFloat(line.quantity || 0);
-      const lineCost = stdCost * qty * (isCredit ? -1 : 1);
-      monthly[mi].totalCost += lineCost;
-      if (lineCost > 0) monthly[mi].hasCostData = true;
-      monthly[mi].marginableRevenue += parseFloat(line.price_subtotal || 0) * (isCredit ? -1 : 1);
-      const wkey = `${mi}_${weekNum}`;
-      if (!weeklyRevBuckets[wkey]) weeklyRevBuckets[wkey] = { revenue: 0, orders: 0, cost: 0 };
-      weeklyRevBuckets[wkey].cost += lineCost;
-    }
-
     for (const m of monthly) {
-      m.revenue     = Math.round(m.revenue);
-      m.totalCost   = Math.round(m.totalCost);
-      m.grossProfit = m.hasCostData ? Math.round(m.marginableRevenue - m.totalCost) : 0;
-      m.marginPct   = m.hasCostData && m.marginableRevenue > 0
-                       ? Math.round((m.grossProfit / m.marginableRevenue) * 100)
-                       : null;
-      m.marginableRevenue = Math.round(m.marginableRevenue);
-      m.aov         = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
+      m.revenue = Math.round(m.revenue);
+      m.aov     = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
     }
 
-    // ── 8. Build weekly array ─────────────────────────────────────────────────
+    // ── 5. Build weekly array ─────────────────────────────────────────────────
     const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
     const weekly = [];
     for (let mi = 0; mi < 12; mi++) {
@@ -237,21 +162,18 @@ export async function GET(request) {
         const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
         if (startDay > getDaysInMonth(year, mi)) continue;
         const b = weeklyRevBuckets[`${mi}_${w}`];
-        const wkRev = b ? Math.round(b.revenue) : 0;
-        const wkCost = b ? Math.round(b.cost) : 0;
-        const wkHasCost = wkCost > 0;
         weekly.push({
           label:          `${MONTH_NAMES[mi]} W${w}`,
           month:          mi,
           week:           w,
           dateRange:      `${startDay}–${endDay} ${MONTH_NAMES[mi]}`,
-          revenue:        wkRev,
+          revenue:        b ? Math.round(b.revenue) : 0,
           orders:         b ? b.orders : 0,
           aov:            b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
-          totalCost:      wkCost,
-          grossProfit:    wkHasCost ? wkRev - wkCost : null,
-          marginPct:      wkHasCost && wkRev > 0 ? Math.round(((wkRev - wkCost) / wkRev) * 100) : null,
-          hasCostData:    wkHasCost,
+          totalCost:      0,
+          grossProfit:    null,
+          marginPct:      null,
+          hasCostData:    false,
           totalDiscounts: 0,
           newCustomers:   0,
         });
@@ -349,115 +271,9 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 100);
 
-    // ── 11. Top products + categories ─────────────────────────────────────────
-    const prodAgg = {}; // id → { name, code, category, revenue, qty, cost }
-    for (const line of lines) {
-      const d = getMoveDate(line);
-      if (!d || d.getFullYear() !== year) continue;
-      const pid = line.product_id && line.product_id[0];
-      if (!pid) continue;
-      const prod  = productById[pid] || {};
-      const isCredit = getMoveType(line) === 'out_refund';
-      const sign  = isCredit ? -1 : 1;
-      const rev   = parseFloat(line.price_subtotal || 0) * sign;
-      const qty   = parseFloat(line.quantity || 0) * sign;
-      const stdC  = parseFloat(prod.standard_price || 0);
-      const cost  = stdC * qty;
-      const catName = (prod.categ_id && prod.categ_id[1]) ? prod.categ_id[1] : 'Uncategorised';
-      if (!prodAgg[pid]) {
-        prodAgg[pid] = {
-          id: pid,
-          name: prod.name || (line.product_id && line.product_id[1]) || `Product ${pid}`,
-          code: prod.default_code || '',
-          category: catName,
-          revenue: 0, qty: 0, cost: 0,
-          qtyAvailable: parseFloat(prod.qty_available || 0),
-          stdPrice: stdC,
-          type: prod.type || 'product',
-        };
-      }
-      prodAgg[pid].revenue += rev;
-      prodAgg[pid].qty     += qty;
-      prodAgg[pid].cost    += cost;
-    }
+    // Products / categories / fast / slow are served by /api/odoo/advanced.
 
-    const allProducts = Object.values(prodAgg)
-      .filter(p => p.revenue > 0)
-      .map(p => {
-        const gp     = p.revenue - p.cost;
-        const margin = p.revenue > 0 ? Math.round((gp / p.revenue) * 100) : 0;
-        return {
-          title:        p.name,
-          code:         p.code,
-          category:     p.category,
-          revenue:      Math.round(p.revenue),
-          unitsSold:    Math.round(p.qty),
-          grossProfit:  Math.round(gp),
-          margin,
-          qtyAvailable: Math.round(p.qtyAvailable),
-          stdPrice:     p.stdPrice,
-          type:         p.type,
-        };
-      });
-
-    const topProducts = [...allProducts]
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 50);
-
-    // Top categories
-    const catMap = {};
-    for (const p of allProducts) {
-      const c = p.category;
-      if (!catMap[c]) catMap[c] = { category: c, revenue: 0, unitsSold: 0, grossProfit: 0, productCount: 0 };
-      catMap[c].revenue     += p.revenue;
-      catMap[c].unitsSold   += p.unitsSold;
-      catMap[c].grossProfit += p.grossProfit;
-      catMap[c].productCount++;
-    }
-    const topCategories = Object.values(catMap)
-      .sort((a, b) => b.revenue - a.revenue)
-      .map(c => ({ ...c, margin: c.revenue > 0 ? Math.round((c.grossProfit / c.revenue) * 100) : 0 }));
-
-    // ── 12. Fast & slow movers ────────────────────────────────────────────────
-    // Fast = top 20 by units sold per dollar of stock (sell-through)
-    const fastMoving = [...allProducts]
-      .filter(p => p.unitsSold > 0)
-      .sort((a, b) => b.unitsSold - a.unitsSold)
-      .slice(0, 20)
-      .map(p => ({
-        name:         p.title,
-        code:         p.code,
-        category:     p.category,
-        unitsSold:    p.unitsSold,
-        revenue:      p.revenue,
-        margin:       p.margin,
-        currentStock: p.qtyAvailable,
-        sellThrough:  p.qtyAvailable > 0 ? Math.round((p.unitsSold / (p.unitsSold + p.qtyAvailable)) * 100) : 100,
-      }));
-
-    // Slow = products with on-hand stock but very few units sold (capital tied up)
-    const slowMoving = allProducts
-      .filter(p => p.qtyAvailable > 0 && p.type !== 'service')
-      .map(p => {
-        const lockedCapital = Math.round(p.qtyAvailable * p.stdPrice);
-        const turnover      = p.unitsSold / Math.max(p.qtyAvailable, 1);
-        const slowScore     = lockedCapital * (1 - Math.min(turnover, 1));
-        return {
-          name:          p.title,
-          code:          p.code,
-          category:      p.category,
-          currentStock:  p.qtyAvailable,
-          qtySold:       p.unitsSold,
-          lockedCapital,
-          slowScore,
-        };
-      })
-      .filter(p => p.lockedCapital > 0)
-      .sort((a, b) => b.slowScore - a.slowScore)
-      .slice(0, 30)
-      .map(({ slowScore: _s, ...rest }) => rest);
-
-    // ── 13. At-risk + lapsed split out from customers ─────────────────────────
+    // ── 11. At-risk + lapsed split out from customers ─────────────────────────
     const atRisk  = customers.filter(c => c.status === 'At Risk').slice(0, 50);
     const lapsed  = customers.filter(c => c.status === 'Lapsed').slice(0, 50);
 
@@ -466,7 +282,6 @@ export async function GET(request) {
       monthly, weekly,
       salespeople, salespeopleMonthly, salespeopleWeekly,
       customers, atRisk, lapsed,
-      topProducts, topCategories, fastMoving, slowMoving,
     });
 
   } catch (err) {
@@ -475,7 +290,6 @@ export async function GET(request) {
       monthly: emptyYear(), weekly: [],
       salespeople: [], salespeopleMonthly: [], salespeopleWeekly: [],
       customers: [], atRisk: [], lapsed: [],
-      topProducts: [], topCategories: [], fastMoving: [], slowMoving: [],
       error: err.message,
     }, { status: 500 });
   }

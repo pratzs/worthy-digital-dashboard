@@ -676,19 +676,51 @@ export default function EcommerceDashboard() {
       const json = await r.json();
       if (json.error) throw new Error(json.error);
       const convert = (arr) => (arr?.length > 0 ? arr : generateEmptyYear());
+      const existing = cacheRef.current[key] || {};
       cacheRef.current[key] = {
+        ...existing,
         all:                convert(json.monthly),
         weekly:             json.weekly              || [],
         salespeople:        json.salespeople         || [],
         salespeopleMonthly: json.salespeopleMonthly  || [],
         salespeopleWeekly:  json.salespeopleWeekly   || [],
         customers:          json.customers           || [],
+        atRisk:             json.atRisk              || [],
+        lapsed:             json.lapsed              || [],
       };
     } catch {
       const empty = generateEmptyYear();
-      cacheRef.current[key] = { all: empty, weekly: [] };
+      cacheRef.current[key] = { ...(cacheRef.current[key] || {}), all: empty, weekly: [] };
     }
     loadingRef.current[key] = false;
+    forceUpdate();
+
+    // Kick off advanced fetch in parallel — fills products/categories/SKUs.
+    fetchOdooAdvanced(companyId, year);
+  };
+
+  const fetchOdooAdvanced = async (companyId, year) => {
+    const key    = `odoo:${companyId}:${year}`;
+    const advKey = `${key}:adv`;
+    if (loadingRef.current[advKey]) return;
+    loadingRef.current[advKey] = true;
+    forceUpdate();
+    try {
+      const r    = await fetch(`/api/odoo/advanced?year=${year}&company=${companyId}`);
+      const json = await r.json();
+      const existing = cacheRef.current[key] || {};
+      cacheRef.current[key] = {
+        ...existing,
+        topProducts:   json.topProducts   || [],
+        topCategories: json.topCategories || [],
+        fastMoving:    json.fastMoving    || [],
+        slowMoving:    json.slowMoving    || [],
+        advDiagnostics: json.diagnostics || null,
+      };
+    } catch (e) {
+      console.error('[fetchOdooAdvanced] failed', e);
+    }
+    loadingRef.current[advKey] = false;
     forceUpdate();
   };
 
@@ -824,6 +856,7 @@ export default function EcommerceDashboard() {
   const getOdooTopCategories = () => cacheRef.current[`odoo:4:${selectedYear}`]?.topCategories || [];
   const getOdooFastMoving    = () => cacheRef.current[`odoo:4:${selectedYear}`]?.fastMoving    || [];
   const getOdooSlowMoving    = () => cacheRef.current[`odoo:4:${selectedYear}`]?.slowMoving    || [];
+  const isOdooAdvLoading     = () => !!loadingRef.current[`odoo:4:${selectedYear}:adv`];
   const getLuxeSalespeopleMonthly = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly || [];
   const getLuxeSalespeopleWeekly  = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleWeekly  || [];
   const isLoading = (year) => {
@@ -1485,7 +1518,7 @@ export default function EcommerceDashboard() {
             {/* Odoo: top products + top categories */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable theme={T} title="📂 Top Categories — Odoo" subtitle="Where the revenue actually comes from"
-                loading={isLoading(selectedYear)} currency={activeStore.currency}
+                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
                 data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
                 columns={[
                   { key: "name",         label: "Category",     color: T.text },
@@ -1498,7 +1531,7 @@ export default function EcommerceDashboard() {
                 aiExtra="Which categories drive the business? Flag any with margin < 15% — those need a price review."
               />
               <AdvancedTable theme={T} title="🥇 Top Products — Odoo" subtitle="High performers by net revenue"
-                loading={isLoading(selectedYear)} currency={activeStore.currency}
+                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
                 data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
                 columns={[
                   { key: "name",     label: "Product",  color: T.text },
@@ -1515,7 +1548,7 @@ export default function EcommerceDashboard() {
             {/* Odoo: fast & slow movers */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs — Odoo" subtitle="Highest velocity — keep stocked & push wider"
-                loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
+                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
                 columns={[
                   { key: "name",         label: "Product",     color: T.text },
                   { key: "category",     label: "Category",    color: T.textMuted },
@@ -1528,7 +1561,7 @@ export default function EcommerceDashboard() {
                 aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
               />
               <AdvancedTable theme={T} title="🐌 Slow-Moving SKUs — Odoo" subtitle="Capital sitting on the shelf — clear, bundle, or discontinue"
-                loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
+                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
                 columns={[
                   { key: "name",          label: "Product",       color: T.text },
                   { key: "category",      label: "Category",      color: T.textMuted },
