@@ -846,17 +846,30 @@ export default function EcommerceDashboard() {
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
     return cached?.salespeople || [];
   };
-  const getOdooSalespeople = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeople || [];
-  const getOdooSalespeopleMonthly = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeopleMonthly || [];
-  const getOdooSalespeopleWeekly  = () => cacheRef.current[`odoo:4:${selectedYear}`]?.salespeopleWeekly  || [];
-  const getOdooCustomers = () => cacheRef.current[`odoo:4:${selectedYear}`]?.customers || [];
-  const getOdooAtRisk        = () => cacheRef.current[`odoo:4:${selectedYear}`]?.atRisk        || [];
-  const getOdooLapsed        = () => cacheRef.current[`odoo:4:${selectedYear}`]?.lapsed        || [];
-  const getOdooTopProducts   = () => cacheRef.current[`odoo:4:${selectedYear}`]?.topProducts   || [];
-  const getOdooTopCategories = () => cacheRef.current[`odoo:4:${selectedYear}`]?.topCategories || [];
-  const getOdooFastMoving    = () => cacheRef.current[`odoo:4:${selectedYear}`]?.fastMoving    || [];
-  const getOdooSlowMoving    = () => cacheRef.current[`odoo:4:${selectedYear}`]?.slowMoving    || [];
-  const isOdooAdvLoading     = () => !!loadingRef.current[`odoo:4:${selectedYear}:adv`];
+  // Which Odoo company is the active context? 4 = Worthy North, 1 = Worthy Oceania (nova)
+  const currentOdooCid = () => {
+    if (activeStore.id === "nova") return 1;
+    if (activeStore.id === "worthy" && channelTab === "odoo") return 4;
+    return null;
+  };
+  const odooCacheKey = (year) => {
+    const cid = currentOdooCid();
+    return cid ? `odoo:${cid}:${year}` : null;
+  };
+  const getOdooSalespeople        = () => cacheRef.current[odooCacheKey(selectedYear)]?.salespeople        || [];
+  const getOdooSalespeopleMonthly = () => cacheRef.current[odooCacheKey(selectedYear)]?.salespeopleMonthly || [];
+  const getOdooSalespeopleWeekly  = () => cacheRef.current[odooCacheKey(selectedYear)]?.salespeopleWeekly  || [];
+  const getOdooCustomers          = () => cacheRef.current[odooCacheKey(selectedYear)]?.customers          || [];
+  const getOdooAtRisk             = () => cacheRef.current[odooCacheKey(selectedYear)]?.atRisk             || [];
+  const getOdooLapsed             = () => cacheRef.current[odooCacheKey(selectedYear)]?.lapsed             || [];
+  const getOdooTopProducts        = () => cacheRef.current[odooCacheKey(selectedYear)]?.topProducts        || [];
+  const getOdooTopCategories      = () => cacheRef.current[odooCacheKey(selectedYear)]?.topCategories      || [];
+  const getOdooFastMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.fastMoving         || [];
+  const getOdooSlowMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.slowMoving         || [];
+  const isOdooAdvLoading          = () => {
+    const cid = currentOdooCid();
+    return cid ? !!loadingRef.current[`odoo:${cid}:${selectedYear}:adv`] : false;
+  };
   const getLuxeSalespeopleMonthly = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly || [];
   const getLuxeSalespeopleWeekly  = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleWeekly  || [];
   const isLoading = (year) => {
@@ -1484,8 +1497,8 @@ export default function EcommerceDashboard() {
           </>
         )}
 
-        {/* ODOO ADVANCED SECTION — Worthy North Odoo tab */}
-        {activeStore.id === "worthy" && channelTab === "odoo" && (
+        {/* ODOO ADVANCED SECTION — Worthy North (Odoo tab) and Worthy Oceania (nova) */}
+        {((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <>
             {/* Odoo: top customers, at-risk, lapsed */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>

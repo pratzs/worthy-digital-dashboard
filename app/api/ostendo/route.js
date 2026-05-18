@@ -12,7 +12,7 @@ const REP_NAMES = {
   '410': 'Kevin',
   '420': 'Michelle',
   '430': 'Keith',
-  '450': 'Nelson office',
+  '450': 'Nelson Office Online Sales',
   '460': 'Chris',
   '470': 'Lynette',
   '490': 'Leith',
