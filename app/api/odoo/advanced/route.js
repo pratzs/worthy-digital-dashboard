@@ -40,10 +40,7 @@ export async function GET(request) {
     const uid = authJson.result;
     if (!uid) throw new Error('Authentication failed');
 
-    // Pin company context so record rules don't fail with the "expected str
-    // instance, bool found" error we saw on multi-company access (Oceania).
     const ctx = { allowed_company_ids: [companyId], force_company: companyId };
-
     const exec = async (model, method, args, kwargs = {}, timeout = 40000) => {
       const mergedKwargs = { ...kwargs, context: { ...(kwargs.context || {}), ...ctx } };
       const j = await odooCall(url, {
@@ -61,93 +58,138 @@ export async function GET(request) {
       return out;
     };
 
-    // ── PHASE 1: invoice IDs split by move_type ──────────────────────────────
-    // search() returns just IDs — far lighter than search_read.
-    const baseDomain = [
+    // ── PHASE 1: invoice IDs (cheap — just IDs) ───────────────────────────────
+    const invDomain = [
       ['company_id',    '=',  companyId],
+      ['move_type',     'in', ['out_invoice', 'out_refund']],
       ['state',         '=',  'posted'],
       ['invoice_date',  '>=', `${year}-01-01`],
       ['invoice_date',  '<=', `${year}-12-31`],
     ];
-    const [invIds, refundIds] = await Promise.all([
-      exec('account.move', 'search', [[...baseDomain, ['move_type', '=', 'out_invoice']]], { limit: 30000 }, 25000)
-        .catch(e => { console.error(`[Odoo/adv] inv search failed: ${e.message}`); return []; }),
-      exec('account.move', 'search', [[...baseDomain, ['move_type', '=', 'out_refund']]],  { limit: 30000 }, 25000)
-        .catch(e => { console.error(`[Odoo/adv] refund search failed: ${e.message}`); return []; }),
-    ]);
-    console.log(`[Odoo/adv] cid=${companyId} year=${year} invoices=${invIds.length} refunds=${refundIds.length}`);
-    if (invIds.length === 0 && refundIds.length === 0) {
+    let invoiceIds = [];
+    try {
+      invoiceIds = await exec('account.move', 'search', [invDomain], { limit: 30000 }, 25000);
+    } catch (e) {
+      console.error(`[Odoo/adv] invoice search failed: ${e.message}`);
+      return NextResponse.json(emptyResp(`Invoice search failed: ${e.message}`));
+    }
+    console.log(`[Odoo/adv] cid=${companyId} year=${year} invoiceIds=${invoiceIds.length}`);
+    if (invoiceIds.length === 0) {
       return NextResponse.json(emptyResp(null, { invoiceCount: 0, year, companyId }));
     }
 
-    // ── PHASE 2: read_group on lines (the win) ────────────────────────────────
-    // Aggregates in the DB → returns one row per product instead of millions
-    // of line records. We do it once for invoices and once for refunds so we
-    // can sign-flip the refund totals.
-    const groupByMoveSet = async (moveIds, label) => {
-      if (moveIds.length === 0) return [];
-      // For very large id lists, chunk to keep the JSON-RPC payload reasonable.
-      const chunks = chunkArray(moveIds, 5000);
-      const results = await Promise.all(chunks.map(c =>
-        exec('account.move.line', 'read_group',
-          [[['move_id', 'in', c], ['product_id', '!=', false]]],
-          { fields: ['price_subtotal:sum', 'quantity:sum'], groupby: ['product_id'] },
-          35000
+    // Fetch move_type per invoice once (cheap — small payload)
+    const moveTypeById = {};
+    try {
+      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type'] }, 20000);
+      for (const m of moves) moveTypeById[m.id] = m.move_type;
+    } catch (e) {
+      console.error(`[Odoo/adv] move_type read failed (assuming all out_invoice): ${e.message}`);
+    }
+
+    // ── PHASE 2: invoice lines via search_read in tight chunks ────────────────
+    // Minimal field set — keeps payload small (~80 bytes per line).
+    // 500 invoices per chunk × ~5 lines = ~2.5k lines per call. With 20+ chunks
+    // running 8-parallel, total wall time ~10-15s even for 10k invoices.
+    // We deliberately use search_read (NOT read_group) because this Odoo
+    // instance has a record-rule that fails on read_group with the Python
+    // error "expected str instance, bool found".
+    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal'];
+    const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
+    const idChunks = chunkArray(sanitizedIds, 500);
+
+    const parallelLimit = async (tasks, limit) => {
+      const results = new Array(tasks.length);
+      let next = 0;
+      await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+        while (next < tasks.length) {
+          const idx = next++;
+          results[idx] = await tasks[idx]();
+        }
+      }));
+      return results;
+    };
+
+    const chunkResults = await parallelLimit(
+      idChunks.map(c => () =>
+        exec('account.move.line', 'search_read',
+          [[['move_id', 'in', c]]],
+          { fields: lineFields, limit: 30000 },
+          30000
         ).catch(e => {
-          console.error(`[Odoo/adv] ${label} read_group chunk failed: ${e.message}`);
+          console.error(`[Odoo/adv] line chunk failed: ${e.message}`);
           return [];
         })
-      ));
-      return results.flat();
-    };
+      ),
+      8
+    );
+    const rawLines = chunkResults.flat();
 
-    const [invGroups, refundGroups] = await Promise.all([
-      groupByMoveSet(invIds,    'invoice'),
-      groupByMoveSet(refundIds, 'refund'),
-    ]);
-    console.log(`[Odoo/adv] invGroups=${invGroups.length} refundGroups=${refundGroups.length}`);
+    // Drop zero-subtotal rows (tax / payment / receivable lines)
+    // and rows with no product_id (out of scope — see prodAgg comment below).
+    const lines = rawLines.filter(l => {
+      const sub = parseFloat(l.price_subtotal || 0);
+      return sub !== 0;
+    });
+    console.log(`[Odoo/adv] lines: raw=${rawLines.length} kept=${lines.length}`);
 
-    // Merge: invoice positive, refund negative — keyed by product_id
-    const prodTotals = {};
-    const accumulate = (rows, sign) => {
-      for (const r of rows) {
-        if (!r.product_id || !Array.isArray(r.product_id)) continue;
-        const [pid, pname] = r.product_id;
-        if (!prodTotals[pid]) prodTotals[pid] = { pid, pname, revenue: 0, qty: 0 };
-        prodTotals[pid].revenue += sign * parseFloat(r.price_subtotal || 0);
-        prodTotals[pid].qty     += sign * parseFloat(r.quantity       || 0);
-      }
-    };
-    accumulate(invGroups,    1);
-    accumulate(refundGroups, -1);
-
-    const productIds = Object.keys(prodTotals).map(Number);
-    if (productIds.length === 0) {
-      return NextResponse.json(emptyResp('No product lines found in any invoice — every line is product-less manual entry', {
-        invoiceCount: invIds.length, refundCount: refundIds.length, year, companyId,
+    if (lines.length === 0) {
+      return NextResponse.json(emptyResp('Line fetch returned no rows', {
+        invoiceCount: invoiceIds.length, rawLineCount: rawLines.length, year, companyId,
       }));
     }
 
-    // ── PHASE 3: product master (categories, stock, cost) ─────────────────────
+    // ── PHASE 3: aggregate per product (sign-flip refunds) ────────────────────
+    // Lines without product_id are skipped here. For Oceania (which uses
+    // manual-description lines on some invoices) this is acceptable — those
+    // entries don't have a product/category to roll up anyway.
+    const prodAgg = {};
+    let withProduct = 0, withoutProduct = 0;
+    for (const line of lines) {
+      const pid = line.product_id && line.product_id[0];
+      if (!pid) { withoutProduct++; continue; }
+      withProduct++;
+
+      const moveType = moveTypeById[line.move_id && line.move_id[0]];
+      const sign = moveType === 'out_refund' ? -1 : 1;
+
+      const rev = parseFloat(line.price_subtotal || 0) * sign;
+      const qty = parseFloat(line.quantity || 0) * sign;
+      const pname = (line.product_id && line.product_id[1]) || `Product ${pid}`;
+
+      if (!prodAgg[pid]) prodAgg[pid] = { pid, pname, revenue: 0, qty: 0 };
+      prodAgg[pid].revenue += rev;
+      prodAgg[pid].qty     += qty;
+    }
+    console.log(`[Odoo/adv] line breakdown — withProduct=${withProduct} withoutProduct=${withoutProduct}`);
+
+    const productIds = Object.keys(prodAgg).map(Number);
+
+    // ── PHASE 4: product master (categories, stock, cost) ─────────────────────
     let products = [];
     try {
-      const chunks = chunkArray(productIds, 500);
-      const results = await Promise.all(chunks.map(c =>
-        exec('product.product', 'read', [c], {
-          fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
-                   'standard_price', 'list_price', 'type'],
-        }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
-      ));
-      products = results.flat();
+      if (productIds.length > 0) {
+        const pChunks = chunkArray(productIds, 500);
+        const pResults = await parallelLimit(
+          pChunks.map(c => () =>
+            exec('product.product', 'read', [c], {
+              fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
+                       'standard_price', 'list_price', 'type'],
+            }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
+          ),
+          8
+        );
+        products = pResults.flat();
+      }
     } catch (e) {
-      console.error(`[Odoo/adv] product master fetch failed: ${e.message}`);
+      console.error(`[Odoo/adv] product master fetch failed (continuing): ${e.message}`);
     }
     const productById = {};
     for (const p of products) productById[p.id] = p;
     console.log(`[Odoo/adv] product master rows: ${products.length}/${productIds.length}`);
 
-    // ── PHASE 4: shape output ────────────────────────────────────────────────
-    const allProducts = Object.values(prodTotals)
+    // ── PHASE 5: shape output ────────────────────────────────────────────────
+    const allProducts = Object.values(prodAgg)
       .filter(t => t.revenue > 0 || t.qty > 0)
       .map(t => {
         const prod   = productById[t.pid] || {};
@@ -156,7 +198,7 @@ export async function GET(request) {
         const gp     = t.revenue - cost;
         const margin = t.revenue > 0 ? Math.round((gp / t.revenue) * 100) : 0;
         return {
-          title:        prod.name || t.pname || `Product ${t.pid}`,
+          title:        prod.name || t.pname,
           code:         prod.default_code || '',
           category:     (prod.categ_id && prod.categ_id[1]) ? prod.categ_id[1] : 'Uncategorised',
           revenue:      Math.round(t.revenue),
@@ -224,10 +266,12 @@ export async function GET(request) {
     return NextResponse.json({
       topProducts, topCategories, fastMoving, slowMoving,
       diagnostics: {
-        invoiceCount: invIds.length,
-        refundCount:  refundIds.length,
-        productGroups: productIds.length,
-        productCount: products.length,
+        invoiceCount:   invoiceIds.length,
+        rawLineCount:   rawLines.length,
+        keptLineCount:  lines.length,
+        withProduct, withoutProduct,
+        productCount:   products.length,
+        productIds:     productIds.length,
         year, companyId,
       },
     });
