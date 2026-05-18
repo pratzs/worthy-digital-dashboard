@@ -666,7 +666,7 @@ export default function EcommerceDashboard() {
     }
   };
 
-  const fetchOdoo = async (companyId, year) => {
+  const fetchOdoo = async (companyId, year, { fireAdvanced = true } = {}) => {
     const key = `odoo:${companyId}:${year}`;
     if (cacheRef.current[key] || loadingRef.current[key]) return;
     loadingRef.current[key] = true;
@@ -695,8 +695,9 @@ export default function EcommerceDashboard() {
     loadingRef.current[key] = false;
     forceUpdate();
 
-    // Kick off advanced fetch in parallel — fills products/categories/SKUs.
-    fetchOdooAdvanced(companyId, year);
+    // Only fetch the heavy advanced payload for the CURRENT year. The prior
+    // year is loaded for YoY revenue compare, not for product/category tables.
+    if (fireAdvanced) fetchOdooAdvanced(companyId, year);
   };
 
   const fetchOdooAdvanced = async (companyId, year) => {
@@ -738,7 +739,7 @@ export default function EcommerceDashboard() {
         const companyId = activeStore.odooCompanyId || 1;
         await Promise.all([
           fetchOdoo(companyId, selectedYear),
-          fetchOdoo(companyId, selectedYear - 1),
+          fetchOdoo(companyId, selectedYear - 1, { fireAdvanced: false }),
         ]);
         if (advStoreRef.current === storeId) setAdvLoading(false);
         return;
@@ -747,10 +748,11 @@ export default function EcommerceDashboard() {
       await Promise.all([
         fetchYear(storeId, selectedYear),
         fetchYear(storeId, selectedYear - 1),
-        // Worthy North also has Odoo Sales tab
+        // Worthy North also has Odoo Sales tab. Only fire the heavy advanced
+        // payload for the current year — prior year is for YoY revenue only.
         ...(storeId === "worthy" ? [
           fetchOdoo(4, selectedYear),
-          fetchOdoo(4, selectedYear - 1),
+          fetchOdoo(4, selectedYear - 1, { fireAdvanced: false }),
         ] : []),
       ]);
       // After revenue data is cached, fetch cost/margin data for South (non-blocking)
@@ -796,11 +798,13 @@ export default function EcommerceDashboard() {
       if (activeStore.id === "worthy" || activeStore.id === "luxe") {
         Promise.all(ALL_YEARS.map(yr => fetchYear(activeStore.id, yr)));
       }
+      // YoY view: only revenue/order data needed for all years. Skip the
+      // expensive advanced fetch — it's tied to the currently selected year.
       if (activeStore.id === "worthy") {
-        Promise.all(ALL_YEARS.map(yr => fetchOdoo(4, yr)));
+        Promise.all(ALL_YEARS.map(yr => fetchOdoo(4, yr, { fireAdvanced: yr === selectedYear })));
       }
       if (activeStore.id === "nova") {
-        Promise.all(ALL_YEARS.map(yr => fetchOdoo(1, yr)));
+        Promise.all(ALL_YEARS.map(yr => fetchOdoo(1, yr, { fireAdvanced: yr === selectedYear })));
       }
     }
   }, [activeStore.id, view]); // eslint-disable-line
