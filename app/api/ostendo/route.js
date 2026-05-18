@@ -6,6 +6,25 @@ export const maxDuration = 60;
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// Ostendo SALESPERSON codes → friendly names.
+// "-1" suffixed codes are legacy clearance accounts → roll up to the same rep.
+const REP_NAMES = {
+  '410': 'Kevin',
+  '420': 'Michelle',
+  '430': 'Keith',
+  '450': 'Nelson office',
+  '460': 'Chris',
+  '470': 'Lynette',
+  '490': 'Leith',
+};
+const resolveRepName = (raw) => {
+  if (!raw) return 'Unassigned';
+  const code = String(raw).trim();
+  // Strip "-1" (and similar) clearance suffix → roll up to base rep
+  const base = code.replace(/-\d+$/, '');
+  return REP_NAMES[base] || REP_NAMES[code] || code;
+};
+
 const agent = new https.Agent({ rejectUnauthorized: false });
 
 async function ostendoFetch(tablename, condition = null, timeoutMs = 30000) {
@@ -110,7 +129,7 @@ export async function GET(request) {
       weeklyRevBuckets[wkey].orders         += 1;
       weeklyRevBuckets[wkey].totalDiscounts += disc;
 
-      const repName = (row.SALESPERSON && String(row.SALESPERSON).trim()) || 'Unassigned';
+      const repName = resolveRepName(row.SALESPERSON);
       if (!repData[repName]) {
         repData[repName] = {
           monthly: Array.from({ length: 12 }, () => ({ revenue: 0, orders: 0 })),
