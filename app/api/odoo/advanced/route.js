@@ -40,10 +40,8 @@ export async function GET(request) {
     const uid = authJson.result;
     if (!uid) throw new Error('Authentication failed');
 
-    // Pin the call context to the target company so Odoo's record rules don't
-    // cross-pollute multi-company access. Fixes the "expected str instance,
-    // bool found" Python error we saw on company 1 (Worthy Oceania) which
-    // was caused by record-rule evaluation against an unintended company.
+    // Pin company context so record rules don't fail with the "expected str
+    // instance, bool found" error we saw on multi-company access (Oceania).
     const ctx = { allowed_company_ids: [companyId], force_company: companyId };
 
     const exec = async (model, method, args, kwargs = {}, timeout = 40000) => {
@@ -63,165 +61,111 @@ export async function GET(request) {
       return out;
     };
 
-    // ── PHASE 1: invoice IDs ──────────────────────────────────────────────────
-    // search() is much lighter than search_read — just returns IDs.
-    const invDomain = [
+    // ── PHASE 1: invoice IDs split by move_type ──────────────────────────────
+    // search() returns just IDs — far lighter than search_read.
+    const baseDomain = [
       ['company_id',    '=',  companyId],
-      ['move_type',     'in', ['out_invoice', 'out_refund']],
       ['state',         '=',  'posted'],
       ['invoice_date',  '>=', `${year}-01-01`],
       ['invoice_date',  '<=', `${year}-12-31`],
     ];
-    let invoiceIds = [];
-    try {
-      invoiceIds = await exec('account.move', 'search', [invDomain], { limit: 20000 }, 25000);
-    } catch (e) {
-      console.error(`[Odoo/adv] invoice search failed: ${e.message}`);
-      return NextResponse.json(emptyResp(`Invoice search failed: ${e.message}`));
-    }
-    console.log(`[Odoo/adv] cid=${companyId} year=${year} invoiceIds=${invoiceIds.length}`);
-    if (invoiceIds.length === 0) {
-      return NextResponse.json(emptyResp(null, { invoiceCount: 0, lineCount: 0, year, companyId }));
-    }
-
-    // Also fetch move_type per invoice so we can sign credit notes correctly later
-    let moveTypeById = {};
-    try {
-      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type', 'invoice_date'] }, 30000);
-      for (const m of moves) moveTypeById[m.id] = m.move_type;
-    } catch (e) {
-      console.error(`[Odoo/adv] move_type read failed (continuing): ${e.message}`);
+    const [invIds, refundIds] = await Promise.all([
+      exec('account.move', 'search', [[...baseDomain, ['move_type', '=', 'out_invoice']]], { limit: 30000 }, 25000)
+        .catch(e => { console.error(`[Odoo/adv] inv search failed: ${e.message}`); return []; }),
+      exec('account.move', 'search', [[...baseDomain, ['move_type', '=', 'out_refund']]],  { limit: 30000 }, 25000)
+        .catch(e => { console.error(`[Odoo/adv] refund search failed: ${e.message}`); return []; }),
+    ]);
+    console.log(`[Odoo/adv] cid=${companyId} year=${year} invoices=${invIds.length} refunds=${refundIds.length}`);
+    if (invIds.length === 0 && refundIds.length === 0) {
+      return NextResponse.json(emptyResp(null, { invoiceCount: 0, year, companyId }));
     }
 
-    // ── PHASE 2: invoice lines via move_id IN (chunked) ───────────────────────
-    // No dot-notation traversal. Don't filter on product_id — some companies
-    // (e.g. Oceania) enter invoice lines with a description but no product
-    // selected. We aggregate those by line.name as a fallback. We DO exclude
-    // section / note display rows and require a non-zero subtotal so the table
-    // doesn't fill with empty payment / receivable lines.
-    const lineFields = ['id', 'move_id', 'date', 'name', 'product_id',
-                        'quantity', 'price_subtotal'];
-    let lines = [];
-    try {
-      const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
-      const idChunks = chunkArray(sanitizedIds, 1000);
-      const chunkResults = await Promise.all(idChunks.map(c =>
-        exec('account.move.line', 'search_read',
-          [[['move_id', 'in', c]]],
-          { fields: lineFields, limit: 50000 },
-          45000
+    // ── PHASE 2: read_group on lines (the win) ────────────────────────────────
+    // Aggregates in the DB → returns one row per product instead of millions
+    // of line records. We do it once for invoices and once for refunds so we
+    // can sign-flip the refund totals.
+    const groupByMoveSet = async (moveIds, label) => {
+      if (moveIds.length === 0) return [];
+      // For very large id lists, chunk to keep the JSON-RPC payload reasonable.
+      const chunks = chunkArray(moveIds, 5000);
+      const results = await Promise.all(chunks.map(c =>
+        exec('account.move.line', 'read_group',
+          [[['move_id', 'in', c], ['product_id', '!=', false]]],
+          { fields: ['price_subtotal:sum', 'quantity:sum'], groupby: ['product_id'] },
+          35000
         ).catch(e => {
-          console.error(`[Odoo/adv] line chunk failed: ${e.message}`);
+          console.error(`[Odoo/adv] ${label} read_group chunk failed: ${e.message}`);
           return [];
         })
       ));
-      lines = chunkResults.flat();
-    } catch (e) {
-      console.error(`[Odoo/adv] lines fetch failed: ${e.message}`);
-      return NextResponse.json(emptyResp(`Lines fetch failed: ${e.message}`, { invoiceCount: invoiceIds.length }));
-    }
+      return results.flat();
+    };
 
-    // Drop lines with no economic value (tax / receivable / payment lines have 0 subtotal).
-    lines = lines.filter(l => {
-      const sub = parseFloat(l.price_subtotal || 0);
-      return sub !== 0;
-    });
-    console.log(`[Odoo/adv] lines fetched (non-zero subtotal): ${lines.length}`);
+    const [invGroups, refundGroups] = await Promise.all([
+      groupByMoveSet(invIds,    'invoice'),
+      groupByMoveSet(refundIds, 'refund'),
+    ]);
+    console.log(`[Odoo/adv] invGroups=${invGroups.length} refundGroups=${refundGroups.length}`);
 
-    if (lines.length === 0) {
-      return NextResponse.json(emptyResp('No invoice lines returned (lines query worked but matched nothing — try a different year)', {
-        invoiceCount: invoiceIds.length, lineCount: 0, year, companyId,
+    // Merge: invoice positive, refund negative — keyed by product_id
+    const prodTotals = {};
+    const accumulate = (rows, sign) => {
+      for (const r of rows) {
+        if (!r.product_id || !Array.isArray(r.product_id)) continue;
+        const [pid, pname] = r.product_id;
+        if (!prodTotals[pid]) prodTotals[pid] = { pid, pname, revenue: 0, qty: 0 };
+        prodTotals[pid].revenue += sign * parseFloat(r.price_subtotal || 0);
+        prodTotals[pid].qty     += sign * parseFloat(r.quantity       || 0);
+      }
+    };
+    accumulate(invGroups,    1);
+    accumulate(refundGroups, -1);
+
+    const productIds = Object.keys(prodTotals).map(Number);
+    if (productIds.length === 0) {
+      return NextResponse.json(emptyResp('No product lines found in any invoice — every line is product-less manual entry', {
+        invoiceCount: invIds.length, refundCount: refundIds.length, year, companyId,
       }));
     }
 
-    // ── PHASE 3: product master ───────────────────────────────────────────────
-    const productIds = [...new Set(lines.map(l => l.product_id && l.product_id[0]).filter(Boolean))];
+    // ── PHASE 3: product master (categories, stock, cost) ─────────────────────
     let products = [];
     try {
-      if (productIds.length > 0) {
-        const chunks = chunkArray(productIds, 500);
-        const results = await Promise.all(chunks.map(c =>
-          exec('product.product', 'read', [c], {
-            fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
-                     'standard_price', 'list_price', 'type'],
-          }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
-        ));
-        products = results.flat();
-      }
+      const chunks = chunkArray(productIds, 500);
+      const results = await Promise.all(chunks.map(c =>
+        exec('product.product', 'read', [c], {
+          fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
+                   'standard_price', 'list_price', 'type'],
+        }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
+      ));
+      products = results.flat();
     } catch (e) {
-      console.error(`[Odoo/adv] products fetch failed (continuing): ${e.message}`);
+      console.error(`[Odoo/adv] product master fetch failed: ${e.message}`);
     }
     const productById = {};
     for (const p of products) productById[p.id] = p;
-    console.log(`[Odoo/adv] products fetched: ${products.length}/${productIds.length}`);
+    console.log(`[Odoo/adv] product master rows: ${products.length}/${productIds.length}`);
 
-    // ── PHASE 4: aggregate per product (with description fallback) ────────────
-    // Lines without product_id are aggregated by line.name so manual-entry
-    // invoices still surface as rows in Top Products. They land in an
-    // 'Other / Manual' category and have no margin (no cost source).
-    const prodAgg = {};
-    let linesWithProduct = 0, linesWithoutProduct = 0;
-    for (const line of lines) {
-      const d = line.date ? new Date(line.date) : null;
-      if (!d || d.getFullYear() !== year) continue;
-      const moveType = moveTypeById[line.move_id && line.move_id[0]];
-      const sign = moveType === 'out_refund' ? -1 : 1;
-
-      const pid = line.product_id && line.product_id[0];
-      let key, name, code, category, qtyAvailable, stdC, type;
-
-      if (pid) {
-        linesWithProduct++;
-        const prod = productById[pid] || {};
-        key  = `p:${pid}`;
-        name = prod.name || (line.product_id && line.product_id[1]) || `Product ${pid}`;
-        code = prod.default_code || '';
-        category = (prod.categ_id && prod.categ_id[1]) ? prod.categ_id[1] : 'Uncategorised';
-        qtyAvailable = parseFloat(prod.qty_available || 0);
-        stdC = parseFloat(prod.standard_price || 0);
-        type = prod.type || 'product';
-      } else {
-        linesWithoutProduct++;
-        const raw = (line.name || 'Manual entry').toString().trim().replace(/\s+/g, ' ');
-        const short = raw.length > 80 ? raw.slice(0, 80) + '…' : raw;
-        key  = `n:${short.toLowerCase()}`;
-        name = short;
-        code = '';
-        category = 'Other / Manual';
-        qtyAvailable = 0;
-        stdC = 0;
-        type = 'product';
-      }
-
-      const rev  = parseFloat(line.price_subtotal || 0) * sign;
-      const qty  = parseFloat(line.quantity || 0) * sign;
-      const cost = stdC * qty;
-
-      if (!prodAgg[key]) {
-        prodAgg[key] = { id: key, name, code, category, revenue: 0, qty: 0, cost: 0, qtyAvailable, stdPrice: stdC, type };
-      }
-      prodAgg[key].revenue += rev;
-      prodAgg[key].qty     += qty;
-      prodAgg[key].cost    += cost;
-    }
-    console.log(`[Odoo/adv] line breakdown — withProduct=${linesWithProduct} withoutProduct=${linesWithoutProduct}`);
-
-    const allProducts = Object.values(prodAgg)
-      .filter(p => p.revenue > 0)
-      .map(p => {
-        const gp     = p.revenue - p.cost;
-        const margin = p.revenue > 0 ? Math.round((gp / p.revenue) * 100) : 0;
+    // ── PHASE 4: shape output ────────────────────────────────────────────────
+    const allProducts = Object.values(prodTotals)
+      .filter(t => t.revenue > 0 || t.qty > 0)
+      .map(t => {
+        const prod   = productById[t.pid] || {};
+        const stdC   = parseFloat(prod.standard_price || 0);
+        const cost   = stdC * t.qty;
+        const gp     = t.revenue - cost;
+        const margin = t.revenue > 0 ? Math.round((gp / t.revenue) * 100) : 0;
         return {
-          title:        p.name,
-          code:         p.code,
-          category:     p.category,
-          revenue:      Math.round(p.revenue),
-          unitsSold:    Math.round(p.qty),
+          title:        prod.name || t.pname || `Product ${t.pid}`,
+          code:         prod.default_code || '',
+          category:     (prod.categ_id && prod.categ_id[1]) ? prod.categ_id[1] : 'Uncategorised',
+          revenue:      Math.round(t.revenue),
+          unitsSold:    Math.round(t.qty),
           grossProfit:  Math.round(gp),
           margin,
-          qtyAvailable: Math.round(p.qtyAvailable),
-          stdPrice:     p.stdPrice,
-          type:         p.type,
+          qtyAvailable: Math.round(parseFloat(prod.qty_available || 0)),
+          stdPrice:     stdC,
+          type:         prod.type || 'product',
         };
       });
 
@@ -280,12 +224,10 @@ export async function GET(request) {
     return NextResponse.json({
       topProducts, topCategories, fastMoving, slowMoving,
       diagnostics: {
-        invoiceCount:        invoiceIds.length,
-        lineCount:           lines.length,
-        linesWithProduct,
-        linesWithoutProduct,
-        productCount:        products.length,
-        productIds:          productIds.length,
+        invoiceCount: invIds.length,
+        refundCount:  refundIds.length,
+        productGroups: productIds.length,
+        productCount: products.length,
         year, companyId,
       },
     });
