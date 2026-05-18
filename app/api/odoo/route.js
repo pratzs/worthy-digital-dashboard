@@ -69,64 +69,82 @@ export async function GET(request) {
     });
     console.log(`[Odoo] company=${companyId} year=${year} invoices=${invoices.length}`);
 
-    // ── 3. Fetch invoice lines for the year (batched) ─────────────────────────
+    // Run heavy fetches in parallel; each stage fails independently so a slow/failed
+    // products call doesn't kill customers (and vice versa).
+    const chunkArray = (arr, size) => {
+      const out = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    };
+
+    // ── 3. Fetch invoice lines (parallel chunks) ──────────────────────────────
     const lineIds = [...new Set(invoices.flatMap(i => i.invoice_line_ids || []))];
     const lineFields = ['id', 'move_id', 'date', 'product_id', 'product_uom_id',
                         'quantity', 'price_subtotal', 'price_unit', 'price_total'];
     let lines = [];
-    if (lineIds.length > 0) {
-      // Fetch in chunks of 5000 to avoid request size limits
-      const chunkSize = 5000;
-      for (let i = 0; i < lineIds.length; i += chunkSize) {
-        const chunk = lineIds.slice(i, i + chunkSize);
-        const part = await exec('account.move.line', 'read', [chunk], { fields: lineFields }, 45000);
-        lines = lines.concat(part);
+    try {
+      if (lineIds.length > 0) {
+        const chunks = chunkArray(lineIds, 3000);
+        const results = await Promise.all(chunks.map(c =>
+          exec('account.move.line', 'read', [c], { fields: lineFields }, 40000).catch(e => {
+            console.error(`[Odoo] line chunk failed: ${e.message}`); return [];
+          })
+        ));
+        lines = results.flat();
       }
+    } catch (e) {
+      console.error(`[Odoo] lines fetch failed: ${e.message}`);
     }
-    console.log(`[Odoo] lines fetched: ${lines.length}`);
+    console.log(`[Odoo] lines fetched: ${lines.length}/${lineIds.length}`);
 
-    // ── 4. Fetch product details for sold products ────────────────────────────
+    // ── 4 + 5. Fetch products + partners in parallel ──────────────────────────
     const productIds = [...new Set(lines.map(l => l.product_id && l.product_id[0]).filter(Boolean))];
-    let products = [];
-    if (productIds.length > 0) {
-      const chunkSize = 1000;
-      for (let i = 0; i < productIds.length; i += chunkSize) {
-        const chunk = productIds.slice(i, i + chunkSize);
-        const part = await exec('product.product', 'read', [chunk], {
+    const partnerIds = [...new Set(invoices.map(i => i.partner_id && i.partner_id[0]).filter(Boolean))];
+
+    const fetchProducts = async () => {
+      if (productIds.length === 0) return [];
+      const chunks = chunkArray(productIds, 500);
+      const results = await Promise.all(chunks.map(c =>
+        exec('product.product', 'read', [c], {
           fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
                    'standard_price', 'list_price', 'type'],
-        }, 45000);
-        products = products.concat(part);
-      }
-    }
-    const productById = {};
-    for (const p of products) productById[p.id] = p;
-    console.log(`[Odoo] products fetched: ${products.length}`);
+        }, 30000).catch(e => { console.error(`[Odoo] product chunk failed: ${e.message}`); return []; })
+      ));
+      return results.flat();
+    };
 
-    // ── 5. Fetch partner records — keep customers only (customer_rank > 0) ────
-    const partnerIds = [...new Set(invoices.map(i => i.partner_id && i.partner_id[0]).filter(Boolean))];
-    let partners = [];
-    if (partnerIds.length > 0) {
-      const chunkSize = 500;
-      for (let i = 0; i < partnerIds.length; i += chunkSize) {
-        const chunk = partnerIds.slice(i, i + chunkSize);
+    const fetchPartners = async () => {
+      if (partnerIds.length === 0) return [];
+      const chunks = chunkArray(partnerIds, 500);
+      const results = await Promise.all(chunks.map(async c => {
         try {
-          const part = await exec('res.partner', 'read', [chunk], {
+          return await exec('res.partner', 'read', [c], {
             fields: ['id', 'name', 'customer_rank', 'supplier_rank', 'email', 'phone'],
           }, 30000);
-          partners = partners.concat(part);
         } catch (e) {
-          // Some Odoo versions may not expose these fields; fall back
-          const part = await exec('res.partner', 'read', [chunk], {
-            fields: ['id', 'name', 'email', 'phone'],
-          }, 30000);
-          partners = partners.concat(part);
+          try {
+            return await exec('res.partner', 'read', [c], {
+              fields: ['id', 'name', 'email', 'phone'],
+            }, 30000);
+          } catch (e2) {
+            console.error(`[Odoo] partner chunk failed: ${e2.message}`);
+            return [];
+          }
         }
-      }
-    }
+      }));
+      return results.flat();
+    };
+
+    const [products, partners] = await Promise.all([
+      fetchProducts().catch(e => { console.error(`[Odoo] products fetch failed: ${e.message}`); return []; }),
+      fetchPartners().catch(e => { console.error(`[Odoo] partners fetch failed: ${e.message}`); return []; }),
+    ]);
+
+    const productById = {};
+    for (const p of products) productById[p.id] = p;
     const partnerById = {};
     for (const p of partners) partnerById[p.id] = p;
-    console.log(`[Odoo] partners fetched: ${partners.length}`);
+    console.log(`[Odoo] products=${products.length}/${productIds.length} partners=${partners.length}/${partnerIds.length}`);
 
     // A partner is a real customer if customer_rank > 0,
     // OR if customer_rank field unavailable (older Odoo) AND not pure supplier.

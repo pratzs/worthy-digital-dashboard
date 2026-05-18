@@ -1455,122 +1455,91 @@ export default function EcommerceDashboard() {
         {activeStore.id === "worthy" && channelTab === "odoo" && (
           <>
             {/* Odoo: top customers, at-risk, lapsed */}
-            {(() => {
-              const odooCusts    = getOdooCustomers();
-              const odooTopCusts = odooCusts.slice(0, 20);
-              const odooAtRisk   = getOdooAtRisk().slice(0, 20);
-              const odooChrn     = getOdooLapsed().slice(0, 20);
-              if (odooCusts.length === 0) return null;
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
-                  <AdvancedTable theme={T} title="🏆 Top Customers — Odoo" subtitle="Ranked by net invoice revenue (customers only — suppliers excluded)"
-                    loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooTopCusts}
-                    columns={[
-                      { key: "name",    label: "Customer", color: T.text },
-                      { key: "orders",  label: "Orders",   align: "center", color: "#7C9EC9" },
-                      { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                      { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-                      { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
-                    ]}
-                    aiContext="Odoo top customers"
-                    aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status — call them this week."
-                  />
-                  {odooAtRisk.length > 0 && (
-                    <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 days)" subtitle="Overdue for reorder — call before they lapse"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooAtRisk.map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orders }))}
-                      columns={atRiskColumns} aiContext="at-risk Odoo customers"
-                      aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
-                    />
-                  )}
-                  {odooChrn.length > 0 && (
-                    <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 days)" subtitle="Stopped ordering — win-back priority"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooChrn.map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orders }))}
-                      columns={churnedColumns} aiContext="lapsed Odoo customers"
-                      aiExtra="Likely lost to DKSH, Gilmours, or Stock4Shop. Recommend a visit + offer for the top 5 by revenue."
-                    />
-                  )}
-                </div>
-              );
-            })()}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
+              <AdvancedTable theme={T} title="🏆 Top Customers — Odoo" subtitle="Ranked by net invoice revenue (customers only — suppliers excluded)"
+                loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
+                columns={[
+                  { key: "name",    label: "Customer", color: T.text },
+                  { key: "orders",  label: "Orders",   align: "center", color: "#7C9EC9" },
+                  { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                  { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+                  { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
+                ]}
+                aiContext="Odoo top customers"
+                aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status — call them this week."
+              />
+              <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 days)" subtitle="Overdue for reorder — call before they lapse"
+                loading={isLoading(selectedYear)} currency={activeStore.currency}
+                data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orders }))}
+                columns={atRiskColumns} aiContext="at-risk Odoo customers"
+                aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
+              />
+              <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 days)" subtitle="Stopped ordering — win-back priority"
+                loading={isLoading(selectedYear)} currency={activeStore.currency}
+                data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orders }))}
+                columns={churnedColumns} aiContext="lapsed Odoo customers"
+                aiExtra="Likely lost to DKSH, Gilmours, or Stock4Shop. Recommend a visit + offer for the top 5 by revenue."
+              />
+            </div>
 
             {/* Odoo: top products + top categories */}
-            {(() => {
-              const odooProducts   = getOdooTopProducts();
-              const odooCategories = getOdooTopCategories();
-              if (odooProducts.length === 0 && odooCategories.length === 0) return null;
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                  {odooCategories.length > 0 && (
-                    <AdvancedTable theme={T} title="📂 Top Categories — Odoo" subtitle="Where the revenue actually comes from"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooCategories.slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
-                      columns={[
-                        { key: "name",         label: "Category",     color: T.text },
-                        { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
-                        { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
-                        { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                        { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
-                      ]}
-                      aiContext="top Odoo categories"
-                      aiExtra="Which categories drive the business? Flag any with margin < 15% — those need a price review."
-                    />
-                  )}
-                  {odooProducts.length > 0 && (
-                    <AdvancedTable theme={T} title="🥇 Top Products — Odoo" subtitle="High performers by net revenue"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={odooProducts.slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
-                      columns={[
-                        { key: "name",     label: "Product",  color: T.text },
-                        { key: "category", label: "Category", color: T.textMuted },
-                        { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
-                        { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                        { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
-                      ]}
-                      aiContext="top Odoo products"
-                      aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
-                    />
-                  )}
-                </div>
-              );
-            })()}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+              <AdvancedTable theme={T} title="📂 Top Categories — Odoo" subtitle="Where the revenue actually comes from"
+                loading={isLoading(selectedYear)} currency={activeStore.currency}
+                data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
+                columns={[
+                  { key: "name",         label: "Category",     color: T.text },
+                  { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
+                  { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
+                  { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                  { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                ]}
+                aiContext="top Odoo categories"
+                aiExtra="Which categories drive the business? Flag any with margin < 15% — those need a price review."
+              />
+              <AdvancedTable theme={T} title="🥇 Top Products — Odoo" subtitle="High performers by net revenue"
+                loading={isLoading(selectedYear)} currency={activeStore.currency}
+                data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                columns={[
+                  { key: "name",     label: "Product",  color: T.text },
+                  { key: "category", label: "Category", color: T.textMuted },
+                  { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
+                  { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                  { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                ]}
+                aiContext="top Odoo products"
+                aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
+              />
+            </div>
 
             {/* Odoo: fast & slow movers */}
-            {(() => {
-              const fast = getOdooFastMoving();
-              const slow = getOdooSlowMoving();
-              if (fast.length === 0 && slow.length === 0) return null;
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                  {fast.length > 0 && (
-                    <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs — Odoo" subtitle="Highest velocity — keep stocked & push wider"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={fast.slice(0, 20)}
-                      columns={[
-                        { key: "name",         label: "Product",     color: T.text },
-                        { key: "category",     label: "Category",    color: T.textMuted },
-                        { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
-                        { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
-                        { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                        { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
-                      ]}
-                      aiContext="fast-moving Odoo SKUs"
-                      aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
-                    />
-                  )}
-                  {slow.length > 0 && (
-                    <AdvancedTable theme={T} title="🐌 Slow-Moving SKUs — Odoo" subtitle="Capital sitting on the shelf — clear, bundle, or discontinue"
-                      loading={isLoading(selectedYear)} currency={activeStore.currency} data={slow.slice(0, 20)}
-                      columns={[
-                        { key: "name",          label: "Product",       color: T.text },
-                        { key: "category",      label: "Category",      color: T.textMuted },
-                        { key: "currentStock",  label: "On Hand",       align: "right", color: T.textSub },
-                        { key: "qtySold",       label: "Units Sold",    align: "right", color: T.textMuted },
-                        { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
-                      ]}
-                      aiContext="slow-moving Odoo SKUs"
-                      aiExtra="Top 3 by capital tied — recommend specific clearance pricing or rep push. Anything with an expiry risk?"
-                    />
-                  )}
-                </div>
-              );
-            })()}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
+              <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs — Odoo" subtitle="Highest velocity — keep stocked & push wider"
+                loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
+                columns={[
+                  { key: "name",         label: "Product",     color: T.text },
+                  { key: "category",     label: "Category",    color: T.textMuted },
+                  { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
+                  { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
+                  { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                  { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                ]}
+                aiContext="fast-moving Odoo SKUs"
+                aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
+              />
+              <AdvancedTable theme={T} title="🐌 Slow-Moving SKUs — Odoo" subtitle="Capital sitting on the shelf — clear, bundle, or discontinue"
+                loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
+                columns={[
+                  { key: "name",          label: "Product",       color: T.text },
+                  { key: "category",      label: "Category",      color: T.textMuted },
+                  { key: "currentStock",  label: "On Hand",       align: "right", color: T.textSub },
+                  { key: "qtySold",       label: "Units Sold",    align: "right", color: T.textMuted },
+                  { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
+                ]}
+                aiContext="slow-moving Odoo SKUs"
+                aiExtra="Top 3 by capital tied — recommend specific clearance pricing or rep push. Anything with an expiry risk?"
+              />
+            </div>
 
             {/* Odoo salesperson breakdown — single table with view toggle */}
             <SalesRepBreakdown
