@@ -80,7 +80,7 @@ export async function GET(request) {
         params: {
           service: 'object', method: 'execute_kw',
           args: [db, uid, password, 'account.move', 'search_read', [domain], {
-            fields: ['invoice_date', 'amount_untaxed', 'amount_total', 'move_type', 'invoice_line_ids'],
+            fields: ['invoice_date', 'amount_untaxed', 'amount_total', 'move_type', 'invoice_line_ids', 'invoice_user_id'],
             limit:  5000,
           }],
         },
@@ -150,7 +150,56 @@ export async function GET(request) {
       }
     }
 
-    return NextResponse.json({ year, company: companyId, monthly, weekly });
+    // ── 5. Per-salesperson aggregates ─────────────────────────────────────────
+    const repData = {};
+    for (const inv of invoices) {
+      if (!inv.invoice_date) continue;
+      const d = new Date(inv.invoice_date);
+      if (d.getFullYear() !== year) continue;
+      const mi       = d.getMonth();
+      const weekNum  = Math.ceil(d.getDate() / 7);
+      const isCredit = inv.move_type === 'out_refund';
+      const rev      = parseFloat(inv.amount_untaxed || 0) * (isCredit ? -1 : 1);
+      const repName  = (inv.invoice_user_id && inv.invoice_user_id[1]) ? inv.invoice_user_id[1] : 'Unassigned';
+
+      if (!repData[repName]) {
+        repData[repName] = {
+          monthly: Array.from({ length: 12 }, () => ({ revenue: 0, orders: 0 })),
+          weeklyBuckets: {},
+        };
+      }
+      repData[repName].monthly[mi].revenue += rev;
+      if (!isCredit) repData[repName].monthly[mi].orders++;
+      const wkey = `${mi}_${weekNum}`;
+      if (!repData[repName].weeklyBuckets[wkey]) repData[repName].weeklyBuckets[wkey] = { revenue: 0, orders: 0 };
+      repData[repName].weeklyBuckets[wkey].revenue += rev;
+      if (!isCredit) repData[repName].weeklyBuckets[wkey].orders++;
+    }
+
+    const salespeople = Object.entries(repData).map(([name, d]) => {
+      const totalRev = d.monthly.reduce((s, m) => s + m.revenue, 0);
+      const totalOrd = d.monthly.reduce((s, m) => s + m.orders, 0);
+      return { name, revenue: Math.round(totalRev), orders: totalOrd, aov: totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0 };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    const salespeopleMonthly = Object.entries(repData).map(([name, d]) => ({
+      name,
+      months: d.monthly.map((m, mi) => ({ month: MONTH_NAMES[mi], revenue: Math.round(m.revenue), orders: m.orders })),
+    })).sort((a, b) => b.months.reduce((s, m) => s + m.revenue, 0) - a.months.reduce((s, m) => s + m.revenue, 0));
+
+    const salespeopleWeekly = Object.entries(repData).map(([name, d]) => {
+      const wkly = [];
+      for (let mi = 0; mi < 12; mi++) {
+        for (let w = 1; w <= 5; w++) {
+          if ((w - 1) * 7 + 1 > getDaysInMonth(year, mi)) continue;
+          const b = d.weeklyBuckets[`${mi}_${w}`];
+          wkly.push({ month: mi, week: w, revenue: b ? Math.round(b.revenue) : 0, orders: b ? b.orders : 0 });
+        }
+      }
+      return { name, weekly: wkly };
+    }).sort((a, b) => b.weekly.reduce((s, w) => s + w.revenue, 0) - a.weekly.reduce((s, w) => s + w.revenue, 0));
+
+    return NextResponse.json({ year, company: companyId, monthly, weekly, salespeople, salespeopleMonthly, salespeopleWeekly });
 
   } catch (err) {
     console.error(`[Odoo] company=${companyId} year=${year} error:`, err.message);

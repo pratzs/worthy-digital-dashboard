@@ -75,6 +75,8 @@ export async function GET(request) {
     // Weekly revenue buckets: key = "${monthIdx}_${weekNum}"
     const weeklyRevBuckets = {};
 
+    const repData = {};
+
     for (const row of rows) {
       const d = parseDate(row.INVOICEDATE);
       if (!d || d.getFullYear() !== year) continue;
@@ -94,6 +96,21 @@ export async function GET(request) {
       weeklyRevBuckets[wkey].revenue        += rev;
       weeklyRevBuckets[wkey].orders         += 1;
       weeklyRevBuckets[wkey].totalDiscounts += disc;
+
+      // Per-salesperson aggregation
+      const repName = (row.SALESPERSON && String(row.SALESPERSON).trim()) || 'Unassigned';
+      if (!repData[repName]) {
+        repData[repName] = {
+          monthly: Array.from({ length: 12 }, () => ({ revenue: 0, orders: 0 })),
+          weeklyBuckets: {},
+        };
+      }
+      repData[repName].monthly[mi].revenue += rev;
+      repData[repName].monthly[mi].orders  += 1;
+      const rwkey = `${mi}_${weekNum}`;
+      if (!repData[repName].weeklyBuckets[rwkey]) repData[repName].weeklyBuckets[rwkey] = { revenue: 0, orders: 0 };
+      repData[repName].weeklyBuckets[rwkey].revenue += rev;
+      repData[repName].weeklyBuckets[rwkey].orders  += 1;
     }
 
     for (const m of monthly) {
@@ -130,7 +147,30 @@ export async function GET(request) {
       }
     }
 
-    const salespeople = [];
+    const getDaysInMonthO = (y, m) => new Date(y, m + 1, 0).getDate();
+
+    const salespeople = Object.entries(repData).map(([name, d]) => {
+      const totalRev = d.monthly.reduce((s, m) => s + m.revenue, 0);
+      const totalOrd = d.monthly.reduce((s, m) => s + m.orders,  0);
+      return { name, revenue: Math.round(totalRev), orders: totalOrd, aov: totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0 };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    const salespeopleMonthly = Object.entries(repData).map(([name, d]) => ({
+      name,
+      months: d.monthly.map((m, mi) => ({ month: MONTH_NAMES[mi], revenue: Math.round(m.revenue), orders: m.orders })),
+    })).sort((a, b) => b.months.reduce((s, m) => s + m.revenue, 0) - a.months.reduce((s, m) => s + m.revenue, 0));
+
+    const salespeopleWeekly = Object.entries(repData).map(([name, d]) => {
+      const wkly = [];
+      for (let mi = 0; mi < 12; mi++) {
+        for (let w = 1; w <= 5; w++) {
+          if ((w - 1) * 7 + 1 > getDaysInMonthO(year, mi)) continue;
+          const b = d.weeklyBuckets[`${mi}_${w}`];
+          wkly.push({ month: mi, week: w, revenue: b ? Math.round(b.revenue) : 0, orders: b ? b.orders : 0 });
+        }
+      }
+      return { name, weekly: wkly };
+    }).sort((a, b) => b.weekly.reduce((s, w) => s + w.revenue, 0) - a.weekly.reduce((s, w) => s + w.revenue, 0));
 
     return NextResponse.json({
       monthly,
@@ -138,6 +178,8 @@ export async function GET(request) {
       monthlyOnline: monthly,
       weekly,
       salespeople,
+      salespeopleMonthly,
+      salespeopleWeekly,
     });
 
   } catch (err) {
