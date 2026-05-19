@@ -370,7 +370,10 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
 };
 
 // ── Sales Rep Breakdown — ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, loading, currency, weeklyMonth, onWeeklyMonthChange, T, accent }) => {
+const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, T, accent }) => {
+  // Merge margin numbers (cost, GP, marginPct) onto each rep by name
+  const marginByName = {};
+  for (const m of (repMargins || [])) marginByName[m.name] = m;
   const [repView, setRepView] = useState("annual");
 
   const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev > 0 ? 600 : 400 });
@@ -378,13 +381,20 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   const headStyle    = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
   const numStyle     = (v) => ({ padding: "10px 12px", textAlign: "right", color: T.textSub, fontSize: 12, whiteSpace: "nowrap" });
 
-  // Annual rows (summary)
-  const annualRows = (salespeople || []).map(s => ({
-    name:    s.name,
-    orders:  s.orders,
-    revenue: Math.round(s.revenue),
-    aov:     s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
-  }));
+  // Annual rows (summary) — merged with cost/margin when available
+  const annualRows = (salespeople || []).map(s => {
+    const m = marginByName[s.name];
+    return {
+      name:    s.name,
+      orders:  s.orders,
+      revenue: Math.round(s.revenue),
+      aov:     s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
+      cost:    m ? Math.round(m.cost || 0) : null,
+      grossProfit: m ? Math.round(m.grossProfit || 0) : null,
+      marginPct:   m ? m.marginPct : null,
+    };
+  });
+  const hasMargin = annualRows.some(r => r.marginPct !== null && r.marginPct !== undefined);
 
   // Monthly pivot rows: cols = Jan..Dec + Total
   const monthlyPivot = salespeopleMonthly || [];
@@ -437,11 +447,13 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 <th style={headStyle}>Orders</th>
                 <th style={headStyle}>Revenue</th>
                 <th style={headStyle}>Avg Order</th>
+                {hasMargin && <th style={headStyle}>Gross Profit</th>}
+                {hasMargin && <th style={headStyle}>Margin</th>}
               </tr>
             </thead>
             <tbody>
               {annualRows.length === 0 ? (
-                <tr><td colSpan={4} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                <tr><td colSpan={hasMargin ? 6 : 4} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
                   {loading ? "Loading…" : "No sales rep data"}
                 </td></tr>
               ) : annualRows.map((r, i) => (
@@ -450,6 +462,16 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   <td style={numStyle()}>{r.orders.toLocaleString()}</td>
                   <td style={{ ...cellStyle(r.revenue), color: accent, fontWeight: 700 }}>{fmtK(r.revenue, currency)}</td>
                   <td style={cellStyle(r.aov)}>{fmtK(r.aov, currency)}</td>
+                  {hasMargin && (
+                    <td style={{ ...cellStyle(r.grossProfit || 0), color: (r.grossProfit ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                      {r.grossProfit !== null ? fmtK(r.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                    </td>
+                  )}
+                  {hasMargin && (
+                    <td style={{ ...cellStyle(0), color: (r.marginPct ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
+                      {r.marginPct !== null && r.marginPct !== undefined ? `${r.marginPct}%` : <span style={{ color: T.textLabel }}>—</span>}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -736,6 +758,7 @@ export default function EcommerceDashboard() {
         fastMoving:    json.fastMoving    || [],
         slowMoving:    json.slowMoving    || [],
         monthlyCost:   json.monthlyCost   || [],
+        repMargins:    json.repMargins    || [],
         advDiagnostics: json.diagnostics || null,
       };
     } catch (e) {
@@ -794,7 +817,7 @@ export default function EcommerceDashboard() {
           const mappedChurned     = (data.churned    || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
           const mappedAtRisk      = (data.atRisk     || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
           const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: c.firstOrder || null }));
-          setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], metrics: data.metrics || {} }, prev: {} });
+          setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], repMargins: data.repMargins || [], metrics: data.metrics || {} }, prev: {} });
         } else {
           const channelParam = channelTab !== "odoo" ? `&channel=${channelTab}` : "";
           const res  = await fetch(`/api/shopify/advanced?startDate=${advStartDate}&endDate=${advEndDate}${channelParam}`, { cache: "no-store" });
@@ -890,6 +913,7 @@ export default function EcommerceDashboard() {
   const getOdooTopCategories      = () => cacheRef.current[odooCacheKey(selectedYear)]?.topCategories      || [];
   const getOdooFastMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.fastMoving         || [];
   const getOdooSlowMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.slowMoving         || [];
+  const getOdooRepMargins         = () => cacheRef.current[odooCacheKey(selectedYear)]?.repMargins         || [];
   const isOdooAdvLoading          = () => {
     const cid = currentOdooCid();
     return cid ? !!loadingRef.current[`odoo:${cid}:${selectedYear}:adv`] : false;
@@ -1616,6 +1640,7 @@ export default function EcommerceDashboard() {
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
               salespeopleWeekly={getOdooSalespeopleWeekly()}
+              repMargins={getOdooRepMargins()}
               loading={isLoading(selectedYear)}
               currency={activeStore.currency}
               weeklyMonth={weeklyMonth}
@@ -1682,6 +1707,7 @@ export default function EcommerceDashboard() {
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthly()}
                   salespeopleWeekly={getLuxeSalespeopleWeekly()}
+                  repMargins={advancedData.curr?.repMargins || []}
                   loading={isLoading(selectedYear)}
                   currency={activeStore.currency}
                   weeklyMonth={weeklyMonth}

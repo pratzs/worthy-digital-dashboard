@@ -78,18 +78,20 @@ export async function GET(request) {
       return NextResponse.json(emptyResp(null, { invoiceCount: 0, year, companyId }));
     }
 
-    // Fetch move_type + invoice_date per invoice once (cheap — small payload).
-    // invoice_date is needed so we can bucket line cost into months below.
+    // Fetch move_type + invoice_date + invoice_user_id per invoice once.
+    // invoice_user_id needed so we can roll cost up per sales rep.
     const moveTypeById = {};
     const moveDateById = {};
+    const moveRepById  = {};
     try {
-      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type', 'invoice_date'] }, 20000);
+      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type', 'invoice_date', 'invoice_user_id'] }, 20000);
       for (const m of moves) {
         moveTypeById[m.id] = m.move_type;
         moveDateById[m.id] = m.invoice_date;
+        moveRepById[m.id]  = (m.invoice_user_id && m.invoice_user_id[1]) ? m.invoice_user_id[1] : 'Unassigned';
       }
     } catch (e) {
-      console.error(`[Odoo/adv] move_type read failed (assuming all out_invoice): ${e.message}`);
+      console.error(`[Odoo/adv] moves read failed (assuming all out_invoice): ${e.message}`);
     }
 
     // ── PHASE 2: invoice lines via search_read in tight chunks ────────────────
@@ -102,7 +104,11 @@ export async function GET(request) {
     // Minimal field set. purchase_price would be ideal but it's not on
     // account.move.line in this Odoo instance (requires the sale_margin
     // module). Cost comes from product.template.standard_price instead.
-    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal'];
+    // product_uom_id needed so we can convert line qty (e.g. "Case of 24")
+    // into the same UoM the template's standard_price is stored against
+    // (e.g. "Each") — otherwise cost is multiplied by the case-pack factor
+    // and margin comes out wildly negative.
+    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal', 'product_uom_id'];
     const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
     const idChunks = chunkArray(sanitizedIds, 500);
 
@@ -205,7 +211,7 @@ export async function GET(request) {
         const tResults = await parallelLimit(
           tChunks.map(c => () =>
             exec('product.template', 'read', [c], {
-              fields: ['id', 'standard_price', 'categ_id'],
+              fields: ['id', 'standard_price', 'categ_id', 'uom_id'],
             }, 25000).catch(e => { console.error(`[Odoo/adv] template chunk failed: ${e.message}`); return []; })
           ),
           8
@@ -231,10 +237,69 @@ export async function GET(request) {
         type: v.type,
         categ_id: tmpl?.categ_id || null,
         standard_price: parseFloat(tmpl?.standard_price || 0),
+        // tmpl_uom_id is the UoM standard_price is denominated in
+        tmpl_uom_id: tmpl?.uom_id && tmpl.uom_id[0],
       };
     }
     const costForProduct = (pid) => productById[pid]?.standard_price || 0;
     const products = variants; // for diagnostics
+
+    // Fetch every UoM we'll need so we can convert line qty (in line.product_uom_id)
+    // into product.uom_id, the unit standard_price is stored against.
+    const uomFactorById = {};
+    try {
+      const allUoms = await exec('uom.uom', 'search_read', [[]], { fields: ['id', 'factor'] }, 15000)
+        .catch(e => { console.error(`[Odoo/adv] uom search failed: ${e.message}`); return []; });
+      for (const u of allUoms) {
+        uomFactorById[u.id] = parseFloat(u.factor) || 1;
+      }
+      console.log(`[Odoo/adv] uoms loaded: ${allUoms.length}`);
+    } catch (e) {
+      console.error(`[Odoo/adv] uom fetch failed (using 1.0 factors): ${e.message}`);
+    }
+    // Convert a quantity from line's UoM into the product's base UoM.
+    // Odoo factor semantics: 1 reference unit = factor × this_unit.
+    // → qty_in_target = qty_in_source × source.factor / target.factor.
+    const convertQty = (qty, fromUomId, toUomId) => {
+      if (!fromUomId || !toUomId || fromUomId === toUomId) return qty;
+      const fromF = uomFactorById[fromUomId];
+      const toF   = uomFactorById[toUomId];
+      if (!fromF || !toF) return qty;
+      return qty * fromF / toF;
+    };
+
+    // ── PHASE 4b: re-pass lines for UoM-converted cost + per-rep margins ──────
+    // PHASE 3 summed qty in the LINE UoM (e.g. cases) which is the right unit
+    // for the "Units Sold" display. For COST we need qty in the product's
+    // base UoM (uom_id, where standard_price is denominated). We also build
+    // per-rep totals here in the same loop.
+    const prodCostByPid = {}; // pid → total cost (rev-sign-flipped, UoM-converted)
+    const repAgg = {};        // rep name → { revenue, cost, marginableRev }
+    for (const line of lines) {
+      const pid = line.product_id && line.product_id[0];
+      const moveId = line.move_id && line.move_id[0];
+      const moveType = moveTypeById[moveId];
+      const sign = moveType === 'out_refund' ? -1 : 1;
+      const qtyLine = parseFloat(line.quantity || 0) * sign;
+      const rev     = parseFloat(line.price_subtotal || 0) * sign;
+      const repName = moveRepById[moveId] || 'Unassigned';
+
+      if (!repAgg[repName]) repAgg[repName] = { revenue: 0, cost: 0, marginableRev: 0 };
+      repAgg[repName].revenue += rev;
+
+      if (!pid) continue;
+      const stdC = costForProduct(pid);
+      if (!stdC) continue;
+
+      const prod = productById[pid] || {};
+      const lineUomId = line.product_uom_id && line.product_uom_id[0];
+      const qtyInBaseUom = convertQty(qtyLine, lineUomId, prod.tmpl_uom_id);
+      const cost = stdC * qtyInBaseUom;
+
+      prodCostByPid[pid] = (prodCostByPid[pid] || 0) + cost;
+      repAgg[repName].cost          += cost;
+      repAgg[repName].marginableRev += rev;
+    }
 
     // ── PHASE 5: shape output ────────────────────────────────────────────────
     const allProducts = Object.values(prodAgg)
@@ -242,7 +307,7 @@ export async function GET(request) {
       .map(t => {
         const prod   = productById[t.pid] || {};
         const stdC   = costForProduct(t.pid) || parseFloat(prod.standard_price || 0);
-        const cost   = stdC * t.qty;
+        const cost   = prodCostByPid[t.pid] || 0;
         const gp     = t.revenue - cost;
         const margin = t.revenue > 0 ? Math.round((gp / t.revenue) * 100) : 0;
         return {
@@ -328,22 +393,21 @@ export async function GET(request) {
       const mi = d.getMonth();
 
       const sign     = moveTypeById[moveId] === 'out_refund' ? -1 : 1;
-      const qty      = parseFloat(line.quantity || 0) * sign;
+      const qtyLine  = parseFloat(line.quantity || 0) * sign;
       const rev      = parseFloat(line.price_subtotal || 0) * sign;
 
       const pid = line.product_id && line.product_id[0];
       const unitCost = pid ? costForProduct(pid) : 0;
-      const cost = unitCost * qty;
+      if (unitCost <= 0) continue;
 
-      // Only fold revenue + cost together when we have a real cost.
-      // Lines with no purchase_price are excluded from BOTH sides so
-      // margin% reflects only the lines we can actually cost — matching
-      // Odoo's own margin reports.
-      if (unitCost > 0) {
-        monthlyCost[mi].marginableRevenue += rev;
-        monthlyCost[mi].totalCost         += cost;
-        monthlyCost[mi].hasCostData = true;
-      }
+      const prod = productById[pid] || {};
+      const lineUomId = line.product_uom_id && line.product_uom_id[0];
+      const qtyInBaseUom = convertQty(qtyLine, lineUomId, prod.tmpl_uom_id);
+      const cost = unitCost * qtyInBaseUom;
+
+      monthlyCost[mi].marginableRevenue += rev;
+      monthlyCost[mi].totalCost         += cost;
+      monthlyCost[mi].hasCostData = true;
     }
     for (const m of monthlyCost) {
       m.totalCost         = Math.round(m.totalCost);
@@ -354,9 +418,24 @@ export async function GET(request) {
                               : null;
     }
 
+    // ── PHASE 7: per-rep margins ──────────────────────────────────────────────
+    const repMargins = Object.entries(repAgg).map(([name, r]) => {
+      const cost   = Math.round(r.cost);
+      const margRev = Math.round(r.marginableRev);
+      const gp     = margRev - cost;
+      return {
+        name,
+        revenue:           Math.round(r.revenue),
+        cost,
+        marginableRevenue: margRev,
+        grossProfit:       gp,
+        marginPct:         margRev > 0 ? Math.round((gp / margRev) * 100) : null,
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+
     return NextResponse.json({
       topProducts, topCategories, fastMoving, slowMoving,
-      monthlyCost,
+      monthlyCost, repMargins,
       diagnostics: {
         invoiceCount:   invoiceIds.length,
         rawLineCount:   rawLines.length,

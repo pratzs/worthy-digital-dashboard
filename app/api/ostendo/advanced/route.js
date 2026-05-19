@@ -599,6 +599,45 @@ export async function GET(request) {
     // Return empty — will populate once a full year of data exists.
     const declining = [];
 
+    // ── PER-REP MARGINS ──────────────────────────────────────────────────────
+    // Map invoice number → SALESPERSON via header rows, with the same code-to-
+    // name resolution used by the main /api/ostendo route.
+    const REP_NAMES = {
+      '410': 'Kevin', '420': 'Michelle', '430': 'Keith',
+      '450': 'Nelson Office Online Sales', '460': 'Chris',
+      '470': 'Lynette', '490': 'Leith',
+    };
+    const resolveRep = (raw) => {
+      if (!raw) return 'Unassigned';
+      const code = String(raw).trim();
+      const base = code.replace(/-\d+$/, '');
+      return REP_NAMES[base] || REP_NAMES[code] || code;
+    };
+    const invToRep = {};
+    for (const inv of filteredCurrInvRows) {
+      const num = getInvNum(inv);
+      if (num) invToRep[String(num).trim()] = resolveRep(inv.SALESPERSON);
+    }
+    const repAgg = {};
+    for (const line of currLineRows) {
+      const num = String(line.INVOICENUMBER ?? line.INVOICENO ?? '').trim();
+      const rep = invToRep[num] || 'Unassigned';
+      if (!repAgg[rep]) repAgg[rep] = { revenue: 0, cost: 0 };
+      repAgg[rep].revenue += lineNet(line);
+      repAgg[rep].cost    += lineCostTotal(line);
+    }
+    const repMargins = Object.entries(repAgg).map(([name, r]) => {
+      const cost = Math.round(r.cost);
+      const rev  = Math.round(r.revenue);
+      const gp   = rev - cost;
+      return {
+        name, revenue: rev, cost,
+        marginableRevenue: rev,
+        grossProfit:       gp,
+        marginPct:         rev > 0 ? Math.round((gp / rev) * 100) : null,
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+
     return NextResponse.json({
       products,
       categories,
@@ -609,6 +648,7 @@ export async function GET(request) {
       clv,
       declining,
       decliningMoM,
+      repMargins,
       metrics: {
         totalRevenue:    Math.round(filteredCurrInvRows.reduce((s, r) => s + parseNum(r.INVOICENETTAMOUNT ?? r.INVOICETOTALAMOUNT), 0)),
         totalOrders:     filteredCurrInvRows.length,
