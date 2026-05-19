@@ -1,6 +1,13 @@
 export const metadata = {
-  title: "Worthy Products · Analytics",
-  description: "Shopify analytics dashboard for Worthy Products NZ",
+  title: "Worthy - Accounting Dashboard",
+  description: "Internal accounting dashboard for Worthy — restricted access.",
+  icons: {
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.png",
+    apple:    "/favicon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
