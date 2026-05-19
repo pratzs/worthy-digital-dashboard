@@ -87,7 +87,7 @@ export async function GET(request) {
         const results = await Promise.all(chunks.map(async c => {
           try {
             return await exec('res.partner', 'read', [c], {
-              fields: ['id', 'name', 'customer_rank', 'supplier_rank', 'email', 'phone'],
+              fields: ['id', 'name', 'customer_rank', 'supplier_rank', 'email', 'phone', 'is_company', 'create_date'],
             }, 25000);
           } catch (e) {
             try {
@@ -129,25 +129,18 @@ export async function GET(request) {
     const monthly          = emptyYear();
     const weeklyRevBuckets = {};
 
-    // Track each customer's FIRST invoice month this year. A customer is
-    // counted as "new" in the earliest month they appear.
-    const partnerFirstMonth = {}; // pid → mi
-
-    // Pre-pass: walk invoices in date order (only out_invoice — credit notes
-    // shouldn't count as a new-customer trigger).
-    const ordered = [...invoices]
-      .filter(inv => inv.invoice_date && new Date(inv.invoice_date).getFullYear() === year)
-      .filter(inv => inv.move_type !== 'out_refund')
-      .sort((a, b) => new Date(a.invoice_date) - new Date(b.invoice_date));
-    for (const inv of ordered) {
-      const pid = inv.partner_id && inv.partner_id[0];
-      if (!pid) continue;
-      if (!(pid in partnerFirstMonth)) {
-        partnerFirstMonth[pid] = new Date(inv.invoice_date).getMonth();
-      }
-    }
-    for (const mi of Object.values(partnerFirstMonth)) {
-      monthly[mi].newCustomers += 1;
+    // New customers = company partners whose Odoo create_date lands in this
+    // month and this year (i.e. fresh accounts that didn't exist before).
+    // Individuals (is_company=false) and partners with no create_date are
+    // excluded.
+    for (const p of partners) {
+      if (!p.create_date) continue;
+      if (p.is_company === false) continue; // skip individuals; null/true stays in
+      const d = new Date(p.create_date);
+      if (isNaN(d) || d.getFullYear() !== year) continue;
+      // Must also actually be a customer of THIS company (i.e. they invoiced)
+      if (!isCustomerPartner(p.id)) continue;
+      monthly[d.getMonth()].newCustomers += 1;
     }
 
     for (const inv of invoices) {

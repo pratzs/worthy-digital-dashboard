@@ -173,61 +173,68 @@ export async function GET(request) {
 
     const productIds = Object.keys(prodAgg).map(Number);
 
-    // ── PHASE 4: product master via product.template (single call) ────────────
-    // We fetch product.template directly (not product.product) because:
-    //   1. standard_price on product.product is a company-dependent property
-    //      that often resolves to 0 over JSON-RPC — the real cost lives on
-    //      the template.
-    //   2. product.template carries name / default_code / categ_id /
-    //      qty_available / list_price / type all on the same record.
-    //
-    // We resolve "variant id → template" via the template's
-    // product_variant_ids O2M field, in chunks so the search domain stays
-    // reasonable. ONE network round trip per chunk replaces the previous
-    // two (product.product + product.template).
-    const variantToTemplate = {};
-    let templates = [];
+    // ── PHASE 4: product.product → product.template (two reads-by-id) ────────
+    // Reads by id are the fastest query type in Odoo. The previous
+    // search_read with product_variant_ids IN (...) was forcing a scan
+    // across every template and timing out.
+    const variantStart = Date.now();
+    let variants = [];
     try {
       const vChunks = chunkArray(productIds, 500);
-      const tResults = await parallelLimit(
+      const vResults = await parallelLimit(
         vChunks.map(c => () =>
-          exec('product.template', 'search_read',
-            [[['product_variant_ids', 'in', c]]],
-            {
-              fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
-                       'standard_price', 'list_price', 'type', 'product_variant_ids'],
-              limit: 5000,
-            },
-            25000
-          ).catch(e => { console.error(`[Odoo/adv] template chunk failed: ${e.message}`); return []; })
+          exec('product.product', 'read', [c], {
+            fields: ['id', 'name', 'default_code', 'qty_available', 'list_price',
+                     'type', 'product_tmpl_id'],
+          }, 25000).catch(e => { console.error(`[Odoo/adv] variant chunk failed: ${e.message}`); return []; })
         ),
         8
       );
-      templates = tResults.flat();
+      variants = vResults.flat();
     } catch (e) {
-      console.error(`[Odoo/adv] template fetch failed (continuing with empty costs): ${e.message}`);
+      console.error(`[Odoo/adv] variants fetch failed (continuing): ${e.message}`);
     }
-    // Dedupe templates (chunked search can return the same template twice)
-    const seenTmpl = new Set();
-    const uniqueTemplates = [];
-    for (const t of templates) {
-      if (seenTmpl.has(t.id)) continue;
-      seenTmpl.add(t.id);
-      uniqueTemplates.push(t);
-    }
-    for (const t of uniqueTemplates) {
-      for (const vid of (t.product_variant_ids || [])) {
-        variantToTemplate[vid] = t;
-      }
-    }
-    console.log(`[Odoo/adv] templates loaded: ${uniqueTemplates.length}, variants mapped: ${Object.keys(variantToTemplate).length}/${productIds.length}`);
+    console.log(`[Odoo/adv] variants read: ${variants.length}/${productIds.length} in ${Date.now() - variantStart}ms`);
 
-    // Backwards-compat: keep productById/costForProduct names so the rest of
-    // the file doesn't need to change. Each variant points at its template
-    // record so all the downstream fields (name, categ_id, etc.) resolve.
-    const productById = variantToTemplate;
-    const costForProduct = (pid) => parseFloat(variantToTemplate[pid]?.standard_price || 0);
-    const products = uniqueTemplates; // for diagnostics
+    const tmplIds = [...new Set(variants.map(v => v.product_tmpl_id && v.product_tmpl_id[0]).filter(Boolean))];
+    const tmplStart = Date.now();
+    const tmplById = {};
+    try {
+      if (tmplIds.length > 0) {
+        const tChunks = chunkArray(tmplIds, 500);
+        const tResults = await parallelLimit(
+          tChunks.map(c => () =>
+            exec('product.template', 'read', [c], {
+              fields: ['id', 'standard_price', 'categ_id'],
+            }, 25000).catch(e => { console.error(`[Odoo/adv] template chunk failed: ${e.message}`); return []; })
+          ),
+          8
+        );
+        for (const t of tResults.flat()) tmplById[t.id] = t;
+      }
+    } catch (e) {
+      console.error(`[Odoo/adv] templates fetch failed (continuing): ${e.message}`);
+    }
+    console.log(`[Odoo/adv] templates read: ${Object.keys(tmplById).length}/${tmplIds.length} in ${Date.now() - tmplStart}ms`);
+
+    // Build variant → consolidated record for downstream code.
+    const productById = {};
+    for (const v of variants) {
+      const tid  = v.product_tmpl_id && v.product_tmpl_id[0];
+      const tmpl = tid ? tmplById[tid] : null;
+      productById[v.id] = {
+        id: v.id,
+        name: v.name,
+        default_code: v.default_code,
+        qty_available: v.qty_available,
+        list_price: v.list_price,
+        type: v.type,
+        categ_id: tmpl?.categ_id || null,
+        standard_price: parseFloat(tmpl?.standard_price || 0),
+      };
+    }
+    const costForProduct = (pid) => productById[pid]?.standard_price || 0;
+    const products = variants; // for diagnostics
 
     // ── PHASE 5: shape output ────────────────────────────────────────────────
     const allProducts = Object.values(prodAgg)
