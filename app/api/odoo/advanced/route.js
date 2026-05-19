@@ -191,7 +191,7 @@ export async function GET(request) {
         vChunks.map(c => () =>
           exec('product.product', 'read', [c], {
             fields: ['id', 'name', 'default_code', 'qty_available', 'list_price',
-                     'type', 'product_tmpl_id'],
+                     'type', 'product_tmpl_id', 'uom_id'],
           }, 25000).catch(e => { console.error(`[Odoo/adv] variant chunk failed: ${e.message}`); return []; })
         ),
         8
@@ -211,7 +211,7 @@ export async function GET(request) {
         const tResults = await parallelLimit(
           tChunks.map(c => () =>
             exec('product.template', 'read', [c], {
-              fields: ['id', 'standard_price', 'categ_id', 'uom_id'],
+              fields: ['id', 'standard_price', 'categ_id'],
             }, 25000).catch(e => { console.error(`[Odoo/adv] template chunk failed: ${e.message}`); return []; })
           ),
           8
@@ -237,12 +237,19 @@ export async function GET(request) {
         type: v.type,
         categ_id: tmpl?.categ_id || null,
         standard_price: parseFloat(tmpl?.standard_price || 0),
-        // tmpl_uom_id is the UoM standard_price is denominated in
-        tmpl_uom_id: tmpl?.uom_id && tmpl.uom_id[0],
+        // base UoM: standard_price is denominated in product.template.uom_id,
+        // which product.product.uom_id mirrors via a related field.
+        base_uom_id: v.uom_id && v.uom_id[0],
       };
     }
     const costForProduct = (pid) => productById[pid]?.standard_price || 0;
     const products = variants; // for diagnostics
+
+    // Diagnostic: how many products actually have a non-zero standard_price?
+    const productsWithCost = Object.values(productById).filter(p => p.standard_price > 0).length;
+    const sampleCosts = Object.values(productById).filter(p => p.standard_price > 0).slice(0, 3)
+      .map(p => `${p.name}=${p.standard_price}`).join(' | ');
+    console.log(`[Odoo/adv] products with cost: ${productsWithCost}/${Object.keys(productById).length}; sample: ${sampleCosts}`);
 
     // Fetch every UoM we'll need so we can convert line qty (in line.product_uom_id)
     // into product.uom_id, the unit standard_price is stored against.
@@ -273,8 +280,9 @@ export async function GET(request) {
     // for the "Units Sold" display. For COST we need qty in the product's
     // base UoM (uom_id, where standard_price is denominated). We also build
     // per-rep totals here in the same loop.
-    const prodCostByPid = {}; // pid → total cost (rev-sign-flipped, UoM-converted)
-    const repAgg = {};        // rep name → { revenue, cost, marginableRev }
+    const prodCostByPid = {};
+    const repAgg = {};
+    let linesWithCost = 0, linesNoCost = 0, totalCostAccum = 0;
     for (const line of lines) {
       const pid = line.product_id && line.product_id[0];
       const moveId = line.move_id && line.move_id[0];
@@ -287,19 +295,22 @@ export async function GET(request) {
       if (!repAgg[repName]) repAgg[repName] = { revenue: 0, cost: 0, marginableRev: 0 };
       repAgg[repName].revenue += rev;
 
-      if (!pid) continue;
+      if (!pid) { linesNoCost++; continue; }
       const stdC = costForProduct(pid);
-      if (!stdC) continue;
+      if (!stdC) { linesNoCost++; continue; }
+      linesWithCost++;
 
       const prod = productById[pid] || {};
       const lineUomId = line.product_uom_id && line.product_uom_id[0];
-      const qtyInBaseUom = convertQty(qtyLine, lineUomId, prod.tmpl_uom_id);
+      const qtyInBaseUom = convertQty(qtyLine, lineUomId, prod.base_uom_id);
       const cost = stdC * qtyInBaseUom;
+      totalCostAccum += cost;
 
       prodCostByPid[pid] = (prodCostByPid[pid] || 0) + cost;
       repAgg[repName].cost          += cost;
       repAgg[repName].marginableRev += rev;
     }
+    console.log(`[Odoo/adv] cost pass — linesWithCost=${linesWithCost} linesNoCost=${linesNoCost} totalCost=${Math.round(totalCostAccum)}`);
 
     // ── PHASE 5: shape output ────────────────────────────────────────────────
     const allProducts = Object.values(prodAgg)
@@ -402,7 +413,7 @@ export async function GET(request) {
 
       const prod = productById[pid] || {};
       const lineUomId = line.product_uom_id && line.product_uom_id[0];
-      const qtyInBaseUom = convertQty(qtyLine, lineUomId, prod.tmpl_uom_id);
+      const qtyInBaseUom = convertQty(qtyLine, lineUomId, prod.base_uom_id);
       const cost = unitCost * qtyInBaseUom;
 
       monthlyCost[mi].marginableRevenue += rev;
