@@ -99,7 +99,10 @@ export async function GET(request) {
     // We deliberately use search_read (NOT read_group) because this Odoo
     // instance has a record-rule that fails on read_group with the Python
     // error "expected str instance, bool found".
-    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal'];
+    // purchase_price = unit cost snapshotted at invoice posting (Odoo's
+    // canonical "cost" field for margin reports). Falling back to 0 when
+    // absent — better to under-report margin than over-report it.
+    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal', 'purchase_price'];
     const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
     const idChunks = chunkArray(sanitizedIds, 500);
 
@@ -284,16 +287,28 @@ export async function GET(request) {
       if (isNaN(d) || d.getFullYear() !== year) continue;
       const mi = d.getMonth();
 
-      const sign = moveTypeById[moveId] === 'out_refund' ? -1 : 1;
-      const qty  = parseFloat(line.quantity || 0) * sign;
-      const rev  = parseFloat(line.price_subtotal || 0) * sign;
-      const pid  = line.product_id && line.product_id[0];
-      const stdC = pid && productById[pid] ? parseFloat(productById[pid].standard_price || 0) : 0;
-      const cost = stdC * qty;
+      const sign     = moveTypeById[moveId] === 'out_refund' ? -1 : 1;
+      const qty      = parseFloat(line.quantity || 0) * sign;
+      const rev      = parseFloat(line.price_subtotal || 0) * sign;
 
-      monthlyCost[mi].marginableRevenue += rev;
-      monthlyCost[mi].totalCost         += cost;
-      if (cost !== 0) monthlyCost[mi].hasCostData = true;
+      // Prefer purchase_price (snapshotted on the line at posting time).
+      // Falling back to product master standard_price only if absent.
+      let unitCost = parseFloat(line.purchase_price || 0);
+      if (!unitCost) {
+        const pid = line.product_id && line.product_id[0];
+        unitCost = pid && productById[pid] ? parseFloat(productById[pid].standard_price || 0) : 0;
+      }
+      const cost = unitCost * qty;
+
+      // Only fold revenue + cost together when we have a real cost.
+      // Lines with no purchase_price are excluded from BOTH sides so
+      // margin% reflects only the lines we can actually cost — matching
+      // Odoo's own margin reports.
+      if (unitCost > 0) {
+        monthlyCost[mi].marginableRevenue += rev;
+        monthlyCost[mi].totalCost         += cost;
+        monthlyCost[mi].hasCostData = true;
+      }
     }
     for (const m of monthlyCost) {
       m.totalCost         = Math.round(m.totalCost);

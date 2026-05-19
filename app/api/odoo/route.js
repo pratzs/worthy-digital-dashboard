@@ -125,9 +125,30 @@ export async function GET(request) {
       return true;
     };
 
-    // ── 4. Aggregate monthly + weekly (revenue/orders/returns only) ───────────
+    // ── 4. Aggregate monthly + weekly (revenue/orders/returns + new customers)
     const monthly          = emptyYear();
     const weeklyRevBuckets = {};
+
+    // Track each customer's FIRST invoice month this year. A customer is
+    // counted as "new" in the earliest month they appear.
+    const partnerFirstMonth = {}; // pid → mi
+
+    // Pre-pass: walk invoices in date order (only out_invoice — credit notes
+    // shouldn't count as a new-customer trigger).
+    const ordered = [...invoices]
+      .filter(inv => inv.invoice_date && new Date(inv.invoice_date).getFullYear() === year)
+      .filter(inv => inv.move_type !== 'out_refund')
+      .sort((a, b) => new Date(a.invoice_date) - new Date(b.invoice_date));
+    for (const inv of ordered) {
+      const pid = inv.partner_id && inv.partner_id[0];
+      if (!pid) continue;
+      if (!(pid in partnerFirstMonth)) {
+        partnerFirstMonth[pid] = new Date(inv.invoice_date).getMonth();
+      }
+    }
+    for (const mi of Object.values(partnerFirstMonth)) {
+      monthly[mi].newCustomers += 1;
+    }
 
     for (const inv of invoices) {
       if (!inv.invoice_date) continue;
