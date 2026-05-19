@@ -99,10 +99,10 @@ export async function GET(request) {
     // We deliberately use search_read (NOT read_group) because this Odoo
     // instance has a record-rule that fails on read_group with the Python
     // error "expected str instance, bool found".
-    // purchase_price = unit cost snapshotted at invoice posting (Odoo's
-    // canonical "cost" field for margin reports). Falling back to 0 when
-    // absent — better to under-report margin than over-report it.
-    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal', 'purchase_price'];
+    // Minimal field set. purchase_price would be ideal but it's not on
+    // account.move.line in this Odoo instance (requires the sale_margin
+    // module). Cost comes from product.template.standard_price instead.
+    const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal'];
     const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
     const idChunks = chunkArray(sanitizedIds, 500);
 
@@ -331,12 +331,8 @@ export async function GET(request) {
       const qty      = parseFloat(line.quantity || 0) * sign;
       const rev      = parseFloat(line.price_subtotal || 0) * sign;
 
-      // Use product.template.standard_price (resolved via the variant's
-      // tmpl_id). purchase_price on the line is a fallback only — many
-      // Worthy invoices have it set to 0 even when the template cost is real.
-      const pid  = line.product_id && line.product_id[0];
-      let unitCost = pid ? costForProduct(pid) : 0;
-      if (!unitCost) unitCost = parseFloat(line.purchase_price || 0);
+      const pid = line.product_id && line.product_id[0];
+      const unitCost = pid ? costForProduct(pid) : 0;
       const cost = unitCost * qty;
 
       // Only fold revenue + cost together when we have a real cost.
