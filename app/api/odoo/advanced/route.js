@@ -174,6 +174,11 @@ export async function GET(request) {
     const productIds = Object.keys(prodAgg).map(Number);
 
     // ── PHASE 4: product master (categories, stock, cost) ─────────────────────
+    // product.product.standard_price is a company-dependent property that
+    // sometimes resolves to 0 over JSON-RPC even when product.template has
+    // a real value. We pull the template id from the variant and then read
+    // product.template.standard_price directly — that's where the actual
+    // cost lives.
     let products = [];
     try {
       if (productIds.length > 0) {
@@ -182,7 +187,7 @@ export async function GET(request) {
           pChunks.map(c => () =>
             exec('product.product', 'read', [c], {
               fields: ['id', 'name', 'default_code', 'categ_id', 'qty_available',
-                       'standard_price', 'list_price', 'type'],
+                       'standard_price', 'list_price', 'type', 'product_tmpl_id'],
             }, 25000).catch(e => { console.error(`[Odoo/adv] product chunk failed: ${e.message}`); return []; })
           ),
           8
@@ -196,12 +201,42 @@ export async function GET(request) {
     for (const p of products) productById[p.id] = p;
     console.log(`[Odoo/adv] product master rows: ${products.length}/${productIds.length}`);
 
+    // Fetch product.template.standard_price for every variant we saw.
+    const tmplIds = [...new Set(products.map(p => p.product_tmpl_id && p.product_tmpl_id[0]).filter(Boolean))];
+    const tmplCostById = {};
+    try {
+      if (tmplIds.length > 0) {
+        const tChunks = chunkArray(tmplIds, 500);
+        const tResults = await parallelLimit(
+          tChunks.map(c => () =>
+            exec('product.template', 'read', [c], {
+              fields: ['id', 'standard_price'],
+            }, 25000).catch(e => { console.error(`[Odoo/adv] template chunk failed: ${e.message}`); return []; })
+          ),
+          8
+        );
+        for (const t of tResults.flat()) {
+          tmplCostById[t.id] = parseFloat(t.standard_price || 0);
+        }
+      }
+    } catch (e) {
+      console.error(`[Odoo/adv] template fetch failed (continuing): ${e.message}`);
+    }
+    // Resolver: given a variant id, return the template standard_price.
+    const costForProduct = (pid) => {
+      const p = productById[pid];
+      if (!p) return 0;
+      const tid = p.product_tmpl_id && p.product_tmpl_id[0];
+      return tid ? (tmplCostById[tid] || 0) : parseFloat(p.standard_price || 0);
+    };
+    console.log(`[Odoo/adv] template costs loaded: ${Object.keys(tmplCostById).length}/${tmplIds.length}`);
+
     // ── PHASE 5: shape output ────────────────────────────────────────────────
     const allProducts = Object.values(prodAgg)
       .filter(t => t.revenue > 0 || t.qty > 0)
       .map(t => {
         const prod   = productById[t.pid] || {};
-        const stdC   = parseFloat(prod.standard_price || 0);
+        const stdC   = costForProduct(t.pid) || parseFloat(prod.standard_price || 0);
         const cost   = stdC * t.qty;
         const gp     = t.revenue - cost;
         const margin = t.revenue > 0 ? Math.round((gp / t.revenue) * 100) : 0;
@@ -214,7 +249,7 @@ export async function GET(request) {
           grossProfit:  Math.round(gp),
           margin,
           qtyAvailable: Math.round(parseFloat(prod.qty_available || 0)),
-          stdPrice:     stdC,
+          stdPrice:     stdC, // resolved via template above
           type:         prod.type || 'product',
         };
       });
@@ -291,13 +326,12 @@ export async function GET(request) {
       const qty      = parseFloat(line.quantity || 0) * sign;
       const rev      = parseFloat(line.price_subtotal || 0) * sign;
 
-      // Prefer purchase_price (snapshotted on the line at posting time).
-      // Falling back to product master standard_price only if absent.
-      let unitCost = parseFloat(line.purchase_price || 0);
-      if (!unitCost) {
-        const pid = line.product_id && line.product_id[0];
-        unitCost = pid && productById[pid] ? parseFloat(productById[pid].standard_price || 0) : 0;
-      }
+      // Use product.template.standard_price (resolved via the variant's
+      // tmpl_id). purchase_price on the line is a fallback only — many
+      // Worthy invoices have it set to 0 even when the template cost is real.
+      const pid  = line.product_id && line.product_id[0];
+      let unitCost = pid ? costForProduct(pid) : 0;
+      if (!unitCost) unitCost = parseFloat(line.purchase_price || 0);
       const cost = unitCost * qty;
 
       // Only fold revenue + cost together when we have a real cost.
