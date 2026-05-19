@@ -710,12 +710,32 @@ export default function EcommerceDashboard() {
       const r    = await fetch(`/api/odoo/advanced?year=${year}&company=${companyId}`);
       const json = await r.json();
       const existing = cacheRef.current[key] || {};
+
+      // Merge per-month cost/GP/margin from advanced into existing monthly buckets
+      // (those came from /api/odoo and only have revenue + orders).
+      let merged = existing.all;
+      if (json.monthlyCost && Array.isArray(json.monthlyCost) && Array.isArray(existing.all)) {
+        merged = existing.all.map((m, i) => {
+          const c = json.monthlyCost[i] || {};
+          return {
+            ...m,
+            totalCost:         c.totalCost         ?? m.totalCost         ?? 0,
+            marginableRevenue: c.marginableRevenue ?? m.marginableRevenue ?? 0,
+            grossProfit:       c.grossProfit       ?? m.grossProfit       ?? 0,
+            marginPct:         c.marginPct         ?? m.marginPct         ?? null,
+            hasCostData:       !!c.hasCostData,
+          };
+        });
+      }
+
       cacheRef.current[key] = {
         ...existing,
+        all:           merged,
         topProducts:   json.topProducts   || [],
         topCategories: json.topCategories || [],
         fastMoving:    json.fastMoving    || [],
         slowMoving:    json.slowMoving    || [],
+        monthlyCost:   json.monthlyCost   || [],
         advDiagnostics: json.diagnostics || null,
       };
     } catch (e) {

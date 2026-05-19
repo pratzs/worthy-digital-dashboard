@@ -78,11 +78,16 @@ export async function GET(request) {
       return NextResponse.json(emptyResp(null, { invoiceCount: 0, year, companyId }));
     }
 
-    // Fetch move_type per invoice once (cheap — small payload)
+    // Fetch move_type + invoice_date per invoice once (cheap — small payload).
+    // invoice_date is needed so we can bucket line cost into months below.
     const moveTypeById = {};
+    const moveDateById = {};
     try {
-      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type'] }, 20000);
-      for (const m of moves) moveTypeById[m.id] = m.move_type;
+      const moves = await exec('account.move', 'read', [invoiceIds], { fields: ['id', 'move_type', 'invoice_date'] }, 20000);
+      for (const m of moves) {
+        moveTypeById[m.id] = m.move_type;
+        moveDateById[m.id] = m.invoice_date;
+      }
     } catch (e) {
       console.error(`[Odoo/adv] move_type read failed (assuming all out_invoice): ${e.message}`);
     }
@@ -263,8 +268,45 @@ export async function GET(request) {
       .slice(0, 30)
       .map(({ slowScore: _s, ...rest }) => rest);
 
+    // ── PHASE 6: monthly cost / margin buckets ────────────────────────────────
+    // We already have every line + each line's product standard_price. Roll
+    // them up by invoice month so the dashboard's monthly cards can finally
+    // show Cost, Gross Profit, and Margin% for Worthy North + Oceania.
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthlyCost = MONTH_NAMES.map(m => ({
+      month: m, totalCost: 0, marginableRevenue: 0, hasCostData: false,
+    }));
+    for (const line of lines) {
+      const moveId = line.move_id && line.move_id[0];
+      const dateStr = moveDateById[moveId];
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (isNaN(d) || d.getFullYear() !== year) continue;
+      const mi = d.getMonth();
+
+      const sign = moveTypeById[moveId] === 'out_refund' ? -1 : 1;
+      const qty  = parseFloat(line.quantity || 0) * sign;
+      const rev  = parseFloat(line.price_subtotal || 0) * sign;
+      const pid  = line.product_id && line.product_id[0];
+      const stdC = pid && productById[pid] ? parseFloat(productById[pid].standard_price || 0) : 0;
+      const cost = stdC * qty;
+
+      monthlyCost[mi].marginableRevenue += rev;
+      monthlyCost[mi].totalCost         += cost;
+      if (cost !== 0) monthlyCost[mi].hasCostData = true;
+    }
+    for (const m of monthlyCost) {
+      m.totalCost         = Math.round(m.totalCost);
+      m.marginableRevenue = Math.round(m.marginableRevenue);
+      m.grossProfit       = m.hasCostData ? m.marginableRevenue - m.totalCost : null;
+      m.marginPct         = m.hasCostData && m.marginableRevenue > 0
+                              ? Math.round((m.grossProfit / m.marginableRevenue) * 100)
+                              : null;
+    }
+
     return NextResponse.json({
       topProducts, topCategories, fastMoving, slowMoving,
+      monthlyCost,
       diagnostics: {
         invoiceCount:   invoiceIds.length,
         rawLineCount:   rawLines.length,
