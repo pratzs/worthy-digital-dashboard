@@ -45,21 +45,17 @@ export default function LoginPage() {
         width: '100%', maxWidth: 440,
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32,
       }}>
-        {/* Twin Worthy logos */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
-          <img src="/logo-black.png" alt="Worthy"
-               style={{ height: 72, width: 'auto', objectFit: 'contain' }} />
-          <img src="/logo-black.png" alt="Worthy"
-               style={{ height: 72, width: 'auto', objectFit: 'contain' }} />
-        </div>
+        {/* Worthy logo */}
+        <img src="/logo-black.png" alt="Worthy"
+             style={{ height: 80, width: 'auto', objectFit: 'contain' }} />
 
         {/* Title */}
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', letterSpacing: '0.01em' }}>
-            Worthy Digital Dashboard
+            Worthy Accounts Dashboard
           </div>
-          <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6 }}>
-            Restricted access · accounts-sensitive data
+          <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6, lineHeight: 1.5 }}>
+            Restricted Access. Don&apos;t try to login if you are not authorized to use this dashboard.
           </div>
         </div>
 
@@ -115,15 +111,11 @@ export default function LoginPage() {
           boxSizing: 'border-box',
         }}>
           <div style={{ fontWeight: 700, color: '#111827', marginBottom: 4 }}>Need access?</div>
-          If you don&apos;t have a password yet, please contact{' '}
-          <a href="mailto:pratham@worthy.nz" style={{ color: '#66270F', fontWeight: 600, textDecoration: 'none' }}>
-            Pratham at pratham@worthy.nz
-          </a>{' '}
-          or reach out to the company Digital Commerce Lead to get help logging in.
+          If you don&apos;t have a password yet, please contact Worthy&apos;s Digital Commerce Lead to get help logging in.
         </div>
 
         <div style={{ fontSize: 10, color: '#9ca3af', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Worthy Products · Internal Use Only
+          Worthy · Internal Use Only
         </div>
       </div>
     </div>
