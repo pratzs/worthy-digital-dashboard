@@ -64,6 +64,7 @@ const fmtExact = (n, cur = "NZD") => {
   const sign = n < 0 ? "-" : "";
   return `${sign}${s}${Math.abs(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
+const round2 = (n) => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
 const fmtPct = (n) => (n === null || n === undefined) ? "—" : `${n > 0 ? "+" : ""}${n}%`;
 
 const GrowthBadge = ({ value }) => {
@@ -103,7 +104,7 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f
   );
 };
 
-const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true }) => {
+const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true, exact = false }) => {
   const [display, setDisplay] = useState(0);
   const isPos = !growth || growth >= 0;
   const textHead = darkMode ? "#f0e8d8" : "#0f172a";
@@ -127,7 +128,7 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
         </div>
       </div>
       <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
-        {sub === "currency" ? fmtK(display, currency) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
+        {sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
       </div>
       <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
     </div>
@@ -972,13 +973,14 @@ export default function EcommerceDashboard() {
   const totalNewC = curr.reduce((s, d) => s + (d.newCustomers   || 0), 0);
   const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
   const totalRet  = curr.reduce((s, d) => s + (d.returns        || 0), 0);
-  const avgAOV    = totalOrd ? Math.round(totalRev / totalOrd) : 0;
+  const isOstendo = activeStore.id === "luxe";
+  const avgAOV    = totalOrd ? (isOstendo ? round2(totalRev / totalOrd) : Math.round(totalRev / totalOrd)) : 0;
   const prevAOV   = prevOrd  ? Math.round(prevRev  / prevOrd)  : 0;
 
   const totalMargRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const trueMargin   = totalMargRev > 0 ? (totalMargRev - totalCost) / totalMargRev : null;
   // FIX 3: Fall back to simple rev-cost GP when marginableRevenue is 0
-  const gp       = trueMargin !== null ? Math.round(totalRev * trueMargin)
+  const gp       = trueMargin !== null ? (isOstendo ? round2(totalRev * trueMargin) : Math.round(totalRev * trueMargin))
                  : hasCost    ? totalRev - totalCost
                  : null;
   const gpMargin = trueMargin !== null ? Math.round(trueMargin * 100) : null;
@@ -1229,10 +1231,10 @@ export default function EcommerceDashboard() {
 
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard darkMode={darkMode} label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
           <KPICard darkMode={darkMode} label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard darkMode={darkMode} label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} />
-          <KPICard darkMode={darkMode} label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
+          <KPICard darkMode={darkMode} label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
         </div>
 
         {view === "monthly" ? (
@@ -1316,12 +1318,12 @@ export default function EcommerceDashboard() {
                           <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
                             <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
-                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? fmtK(row.totalCost, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (isOstendo ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (isOstendo ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (isOstendo ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (isOstendo ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
@@ -1332,12 +1334,12 @@ export default function EcommerceDashboard() {
                     <tfoot>
                       <tr style={{ borderTop: `1px solid ${T.border}` }}>
                         <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
-                        <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(totalRev, activeStore.currency)}</td>
-                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? fmtK(totalCost, activeStore.currency) : "—"}</td>
-                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? fmtK(gp, activeStore.currency) : "—"}</td>
+                        <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{isOstendo ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
+                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (isOstendo ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "—"}</td>
+                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (isOstendo ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "—"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
                         <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
-                        <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{fmtK(avgAOV, activeStore.currency)}</td>
+                        <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{isOstendo ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "—"}</td>
                         <td style={{ padding: "10px 8px", color: "#aa8a8a", fontWeight: 700 }}>{totalRet || "—"}</td>
                         <td style={{ padding: "10px 8px" }}><GrowthBadge value={revG} /></td>
