@@ -293,10 +293,17 @@ export async function GET(request) {
       const repName = moveRepById[moveId] || 'Unassigned';
 
       const moveDate = moveDateById[moveId];
-      const mi = moveDate ? new Date(moveDate).getMonth() : -1;
-      if (!repAgg[repName]) repAgg[repName] = { revenue: 0, cost: 0, marginableRev: 0, monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0, marginableRev: 0})) };
+      const moveD = moveDate ? new Date(moveDate) : null;
+      const mi = moveD ? moveD.getMonth() : -1;
+      if (!repAgg[repName]) repAgg[repName] = { revenue: 0, cost: 0, marginableRev: 0, monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0, marginableRev: 0})), weekly: {} };
       repAgg[repName].revenue += rev;
-      if (mi >= 0) repAgg[repName].monthly[mi].revenue += rev;
+      if (mi >= 0 && moveD) {
+        repAgg[repName].monthly[mi].revenue += rev;
+        const wk   = Math.ceil(moveD.getDate() / 7);
+        const wkey = `${mi}_${wk}`;
+        if (!repAgg[repName].weekly[wkey]) repAgg[repName].weekly[wkey] = { revenue: 0, cost: 0, marginableRev: 0 };
+        repAgg[repName].weekly[wkey].revenue += rev;
+      }
 
       if (!pid) { linesNoCost++; continue; }
       const stdC = costForProduct(pid);
@@ -312,9 +319,13 @@ export async function GET(request) {
       prodCostByPid[pid] = (prodCostByPid[pid] || 0) + cost;
       repAgg[repName].cost          += cost;
       repAgg[repName].marginableRev += rev;
-      if (mi >= 0) {
+      if (mi >= 0 && moveD) {
         repAgg[repName].monthly[mi].cost          += cost;
         repAgg[repName].monthly[mi].marginableRev += rev;
+        const wk   = Math.ceil(moveD.getDate() / 7);
+        const wkey = `${mi}_${wk}`;
+        repAgg[repName].weekly[wkey].cost          += cost;
+        repAgg[repName].weekly[wkey].marginableRev += rev;
       }
     }
     console.log(`[Odoo/adv] cost pass — linesWithCost=${linesWithCost} linesNoCost=${linesNoCost} totalCost=${Math.round(totalCostAccum)}`);
@@ -447,6 +458,13 @@ export async function GET(request) {
         const mGP      = mMargRev - mCost;
         return { month: MONTH_NAMES[mi], revenue: Math.round(m.revenue), cost: mCost, grossProfit: mMargRev > 0 ? mGP : null, marginPct: mMargRev > 0 ? Math.round((mGP / mMargRev) * 100) : null };
       });
+      const weeks = Object.entries(r.weekly || {}).map(([key, w]) => {
+        const [moIdx, wkIdx] = key.split('_').map(Number);
+        const wMargRev = Math.round(w.marginableRev);
+        const wCost    = Math.round(w.cost);
+        const wGP      = wMargRev - wCost;
+        return { month: moIdx, week: wkIdx, revenue: Math.round(w.revenue), cost: wCost, grossProfit: wMargRev > 0 ? wGP : null, marginPct: wMargRev > 0 ? Math.round((wGP / wMargRev) * 100) : null };
+      });
       return {
         name,
         revenue:           Math.round(r.revenue),
@@ -454,7 +472,7 @@ export async function GET(request) {
         marginableRevenue: margRev,
         grossProfit:       gp,
         marginPct:         margRev > 0 ? Math.round((gp / margRev) * 100) : null,
-        months,
+        months, weeks,
       };
     }).sort((a, b) => b.revenue - a.revenue);
 

@@ -517,8 +517,21 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 return (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                     <td style={repCellStyle}>{rep.name}</td>
-                    {rep.months.map((m, mi) => <td key={mi} style={cellStyle(m.revenue)}>{m.revenue > 0 ? money(m.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                    <td style={{ ...cellStyle(total), color: accent, fontWeight: 700 }}>{money(keep(total), currency)}</td>
+                    {rep.months.map((m, mi) => {
+                      const mm = marginByName[rep.name]?.months?.[mi];
+                      const mColor = mm?.marginPct != null ? (mm.marginPct >= 20 ? "#4ade80" : mm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
+                      return (
+                        <td key={mi} style={{ ...cellStyle(m.revenue), verticalAlign: "top" }}>
+                          {m.revenue > 0 ? (
+                            <>
+                              <div>{money(m.revenue, currency)}</div>
+                              {mm?.marginPct != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{mm.marginPct}%</div>}
+                            </>
+                          ) : <span style={{ color: T.textLabel }}>—</span>}
+                        </td>
+                      );
+                    })}
+                    <td style={{ ...cellStyle(total), color: accent, fontWeight: 700, verticalAlign: "top" }}>{money(keep(total), currency)}</td>
                     {hasMargin && (
                       <td style={{ ...cellStyle(marg?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
                         {marg?.grossProfit != null ? money(marg.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
@@ -538,8 +551,21 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 <tr style={{ borderTop: `1px solid ${T.border}` }}>
                   <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
                   {MONTH_NAMES.map((m, mi) => {
-                    const colTotal = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
-                    return <td key={mi} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700 }}>{colTotal > 0 ? money(keep(colTotal), currency) : "—"}</td>;
+                    const colTotal  = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
+                    const colGP     = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.grossProfit || 0), 0) : null;
+                    const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.revenue || 0), 0) : 0;
+                    const colMargin = colMargRv > 0 && colGP != null ? Math.round((colGP / colMargRv) * 100) : null;
+                    const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
+                    return (
+                      <td key={mi} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
+                        {colTotal > 0 ? (
+                          <>
+                            <div>{money(keep(colTotal), currency)}</div>
+                            {colMargin != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{colMargin}%</div>}
+                          </>
+                        ) : "—"}
+                      </td>
+                    );
                   })}
                   {(() => {
                     const grandTotal = monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0);
@@ -592,12 +618,33 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     {loading ? "Loading…" : `No data for ${MONTH_NAMES[weeklyMonth]}`}
                   </td></tr>
                 ) : weeklyPivot.map((rep, i) => {
-                  const mo = marginByName[rep.name]?.months?.[weeklyMonth];
+                  const mo   = marginByName[rep.name]?.months?.[weeklyMonth];
+                  const repW = marginByName[rep.name]?.weeks || [];
                   return (
                     <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                       <td style={repCellStyle}>{rep.name}</td>
-                      {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? money(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                      <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{money(rep.monthTotal, currency)}</td>
+                      {rep.weeks.map((w, wi) => {
+                        const wm = repW.find(x => x.month === weeklyMonth && x.week === wi + 1);
+                        const wColor = wm?.marginPct != null ? (wm.marginPct >= 20 ? "#4ade80" : wm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
+                        return (
+                          <td key={wi} style={{ ...cellStyle(w.revenue), verticalAlign: "top" }}>
+                            {w.revenue > 0 ? (
+                              <>
+                                <div>{money(w.revenue, currency)}</div>
+                                {wm?.marginPct != null && <div style={{ fontSize: 9, color: wColor, fontWeight: 700, marginTop: 2 }}>{wm.marginPct}%</div>}
+                              </>
+                            ) : <span style={{ color: T.textLabel }}>—</span>}
+                          </td>
+                        );
+                      })}
+                      <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700, verticalAlign: "top" }}>
+                        {rep.monthTotal > 0 ? (
+                          <>
+                            <div>{money(rep.monthTotal, currency)}</div>
+                            {mo?.marginPct != null && <div style={{ fontSize: 9, color: mo.marginPct >= 20 ? "#4ade80" : mo.marginPct >= 0 ? accent : "#f87171", fontWeight: 700, marginTop: 2 }}>{mo.marginPct}%</div>}
+                          </>
+                        ) : "—"}
+                      </td>
                       {hasMargin && (
                         <td style={{ ...cellStyle(mo?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
                           {mo?.grossProfit != null ? money(mo.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}

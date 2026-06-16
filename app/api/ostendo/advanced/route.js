@@ -625,14 +625,19 @@ export async function GET(request) {
       const rep  = invToRep[num] || 'Unassigned';
       const d    = invDateMap[num];
       const mi   = d ? d.getMonth() : -1;
-      if (!repAgg[rep]) repAgg[rep] = { revenue: 0, cost: 0, monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0})) };
+      if (!repAgg[rep]) repAgg[rep] = { revenue: 0, cost: 0, monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0})), weekly: {} };
       const lineRev  = lineNet(line);
       const lineCost = lineCostTotal(line);
       repAgg[rep].revenue += lineRev;
       repAgg[rep].cost    += lineCost;
-      if (mi >= 0) {
+      if (mi >= 0 && d) {
         repAgg[rep].monthly[mi].revenue += lineRev;
         repAgg[rep].monthly[mi].cost    += lineCost;
+        const wk   = Math.ceil(d.getDate() / 7);
+        const wkey = `${mi}_${wk}`;
+        if (!repAgg[rep].weekly[wkey]) repAgg[rep].weekly[wkey] = { revenue: 0, cost: 0 };
+        repAgg[rep].weekly[wkey].revenue += lineRev;
+        repAgg[rep].weekly[wkey].cost    += lineCost;
       }
     }
     const repMargins = Object.entries(repAgg).map(([name, r]) => {
@@ -645,7 +650,14 @@ export async function GET(request) {
         const mGP   = mRev - mCost;
         return { month: MONTH_NAMES_ADV[mi], revenue: mRev, cost: mCost, grossProfit: mGP, marginPct: mRev > 0 ? Math.round((mGP / mRev) * 100) : null };
       });
-      return { name, revenue: rev, cost, marginableRevenue: rev, grossProfit: gp, marginPct: rev > 0 ? Math.round((gp / rev) * 100) : null, months };
+      const weeks = Object.entries(r.weekly).map(([key, w]) => {
+        const [moIdx, wkIdx] = key.split('_').map(Number);
+        const wRev  = Math.round(w.revenue);
+        const wCost = Math.round(w.cost);
+        const wGP   = wRev - wCost;
+        return { month: moIdx, week: wkIdx, revenue: wRev, cost: wCost, grossProfit: wGP, marginPct: wRev > 0 ? Math.round((wGP / wRev) * 100) : null };
+      });
+      return { name, revenue: rev, cost, marginableRevenue: rev, grossProfit: gp, marginPct: rev > 0 ? Math.round((gp / rev) * 100) : null, months, weeks };
     }).sort((a, b) => b.revenue - a.revenue);
 
     return NextResponse.json({
