@@ -105,7 +105,7 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f
   );
 };
 
-const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true, exact = false }) => {
+const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true, exact = false, compareText = null }) => {
   const [display, setDisplay] = useState(0);
   const isPos = !growth || growth >= 0;
   const textHead = darkMode ? "#f0e8d8" : "#0f172a";
@@ -132,6 +132,7 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
         {value === null ? "—" : sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
       </div>
       <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
+      {compareText && <div style={{ fontSize: 10, color: textMuted, marginTop: 4, opacity: 0.8 }}>{compareText}</div>}
     </div>
   );
 };
@@ -683,6 +684,7 @@ export default function EcommerceDashboard() {
   const [darkMode,       setDarkMode]       = useState(false);
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
+  const [selectedWeek,   setSelectedWeek]   = useState(null); // null = month total, 1-5 = specific week
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
@@ -1053,9 +1055,10 @@ export default function EcommerceDashboard() {
       ...d,
       grossProfit: d.grossProfit !== undefined ? d.grossProfit : dynGp,
       marginPct:   d.marginPct   !== undefined ? d.marginPct   : dynMargin,
-      prevRevenue: prev[i]?.revenue || 0,
-      prevOrders:  prev[i]?.orders  || 0,
-      momGrowth:   prevLoaded ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
+      prevRevenue:  prev[i]?.revenue || 0,
+      prevOrders:   prev[i]?.orders  || 0,
+      prevMarginPct: (() => { const pr = prev[i]?.revenue || 0, pc = prev[i]?.totalCost || 0; return (prev[i]?.hasCostData && pr > 0) ? Math.round(((pr - pc) / pr) * 100) : null; })(),
+      momGrowth:    prevLoaded ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
     };
   });
 
@@ -1133,7 +1136,11 @@ export default function EcommerceDashboard() {
 
   // ── Contextual KPIs — update based on active view ─────────────────────────
   // Weekly tab → show selected month totals; Monthly/YoY → show period totals
-  const weeklyDataCtx = view === "weekly" ? getWeekly().filter(w => w.month === weeklyMonth) : [];
+  const weeklyDataCtx = view === "weekly"
+    ? selectedWeek !== null
+      ? getWeekly().filter(w => w.month === weeklyMonth && w.week === selectedWeek)
+      : getWeekly().filter(w => w.month === weeklyMonth)
+    : [];
   const kpiRev     = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.revenue   || 0), 0) : totalRev;
   const kpiOrd     = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.orders    || 0), 0) : totalOrd;
   const kpiCost    = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.totalCost || 0), 0) : totalCost;
@@ -1148,6 +1155,15 @@ export default function EcommerceDashboard() {
   const kpiGrowth    = view === "weekly" ? null : revG;
   const kpiOrdGrowth = view === "weekly" ? null : ordG;
   const kpiAovGrowth = view === "weekly" ? null : aovG;
+
+  // Helper: compute week date range string, e.g. "1–7 Jun"
+  const weekDateRange = (year, month, week) => {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const start = (week - 1) * 7 + 1;
+    const end   = Math.min(week * 7, daysInMonth);
+    return `${start}–${end} ${MONTH_NAMES[month]} ${year}`;
+  };
+
   const prevCost       = prev.reduce((s, d) => s + (d.totalCost || 0), 0);
   const prevMargRev    = prev.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const prevTrueMargin = prevMargRev > 0 ? (prevMargRev - prevCost) / prevMargRev : null;
@@ -1156,6 +1172,16 @@ export default function EcommerceDashboard() {
   const kpiMarginGrowth = (view !== "weekly" && prevLoaded && kpiGPMargin !== null && prevGPMargin !== null)
     ? kpiGPMargin - prevGPMargin
     : null;
+
+  // YoY comparison text shown under each KPI card
+  const prevHasCost = prev.some(d => d.hasCostData);
+  const prevGP      = prevHasCost ? Math.round(prevRev - prevCost) : null;
+  const yoyCompare  = view === "yoy" && prevLoaded;
+  const cmpYear     = selectedYear - 1;
+  const cmpRev      = yoyCompare ? `${cmpYear}: ${fmtK(prevRev, activeStore.currency)}` : null;
+  const cmpOrd      = yoyCompare ? `${cmpYear}: ${prevOrd.toLocaleString()} orders` : null;
+  const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null;
+  const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;
 
   const yoyData = ALL_YEARS.map(yr => {
     const d   = getMonthly(yr);
@@ -1173,10 +1199,10 @@ export default function EcommerceDashboard() {
   });
 
   const metrics = [
-    { id: "revenue",  label: "Revenue" },
-    { id: "orders",   label: "Orders" },
-    { id: "aov",      label: "Avg Order Value" },
-    { id: "convRate", label: "Conv. Rate" },
+    { id: "revenue",   label: "Revenue" },
+    { id: "orders",    label: "Orders" },
+    { id: "marginPct", label: "Margin %" },
+    { id: "grossProfit", label: "Gross Profit" },
   ];
 
   const renderStatus = (s) => {
@@ -1350,18 +1376,33 @@ export default function EcommerceDashboard() {
         </div>
 
         {/* KPIs */}
-        <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
-          {view === "weekly"
-            ? `${MONTH_NAMES[weeklyMonth]} ${selectedYear} — month summary`
-            : view === "yoy"
-            ? `${selectedYear} — full year`
-            : `${selectedYear} — year to date`}
-        </div>
+        {view === "weekly" ? (() => {
+          const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
+          const weekNums = [...new Set(allMonthWeeks.map(w => w.week))].sort((a,b) => a-b);
+          const periodLabel = selectedWeek !== null
+            ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
+            : `${MONTH_NAMES[weeklyMonth]} ${selectedYear} — month total`;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>{periodLabel}</div>
+              <div style={{ display: "flex", gap: 3 }}>
+                <button onClick={() => setSelectedWeek(null)} style={{ padding: "2px 8px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: selectedWeek === null ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: selectedWeek === null ? `${accent}20` : "transparent", color: selectedWeek === null ? accent : T.textMuted, cursor: "pointer", letterSpacing: "0.04em" }}>ALL</button>
+                {weekNums.map(w => (
+                  <button key={w} onClick={() => setSelectedWeek(w)} style={{ padding: "2px 8px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: selectedWeek === w ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: selectedWeek === w ? `${accent}20` : "transparent", color: selectedWeek === w ? accent : T.textMuted, cursor: "pointer", letterSpacing: "0.04em" }}>W{w}</button>
+                ))}
+              </div>
+            </div>
+          );
+        })() : (
+          <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+            {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} — full year` : `${selectedYear} — year to date`}
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard darkMode={darkMode} label="Total Revenue"   value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
-          <KPICard darkMode={darkMode} label="Total Orders"    value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} />
-          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiGP || 0} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
+          <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpRev} />
+          <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
+          <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
+          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiGP || 0} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpGP} />
         </div>
 
         {view === "monthly" ? (
@@ -1396,10 +1437,10 @@ export default function EcommerceDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: T.textMuted }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
-                    tickFormatter={activeMetric === "revenue" || activeMetric === "aov" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "convRate" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
+                    tickFormatter={activeMetric === "revenue" || activeMetric === "grossProfit" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "marginPct" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
                   <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
                   <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
-                  <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric} name={`${selectedYear - 1}`} stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                  <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric === "marginPct" ? "prevMarginPct" : activeMetric} name={`${selectedYear - 1}`} stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -1496,7 +1537,7 @@ export default function EcommerceDashboard() {
                 {/* Month selector */}
                 <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
                   {MONTH_NAMES.map((mn, mi) => (
-                    <button key={mn} onClick={() => setWeeklyMonth(mi)} style={{
+                    <button key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(null); }} style={{
                       padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
                       border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
                       background: weeklyMonth === mi ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"),
