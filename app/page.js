@@ -50,6 +50,9 @@ const generateEmptyYear = () =>
     convRate: 0, newCustomers: 0, hasCostData: true, marginableRevenue: 0
   }));
 
+// Dutch Rusk / Worthy South financial year: April → March
+const FY_MONTHS = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
+
 const calcGrowth = (c, p) => (!p || p === 0) ? null : +((( c - p) / p) * 100).toFixed(1);
 const fmt   = (n, cur = "NZD") => new Intl.NumberFormat("en-NZ", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n || 0);
 const fmtK  = (n, cur = "NZD") => {
@@ -684,7 +687,7 @@ export default function EcommerceDashboard() {
   const [darkMode,       setDarkMode]       = useState(false);
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
-  const [selectedWeek,   setSelectedWeek]   = useState(null); // null = month total, 1-5 = specific week
+  const [selectedWeek,   setSelectedWeek]   = useState(Math.ceil(new Date().getDate() / 7));
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
@@ -900,6 +903,8 @@ export default function EcommerceDashboard() {
       await Promise.all([
         fetchYear(storeId, selectedYear),
         fetchYear(storeId, selectedYear - 1),
+        // Dutch Rusk FY: also need next calendar year for Jan-Mar portion
+        ...(storeId === "luxe"   ? [fetchYear(storeId, selectedYear + 1)] : []),
         // Worthy North also has Odoo Sales tab. Only fire the heavy advanced
         // payload for the current year — prior year is for YoY revenue only.
         ...(storeId === "worthy" ? [
@@ -911,6 +916,7 @@ export default function EcommerceDashboard() {
       if (storeId === "luxe") {
         fetchMargins(storeId, selectedYear);
         fetchMargins(storeId, selectedYear - 1);
+        fetchMargins(storeId, selectedYear + 1); // Jan-Mar of current FY
       }
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       try {
@@ -972,12 +978,18 @@ export default function EcommerceDashboard() {
       const cached = cacheRef.current[`odoo:4:${year}`];
       return cached?.all || generateEmptyYear();
     }
-    const cached = cacheRef.current[activeStore.id + ":" + year];
-    if (!cached) {
-      if (activeStore.id === "luxe") return generateEmptyYear();
-      return generateMonthlyData(activeStore.id, year);
+    // Dutch Rusk — financial year April → March (FY2026 = Apr 2026 – Mar 2027)
+    if (activeStore.id === "luxe") {
+      const aprStart = cacheRef.current[`luxe:${year}`]?.all     || [];
+      const marEnd   = cacheRef.current[`luxe:${year + 1}`]?.all || [];
+      const emptyM   = (m) => ({ month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null, orders: 0, returns: 0, sessions: 0, totalDiscounts: 0, aov: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0 });
+      return FY_MONTHS.map((m, i) => {
+        const src = i <= 8 ? aprStart[i + 3] : marEnd[i - 9]; // i=0→Apr(3)…i=8→Dec(11), i=9→Jan(0)…i=11→Mar(2)
+        return src ? { ...src, month: m } : emptyM(m);
+      });
     }
-    if (activeStore.id === "luxe") return cached.all || generateEmptyYear();
+    const cached = cacheRef.current[activeStore.id + ":" + year];
+    if (!cached) return generateMonthlyData(activeStore.id, year);
     if (activeStore.id !== "worthy") return cached;
     // Return channel-specific slice for worthy store
     if (channelTab === "pos")    return cached.pos    || generateEmptyYear();
@@ -1137,24 +1149,41 @@ export default function EcommerceDashboard() {
   // ── Contextual KPIs — update based on active view ─────────────────────────
   // Weekly tab → show selected month totals; Monthly/YoY → show period totals
   const weeklyDataCtx = view === "weekly"
-    ? selectedWeek !== null
-      ? getWeekly().filter(w => w.month === weeklyMonth && w.week === selectedWeek)
-      : getWeekly().filter(w => w.month === weeklyMonth)
+    ? getWeekly().filter(w => w.month === weeklyMonth && w.week === selectedWeek)
     : [];
-  const kpiRev     = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.revenue   || 0), 0) : totalRev;
-  const kpiOrd     = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.orders    || 0), 0) : totalOrd;
-  const kpiCost    = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.totalCost || 0), 0) : totalCost;
-  const kpiHasCost = view === "weekly" ? weeklyDataCtx.some(w => w.hasCostData) : hasCost;
+  // For monthly view: show the latest month with data, not YTD
+  const latestMonthIdx    = curr.reduce((max, m, i) => m.revenue > 0 ? i : max, -1);
+  const latestMonth       = latestMonthIdx >= 0 ? curr[latestMonthIdx] : null;
+  const prevLatestMonth   = latestMonthIdx >= 0 ? (prev[latestMonthIdx] || null) : null;
+  const prevLatestRev     = prevLatestMonth?.revenue    || 0;
+  const prevLatestOrd     = prevLatestMonth?.orders     || 0;
+  const prevLatestCost    = prevLatestMonth?.totalCost  || 0;
+  const prevLatestHasCost = prevLatestMonth?.hasCostData || false;
+  const prevLatestMargin  = prevLatestHasCost && prevLatestRev > 0
+    ? Math.round(((prevLatestRev - prevLatestCost) / prevLatestRev) * 100) : null;
+
+  const kpiRev  = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.revenue   || 0), 0)
+                : view === "monthly" ? (latestMonth?.revenue    || 0)
+                : totalRev;
+  const kpiOrd  = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.orders    || 0), 0)
+                : view === "monthly" ? (latestMonth?.orders     || 0)
+                : totalOrd;
+  const kpiCost = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.totalCost || 0), 0)
+                : view === "monthly" ? (latestMonth?.totalCost  || 0)
+                : totalCost;
+  const kpiHasCost = view === "weekly"  ? weeklyDataCtx.some(w => w.hasCostData)
+                   : view === "monthly" ? (latestMonth?.hasCostData || false)
+                   : hasCost;
   const kpiAOV     = kpiOrd ? (isOstendo ? round2(kpiRev / kpiOrd) : Math.round(kpiRev / kpiOrd)) : 0;
   const kpiGP      = kpiHasCost
     ? (isOstendo ? round2(kpiRev - kpiCost) : Math.round(kpiRev - kpiCost))
-    : (view !== "weekly" ? gp : null);
+    : (view === "yoy" ? gp : null);
   const kpiGPMargin = kpiHasCost && kpiRev > 0
     ? Math.round(((kpiRev - kpiCost) / kpiRev) * 100)
-    : (view !== "weekly" ? gpMargin : null);
-  const kpiGrowth    = view === "weekly" ? null : revG;
-  const kpiOrdGrowth = view === "weekly" ? null : ordG;
-  const kpiAovGrowth = view === "weekly" ? null : aovG;
+    : (view === "yoy" ? gpMargin : null);
+  const kpiGrowth    = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiRev, prevLatestRev) : null) : revG;
+  const kpiOrdGrowth = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiOrd, prevLatestOrd) : null) : ordG;
+  const kpiAovGrowth = view === "weekly" ? null : view === "monthly" ? null : aovG;
 
   // Helper: compute week date range string, e.g. "1–7 Jun"
   const weekDateRange = (year, month, week) => {
@@ -1169,8 +1198,10 @@ export default function EcommerceDashboard() {
   const prevTrueMargin = prevMargRev > 0 ? (prevMargRev - prevCost) / prevMargRev : null;
   const prevGPMargin   = prevTrueMargin !== null ? Math.round(prevTrueMargin * 100) : null;
   // Absolute percentage-point change in margin vs prior year (e.g. "▲ 2%" = improved 2pp)
-  const kpiMarginGrowth = (view !== "weekly" && prevLoaded && kpiGPMargin !== null && prevGPMargin !== null)
+  const kpiMarginGrowth = view === "yoy" && prevLoaded && kpiGPMargin !== null && prevGPMargin !== null
     ? kpiGPMargin - prevGPMargin
+    : view === "monthly" && prevLoaded && kpiGPMargin !== null && prevLatestMargin !== null
+    ? kpiGPMargin - prevLatestMargin
     : null;
 
   // YoY comparison text shown under each KPI card
@@ -1328,7 +1359,7 @@ export default function EcommerceDashboard() {
             const fetching = isLoading(y);
             return (
               <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: selectedYear === y ? `1px solid ${accent}` : `1px solid ${T.border}`, background: selectedYear === y ? `${accent}20` : "transparent", color: selectedYear === y ? accent : loaded ? (darkMode ? "#c0a870" : "#6a5040") : T.textMuted, cursor: "pointer", transition: "all 0.2s", position: "relative" }}>
-                {y}
+                {activeStore.id === "luxe" ? `FY${String(y).slice(2)}` : y}
                 {fetching && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: accent }} />}
                 {!fetching && loaded && selectedYear !== y && (activeStore.id === "worthy" || activeStore.id === "luxe") && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#4ade80", opacity: 0.7 }} />}
               </button>
@@ -1370,7 +1401,7 @@ export default function EcommerceDashboard() {
       <div style={{ padding: "32px 32px 0" }}>
         {/* View toggle */}
         <div style={{ display: "flex", gap: 4, marginBottom: 28, background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)", borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, width: "fit-content" }}>
-          {[["monthly","Monthly Performance"],["weekly","Weekly Breakdown"],["yoy","Year over Year"]].map(([v, lbl]) => (
+          {[["monthly","Monthly Performance"],["weekly","Weekly Breakdown"],["yoy","Yearly"]].map(([v, lbl]) => (
             <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : T.textMuted, boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
           ))}
         </div>
@@ -1379,14 +1410,11 @@ export default function EcommerceDashboard() {
         {view === "weekly" ? (() => {
           const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
           const weekNums = [...new Set(allMonthWeeks.map(w => w.week))].sort((a,b) => a-b);
-          const periodLabel = selectedWeek !== null
-            ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
-            : `${MONTH_NAMES[weeklyMonth]} ${selectedYear} — month total`;
+          const periodLabel = `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`;
           return (
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>{periodLabel}</div>
               <div style={{ display: "flex", gap: 3 }}>
-                <button onClick={() => setSelectedWeek(null)} style={{ padding: "2px 8px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: selectedWeek === null ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: selectedWeek === null ? `${accent}20` : "transparent", color: selectedWeek === null ? accent : T.textMuted, cursor: "pointer", letterSpacing: "0.04em" }}>ALL</button>
                 {weekNums.map(w => (
                   <button key={w} onClick={() => setSelectedWeek(w)} style={{ padding: "2px 8px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: selectedWeek === w ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: selectedWeek === w ? `${accent}20` : "transparent", color: selectedWeek === w ? accent : T.textMuted, cursor: "pointer", letterSpacing: "0.04em" }}>W{w}</button>
                 ))}
@@ -1395,7 +1423,9 @@ export default function EcommerceDashboard() {
           );
         })() : (
           <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
-            {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} — full year` : `${selectedYear} — year to date`}
+            {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} — full year`
+           : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
+           : `${selectedYear} — year to date`}
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
@@ -1418,7 +1448,7 @@ export default function EcommerceDashboard() {
             <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {selectedYear}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {activeStore.id === "luxe" ? `FY${String(selectedYear).slice(2)}` : selectedYear}</div>
                   <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#5a5040" }}>
@@ -1537,7 +1567,7 @@ export default function EcommerceDashboard() {
                 {/* Month selector */}
                 <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
                   {MONTH_NAMES.map((mn, mi) => (
-                    <button key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(null); }} style={{
+                    <button key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(mi === new Date().getMonth() ? Math.ceil(new Date().getDate() / 7) : 1); }} style={{
                       padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
                       border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
                       background: weeklyMonth === mi ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"),
