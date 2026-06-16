@@ -129,7 +129,7 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
         </div>
       </div>
       <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
-        {sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
+        {value === null ? "—" : sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
       </div>
       <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
     </div>
@@ -1148,6 +1148,14 @@ export default function EcommerceDashboard() {
   const kpiGrowth    = view === "weekly" ? null : revG;
   const kpiOrdGrowth = view === "weekly" ? null : ordG;
   const kpiAovGrowth = view === "weekly" ? null : aovG;
+  const prevCost       = prev.reduce((s, d) => s + (d.totalCost || 0), 0);
+  const prevMargRev    = prev.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
+  const prevTrueMargin = prevMargRev > 0 ? (prevMargRev - prevCost) / prevMargRev : null;
+  const prevGPMargin   = prevTrueMargin !== null ? Math.round(prevTrueMargin * 100) : null;
+  // Absolute percentage-point change in margin vs prior year (e.g. "▲ 2%" = improved 2pp)
+  const kpiMarginGrowth = (view !== "weekly" && prevLoaded && kpiGPMargin !== null && prevGPMargin !== null)
+    ? kpiGPMargin - prevGPMargin
+    : null;
 
   const yoyData = ALL_YEARS.map(yr => {
     const d   = getMonthly(yr);
@@ -1352,7 +1360,7 @@ export default function EcommerceDashboard() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
           <KPICard darkMode={darkMode} label="Total Revenue"   value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
           <KPICard darkMode={darkMode} label="Total Orders"    value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard darkMode={darkMode} label="Avg Order Value" value={kpiAOV} growth={kpiAovGrowth} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
+          <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} />
           <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiGP || 0} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
         </div>
 
