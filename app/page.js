@@ -903,8 +903,6 @@ export default function EcommerceDashboard() {
       await Promise.all([
         fetchYear(storeId, selectedYear),
         fetchYear(storeId, selectedYear - 1),
-        // Dutch Rusk FY: also need next calendar year for Jan-Mar portion
-        ...(storeId === "luxe"   ? [fetchYear(storeId, selectedYear + 1)] : []),
         // Worthy North also has Odoo Sales tab. Only fire the heavy advanced
         // payload for the current year — prior year is for YoY revenue only.
         ...(storeId === "worthy" ? [
@@ -912,11 +910,13 @@ export default function EcommerceDashboard() {
           fetchOdoo(4, selectedYear - 1, { fireAdvanced: false }),
         ] : []),
       ]);
-      // After revenue data is cached, fetch cost/margin data for South (non-blocking)
+      // After main years load, fire non-blocking cost/margin + FY tail year
+      // (sequential to avoid hammering Ostendo with concurrent header fetches)
       if (storeId === "luxe") {
         fetchMargins(storeId, selectedYear);
         fetchMargins(storeId, selectedYear - 1);
-        fetchMargins(storeId, selectedYear + 1); // Jan-Mar of current FY
+        fetchYear(storeId, selectedYear + 1);   // Jan-Mar tail of current FY — non-blocking
+        fetchMargins(storeId, selectedYear + 1);
       }
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       try {
