@@ -8,7 +8,18 @@ const agent = new https.Agent({ rejectUnauthorized: false });
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-// GET /tabledata — for fetching SALESINVOICEHEADER (invoice dates)
+const REP_NAMES = {
+  '410': 'Kevin', '420': 'Michelle', '430': 'Keith',
+  '450': 'Nelson Office Online Sales', '460': 'Chris',
+  '470': 'Lynette', '490': 'Leith',
+};
+const resolveRep = (raw) => {
+  if (!raw) return 'Unassigned';
+  const code = String(raw).trim();
+  const base = code.replace(/-\d+$/, '');
+  return REP_NAMES[base] || REP_NAMES[code] || code;
+};
+
 async function ostendoGet(tablename, condition) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
@@ -34,7 +45,6 @@ async function ostendoGet(tablename, condition) {
   });
 }
 
-// POST /sqlquery — for running aggregated SQL (cost per invoice)
 async function ostendoSql(sql) {
   const base   = process.env.OSTENDO_BASE_URL;
   const apiKey = process.env.OSTENDO_API_KEY;
@@ -82,15 +92,15 @@ export async function GET(request) {
   const year = parseInt(searchParams.get('year') || new Date().getFullYear());
 
   try {
-    // Run both fetches in parallel:
-    // 1. Headers → to get INVOICEDATE per invoice
-    // 2. SQL query → to get total cost per invoice (INVOICEQTY × INVOICEUNITCOST)
+    const yearCond = `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`;
+
+    // Run in parallel: headers (revenue + rep + date) and per-invoice cost aggregate
     const [rawHeaders, rawCosts] = await Promise.all([
-      ostendoGet('SALESINVOICEHEADER', `EXTRACT(YEAR FROM INVOICEDATE) = ${year}`),
+      ostendoGet('SALESINVOICEHEADER', yearCond),
       ostendoSql(
         `SELECT INVOICENUMBER, SUM(INVOICEQTY * INVOICEUNITCOST) AS TOTALCOST ` +
         `FROM SALESINVOICELINES ` +
-        `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE EXTRACT(YEAR FROM INVOICEDATE) = ${year}) ` +
+        `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
         `AND INVOICEUNITCOST > 0 ` +
         `GROUP BY INVOICENUMBER`
       ).catch(e => {
@@ -104,23 +114,25 @@ export async function GET(request) {
 
     console.log(`[Ostendo/margins] headers: ${headerRows.length}, cost rows: ${costRows.length}`);
 
+    const getInvNum = (r) => String(r.INVOICENUMBER ?? r.INVOICENO ?? r.InvoiceNumber ?? r.InvoiceNo ?? '').trim();
+
     // Build invoice → date map
     const invDateMap = {};
     for (const row of headerRows) {
       const d   = parseDate(row.INVOICEDATE);
-      const num = String(row.INVOICENUMBER ?? row.INVOICENO ?? '');
+      const num = getInvNum(row);
       if (d && num) invDateMap[num] = d;
     }
 
     // Build invoice → totalCost map
     const invCostMap = {};
     for (const row of costRows) {
-      const num  = String(row.INVOICENUMBER ?? row.INVOICENO ?? '');
+      const num  = getInvNum(row);
       const cost = parseNum(row.TOTALCOST ?? row.totalcost ?? row.LINECOST);
       if (num && cost > 0) invCostMap[num] = cost;
     }
 
-    // Aggregate cost by month and week
+    // ── Overall monthly/weekly aggregates (used by KPI cards) ───────────────────
     const monthlyCost    = Array(12).fill(0);
     const monthlyHasCost = Array(12).fill(false);
     const weeklyCostMap  = {};
@@ -136,14 +148,12 @@ export async function GET(request) {
       weeklyCostMap[wkey] = (weeklyCostMap[wkey] || 0) + cost;
     }
 
-    // Build monthly cost array
     const monthly = MONTH_NAMES.map((m, mi) => ({
       month:       m,
       totalCost:   Math.round(monthlyCost[mi]),
       hasCostData: monthlyHasCost[mi],
     }));
 
-    // Build weekly cost array
     const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
     const weekly = [];
     for (let mi = 0; mi < 12; mi++) {
@@ -160,10 +170,71 @@ export async function GET(request) {
       }
     }
 
-    return NextResponse.json({ monthly, weekly });
+    // ── Per-rep margins (independent from analytics tables) ─────────────────────
+    // Revenue comes from INVOICENETTAMOUNT in headers (same source as main route).
+    // Cost comes from the SQL aggregation above (per invoice, no line scan needed).
+    const repAgg = {};
+    for (const row of headerRows) {
+      const num  = getInvNum(row);
+      const d    = invDateMap[num];
+      if (!d || d.getFullYear() !== year) continue;
+      const rep  = resolveRep(row.SALESPERSON);
+      const rev  = parseNum(row.INVOICENETTAMOUNT ?? row.INVOICETOTALAMOUNT ?? row.INVOICEVALUE);
+      const cost = invCostMap[num] || 0;
+      const mi   = d.getMonth();
+      const wk   = Math.ceil(d.getDate() / 7);
+      const wkey = `${mi}_${wk}`;
+
+      if (!repAgg[rep]) repAgg[rep] = {
+        revenue: 0, cost: 0,
+        monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0})),
+        weekly:  {},
+      };
+      repAgg[rep].revenue += rev;
+      repAgg[rep].cost    += cost;
+      repAgg[rep].monthly[mi].revenue += rev;
+      repAgg[rep].monthly[mi].cost    += cost;
+      if (!repAgg[rep].weekly[wkey]) repAgg[rep].weekly[wkey] = {revenue: 0, cost: 0};
+      repAgg[rep].weekly[wkey].revenue += rev;
+      repAgg[rep].weekly[wkey].cost    += cost;
+    }
+
+    const repMargins = Object.entries(repAgg).map(([name, r]) => {
+      const rev  = Math.round(r.revenue);
+      const cost = Math.round(r.cost);
+      const gp   = rev - cost;
+      const months = r.monthly.map((m, mi) => {
+        const mRev  = Math.round(m.revenue);
+        const mCost = Math.round(m.cost);
+        const mGP   = mRev - mCost;
+        return {
+          month: MONTH_NAMES[mi], revenue: mRev, cost: mCost,
+          grossProfit: mGP, marginPct: mRev > 0 ? Math.round((mGP / mRev) * 100) : null,
+        };
+      });
+      const weeks = Object.entries(r.weekly).map(([key, w]) => {
+        const [moIdx, wkIdx] = key.split('_').map(Number);
+        const wRev  = Math.round(w.revenue);
+        const wCost = Math.round(w.cost);
+        const wGP   = wRev - wCost;
+        return {
+          month: moIdx, week: wkIdx, revenue: wRev, cost: wCost,
+          grossProfit: wGP, marginPct: wRev > 0 ? Math.round((wGP / wRev) * 100) : null,
+        };
+      });
+      return {
+        name, revenue: rev, cost, grossProfit: gp, marginableRevenue: rev,
+        marginPct: rev > 0 ? Math.round((gp / rev) * 100) : null,
+        months, weeks,
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    console.log(`[Ostendo/margins] repMargins computed: ${repMargins.length} reps`);
+
+    return NextResponse.json({ monthly, weekly, repMargins });
 
   } catch (err) {
     console.error('[Ostendo/margins] error:', err.message);
-    return NextResponse.json({ monthly: [], weekly: [], error: err.message }, { status: 500 });
+    return NextResponse.json({ monthly: [], weekly: [], repMargins: [], error: err.message }, { status: 500 });
   }
 }

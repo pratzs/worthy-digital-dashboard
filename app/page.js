@@ -782,6 +782,11 @@ export default function EcommerceDashboard() {
       cached.weeklyPos    = mergeWeekly(cached.weeklyPos    || []);
       cached.weeklyOnline = mergeWeekly(cached.weeklyOnline || []);
 
+      // Store per-rep margins independently so SalesRepBreakdown never depends on advancedData
+      if (json.repMargins?.length) {
+        cacheRef.current[`repMargins:${storeId}:${year}`] = json.repMargins;
+      }
+
       cacheRef.current[mkey] = "done";
       forceUpdate();
     } catch (e) {
@@ -1835,7 +1840,7 @@ export default function EcommerceDashboard() {
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthly()}
                   salespeopleWeekly={getLuxeSalespeopleWeekly()}
-                  repMargins={advancedData.curr?.repMargins || []}
+                  repMargins={cacheRef.current[`repMargins:luxe:${selectedYear}`] || advancedData.curr?.repMargins || []}
                   loading={isLoading(selectedYear)}
                   currency={activeStore.currency}
                   weeklyMonth={weeklyMonth}
