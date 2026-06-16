@@ -292,8 +292,11 @@ export async function GET(request) {
       const rev     = parseFloat(line.price_subtotal || 0) * sign;
       const repName = moveRepById[moveId] || 'Unassigned';
 
-      if (!repAgg[repName]) repAgg[repName] = { revenue: 0, cost: 0, marginableRev: 0 };
+      const moveDate = moveDateById[moveId];
+      const mi = moveDate ? new Date(moveDate).getMonth() : -1;
+      if (!repAgg[repName]) repAgg[repName] = { revenue: 0, cost: 0, marginableRev: 0, monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0, marginableRev: 0})) };
       repAgg[repName].revenue += rev;
+      if (mi >= 0) repAgg[repName].monthly[mi].revenue += rev;
 
       if (!pid) { linesNoCost++; continue; }
       const stdC = costForProduct(pid);
@@ -309,6 +312,10 @@ export async function GET(request) {
       prodCostByPid[pid] = (prodCostByPid[pid] || 0) + cost;
       repAgg[repName].cost          += cost;
       repAgg[repName].marginableRev += rev;
+      if (mi >= 0) {
+        repAgg[repName].monthly[mi].cost          += cost;
+        repAgg[repName].monthly[mi].marginableRev += rev;
+      }
     }
     console.log(`[Odoo/adv] cost pass — linesWithCost=${linesWithCost} linesNoCost=${linesNoCost} totalCost=${Math.round(totalCostAccum)}`);
 
@@ -431,9 +438,15 @@ export async function GET(request) {
 
     // ── PHASE 7: per-rep margins ──────────────────────────────────────────────
     const repMargins = Object.entries(repAgg).map(([name, r]) => {
-      const cost   = Math.round(r.cost);
+      const cost    = Math.round(r.cost);
       const margRev = Math.round(r.marginableRev);
-      const gp     = margRev - cost;
+      const gp      = margRev - cost;
+      const months  = r.monthly.map((m, mi) => {
+        const mMargRev = Math.round(m.marginableRev);
+        const mCost    = Math.round(m.cost);
+        const mGP      = mMargRev - mCost;
+        return { month: MONTH_NAMES[mi], revenue: Math.round(m.revenue), cost: mCost, grossProfit: mMargRev > 0 ? mGP : null, marginPct: mMargRev > 0 ? Math.round((mGP / mMargRev) * 100) : null };
+      });
       return {
         name,
         revenue:           Math.round(r.revenue),
@@ -441,6 +454,7 @@ export async function GET(request) {
         marginableRevenue: margRev,
         grossProfit:       gp,
         marginPct:         margRev > 0 ? Math.round((gp / margRev) * 100) : null,
+        months,
       };
     }).sort((a, b) => b.revenue - a.revenue);
 

@@ -55,7 +55,8 @@ const fmt   = (n, cur = "NZD") => new Intl.NumberFormat("en-NZ", { style: "curre
 const fmtK  = (n, cur = "NZD") => {
   if (n === null || n === undefined) return "—";
   const s = cur === "NZD" ? "NZ$" : "$";
-  return Math.abs(n) >= 1000 ? `${s}${(n / 1000).toFixed(1)}k` : `${s}${n}`;
+  const sign = (n || 0) < 0 ? "-" : "";
+  return `${sign}${s}${Math.abs(Math.round(n || 0)).toLocaleString('en-NZ')}`;
 };
 // Exact whole-and-cents amount, e.g. NZ$1,277,734.48 — ties to Ostendo to the cent
 const fmtExact = (n, cur = "NZD") => {
@@ -500,21 +501,34 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
                 {MONTH_NAMES.map(m => <th key={m} style={headStyle}>{m}</th>)}
-                <th style={{ ...headStyle, color: accent }}>Total</th>
+                <th style={{ ...headStyle, color: accent }}>Total Rev</th>
+                {hasMargin && <th style={headStyle}>Gross Profit</th>}
+                {hasMargin && <th style={headStyle}>Margin</th>}
               </tr>
             </thead>
             <tbody>
               {monthlyPivot.length === 0 ? (
-                <tr><td colSpan={14} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                <tr><td colSpan={hasMargin ? 16 : 14} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
                   {loading ? "Loading…" : "No monthly data"}
                 </td></tr>
               ) : monthlyPivot.map((rep, i) => {
                 const total = rep.months.reduce((s, m) => s + m.revenue, 0);
+                const marg  = marginByName[rep.name];
                 return (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                     <td style={repCellStyle}>{rep.name}</td>
                     {rep.months.map((m, mi) => <td key={mi} style={cellStyle(m.revenue)}>{m.revenue > 0 ? money(m.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
                     <td style={{ ...cellStyle(total), color: accent, fontWeight: 700 }}>{money(keep(total), currency)}</td>
+                    {hasMargin && (
+                      <td style={{ ...cellStyle(marg?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
+                        {marg?.grossProfit != null ? money(marg.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                      </td>
+                    )}
+                    {hasMargin && (
+                      <td style={{ ...cellStyle(0), color: (marg?.marginPct ?? 0) >= 20 ? "#4ade80" : (marg?.marginPct ?? 0) >= 0 ? accent : "#f87171", fontWeight: 700 }}>
+                        {marg?.marginPct != null ? `${marg.marginPct}%` : <span style={{ color: T.textLabel }}>—</span>}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -527,7 +541,20 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     const colTotal = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
                     return <td key={mi} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700 }}>{colTotal > 0 ? money(keep(colTotal), currency) : "—"}</td>;
                   })}
-                  <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0)), currency)}</td>
+                  {(() => {
+                    const grandTotal = monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0);
+                    const totalGP    = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.grossProfit || 0), 0) : null;
+                    const totalMargRv = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.marginableRevenue || m.revenue || 0), 0) : 0;
+                    const totalCostF  = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.cost || 0), 0) : 0;
+                    const totalMarginPct = totalMargRv > 0 ? Math.round(((totalMargRv - totalCostF) / totalMargRv) * 100) : null;
+                    return (
+                      <>
+                        <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(grandTotal), currency)}</td>
+                        {hasMargin && <td style={{ ...cellStyle(totalGP || 0), color: "#C97C9E", fontWeight: 700 }}>{totalGP != null ? money(totalGP, currency) : "—"}</td>}
+                        {hasMargin && <td style={{ ...cellStyle(0), color: totalMarginPct != null ? (totalMarginPct >= 20 ? "#4ade80" : accent) : T.textLabel, fontWeight: 700 }}>{totalMarginPct != null ? `${totalMarginPct}%` : "—"}</td>}
+                      </>
+                    );
+                  })()}
                 </tr>
               </tfoot>
             )}
@@ -555,20 +582,35 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
                   {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}</th>)}
                   <th style={{ ...headStyle, color: accent }}>Month Total</th>
+                  {hasMargin && <th style={headStyle}>Gross Profit</th>}
+                  {hasMargin && <th style={headStyle}>Margin</th>}
                 </tr>
               </thead>
               <tbody>
                 {weeklyPivot.length === 0 ? (
-                  <tr><td colSpan={maxWeeks + 2} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                  <tr><td colSpan={maxWeeks + (hasMargin ? 4 : 2)} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
                     {loading ? "Loading…" : `No data for ${MONTH_NAMES[weeklyMonth]}`}
                   </td></tr>
-                ) : weeklyPivot.map((rep, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                    <td style={repCellStyle}>{rep.name}</td>
-                    {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? money(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                    <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{money(rep.monthTotal, currency)}</td>
-                  </tr>
-                ))}
+                ) : weeklyPivot.map((rep, i) => {
+                  const mo = marginByName[rep.name]?.months?.[weeklyMonth];
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                      <td style={repCellStyle}>{rep.name}</td>
+                      {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? money(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
+                      <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{money(rep.monthTotal, currency)}</td>
+                      {hasMargin && (
+                        <td style={{ ...cellStyle(mo?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
+                          {mo?.grossProfit != null ? money(mo.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                        </td>
+                      )}
+                      {hasMargin && (
+                        <td style={{ ...cellStyle(0), color: (mo?.marginPct ?? 0) >= 20 ? "#4ade80" : (mo?.marginPct ?? 0) >= 0 ? accent : "#f87171", fontWeight: 700 }}>
+                          {mo?.marginPct != null ? `${mo.marginPct}%` : <span style={{ color: T.textLabel }}>—</span>}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1037,6 +1079,24 @@ export default function EcommerceDashboard() {
   const ordG   = prevLoaded ? calcGrowth(totalOrd, prevOrd) : null;
   const aovG   = prevLoaded ? calcGrowth(avgAOV,   prevAOV) : null;
 
+  // ── Contextual KPIs — update based on active view ─────────────────────────
+  // Weekly tab → show selected month totals; Monthly/YoY → show period totals
+  const weeklyDataCtx = view === "weekly" ? getWeekly().filter(w => w.month === weeklyMonth) : [];
+  const kpiRev     = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.revenue   || 0), 0) : totalRev;
+  const kpiOrd     = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.orders    || 0), 0) : totalOrd;
+  const kpiCost    = view === "weekly" ? weeklyDataCtx.reduce((s, w) => s + (w.totalCost || 0), 0) : totalCost;
+  const kpiHasCost = view === "weekly" ? weeklyDataCtx.some(w => w.hasCostData) : hasCost;
+  const kpiAOV     = kpiOrd ? (isOstendo ? round2(kpiRev / kpiOrd) : Math.round(kpiRev / kpiOrd)) : 0;
+  const kpiGP      = kpiHasCost
+    ? (isOstendo ? round2(kpiRev - kpiCost) : Math.round(kpiRev - kpiCost))
+    : (view !== "weekly" ? gp : null);
+  const kpiGPMargin = kpiHasCost && kpiRev > 0
+    ? Math.round(((kpiRev - kpiCost) / kpiRev) * 100)
+    : (view !== "weekly" ? gpMargin : null);
+  const kpiGrowth    = view === "weekly" ? null : revG;
+  const kpiOrdGrowth = view === "weekly" ? null : ordG;
+  const kpiAovGrowth = view === "weekly" ? null : aovG;
+
   const yoyData = ALL_YEARS.map(yr => {
     const d   = getMonthly(yr);
     const rev = d.reduce((s, x) => s + (x.revenue   || 0), 0);
@@ -1230,11 +1290,18 @@ export default function EcommerceDashboard() {
         </div>
 
         {/* KPIs */}
+        <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+          {view === "weekly"
+            ? `${MONTH_NAMES[weeklyMonth]} ${selectedYear} — month summary`
+            : view === "yoy"
+            ? `${selectedYear} — full year`
+            : `${selectedYear} — year to date`}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard darkMode={darkMode} label="Total Revenue"   value={totalRev} growth={revG} icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
-          <KPICard darkMode={darkMode} label="Total Orders"    value={totalOrd} growth={ordG} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
-          <KPICard darkMode={darkMode} label="Avg Order Value" value={avgAOV}   growth={aovG} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
-          <KPICard darkMode={darkMode} label={hasCost && gpMargin !== null ? `Gross Profit · ${gpMargin}% margin` : "Gross Profit"} value={gp || 0} growth={revG} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
+          <KPICard darkMode={darkMode} label="Total Revenue"   value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
+          <KPICard darkMode={darkMode} label="Total Orders"    value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} />
+          <KPICard darkMode={darkMode} label="Avg Order Value" value={kpiAOV} growth={kpiAovGrowth} icon="◆" accent="#9EC97C"   sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
+          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiGP || 0} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} />
         </div>
 
         {view === "monthly" ? (
