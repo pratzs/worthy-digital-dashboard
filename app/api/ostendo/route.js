@@ -63,6 +63,8 @@ const normalizeRows = (res) =>
   Array.isArray(res) ? res : res?.rows || res?.data || res?.records || [];
 
 const parseNum = (v) => (v === null || v === undefined || v === '') ? 0 : parseFloat(v) || 0;
+// Round to cents — keeps full precision so dashboard totals tie to Ostendo exactly
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 const parseDate = (v) => {
   if (!v) return null;
   const s = String(v).trim();
@@ -155,15 +157,15 @@ export async function GET(request) {
     }
 
     for (const m of monthly) {
-      m.aov            = m.orders > 0 ? Math.round(m.revenue / m.orders) : 0;
-      m.revenue        = Math.round(m.revenue);
-      m.totalDiscounts = Math.round(m.totalDiscounts);
-      m.totalCost      = Math.round(m.totalCost);
-      m.grossProfit    = m.hasCostData ? Math.round(m.marginableRevenue - m.totalCost) : 0;
+      m.aov            = m.orders > 0 ? round2(m.revenue / m.orders) : 0;
+      m.revenue        = round2(m.revenue);
+      m.totalDiscounts = round2(m.totalDiscounts);
+      m.totalCost      = round2(m.totalCost);
+      m.grossProfit    = m.hasCostData ? round2(m.marginableRevenue - m.totalCost) : 0;
       m.marginPct      = m.hasCostData && m.marginableRevenue > 0
                           ? Math.round((m.grossProfit / m.marginableRevenue) * 100)
                           : null;
-      m.marginableRevenue = Math.round(m.marginableRevenue);
+      m.marginableRevenue = round2(m.marginableRevenue);
     }
 
     // ── Build weekly array ────────────────────────────────────────────────────
@@ -175,8 +177,8 @@ export async function GET(request) {
         const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
         if (startDay > getDaysInMonth(year, mi)) continue;
         const b = weeklyRevBuckets[`${mi}_${w}`];
-        const wkRev  = b ? Math.round(b.revenue) : 0;
-        const wkCost = b ? Math.round(b.cost)    : 0;
+        const wkRev  = b ? round2(b.revenue) : 0;
+        const wkCost = b ? round2(b.cost)    : 0;
         const wkHasCost = wkCost > 0;
         weekly.push({
           label:          `${MONTH_NAMES[mi]} W${w}`,
@@ -185,12 +187,12 @@ export async function GET(request) {
           dateRange:      `${startDay}–${endDay} ${MONTH_NAMES[mi]}`,
           revenue:        wkRev,
           orders:         b ? b.orders : 0,
-          aov:            b && b.orders > 0 ? Math.round(b.revenue / b.orders) : 0,
+          aov:            b && b.orders > 0 ? round2(b.revenue / b.orders) : 0,
           totalCost:      wkCost,
-          grossProfit:    wkHasCost ? wkRev - wkCost : null,
+          grossProfit:    wkHasCost ? round2(wkRev - wkCost) : null,
           marginPct:      wkHasCost && wkRev > 0 ? Math.round(((wkRev - wkCost) / wkRev) * 100) : null,
           hasCostData:    wkHasCost,
-          totalDiscounts: b ? Math.round(b.totalDiscounts) : 0,
+          totalDiscounts: b ? round2(b.totalDiscounts) : 0,
           newCustomers:   0,
         });
       }
@@ -199,12 +201,12 @@ export async function GET(request) {
     const salespeople = Object.entries(repData).map(([name, d]) => {
       const totalRev = d.monthly.reduce((s, m) => s + m.revenue, 0);
       const totalOrd = d.monthly.reduce((s, m) => s + m.orders,  0);
-      return { name, revenue: Math.round(totalRev), orders: totalOrd, aov: totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0 };
+      return { name, revenue: round2(totalRev), orders: totalOrd, aov: totalOrd > 0 ? round2(totalRev / totalOrd) : 0 };
     }).sort((a, b) => b.revenue - a.revenue);
 
     const salespeopleMonthly = Object.entries(repData).map(([name, d]) => ({
       name,
-      months: d.monthly.map((m, mi) => ({ month: MONTH_NAMES[mi], revenue: Math.round(m.revenue), orders: m.orders })),
+      months: d.monthly.map((m, mi) => ({ month: MONTH_NAMES[mi], revenue: round2(m.revenue), orders: m.orders })),
     })).sort((a, b) => b.months.reduce((s, m) => s + m.revenue, 0) - a.months.reduce((s, m) => s + m.revenue, 0));
 
     const salespeopleWeekly = Object.entries(repData).map(([name, d]) => {
@@ -213,7 +215,7 @@ export async function GET(request) {
         for (let w = 1; w <= 5; w++) {
           if ((w - 1) * 7 + 1 > getDaysInMonth(year, mi)) continue;
           const b = d.weeklyBuckets[`${mi}_${w}`];
-          wkly.push({ month: mi, week: w, revenue: b ? Math.round(b.revenue) : 0, orders: b ? b.orders : 0 });
+          wkly.push({ month: mi, week: w, revenue: b ? round2(b.revenue) : 0, orders: b ? b.orders : 0 });
         }
       }
       return { name, weekly: wkly };

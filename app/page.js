@@ -57,6 +57,13 @@ const fmtK  = (n, cur = "NZD") => {
   const s = cur === "NZD" ? "NZ$" : "$";
   return Math.abs(n) >= 1000 ? `${s}${(n / 1000).toFixed(1)}k` : `${s}${n}`;
 };
+// Exact whole-and-cents amount, e.g. NZ$1,277,734.48 — ties to Ostendo to the cent
+const fmtExact = (n, cur = "NZD") => {
+  if (n === null || n === undefined) return "—";
+  const s = cur === "NZD" ? "NZ$" : "$";
+  const sign = n < 0 ? "-" : "";
+  return `${sign}${s}${Math.abs(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 const fmtPct = (n) => (n === null || n === undefined) ? "—" : `${n > 0 ? "+" : ""}${n}%`;
 
 const GrowthBadge = ({ value }) => {
@@ -370,11 +377,16 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
 };
 
 // ── Sales Rep Breakdown — ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, T, accent }) => {
+const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, T, accent, exact = false }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
   const marginByName = {};
   for (const m of (repMargins || [])) marginByName[m.name] = m;
   const [repView, setRepView] = useState("annual");
+
+  // `exact` → show full amounts to the cent (NZ$1,277,734.48) and never round
+  // intermediate values, so column totals tie to the source to the cent.
+  const money = exact ? fmtExact : fmtK;
+  const keep  = (n) => exact ? n : Math.round(n);
 
   const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev > 0 ? 600 : 400 });
   const repCellStyle = { padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" };
@@ -387,10 +399,10 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
     return {
       name:    s.name,
       orders:  s.orders,
-      revenue: Math.round(s.revenue),
-      aov:     s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
-      cost:    m ? Math.round(m.cost || 0) : null,
-      grossProfit: m ? Math.round(m.grossProfit || 0) : null,
+      revenue: keep(s.revenue),
+      aov:     s.orders > 0 ? keep(s.revenue / s.orders) : 0,
+      cost:    m ? keep(m.cost || 0) : null,
+      grossProfit: m ? keep(m.grossProfit || 0) : null,
       marginPct:   m ? m.marginPct : null,
     };
   });
@@ -460,11 +472,11 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                   <td style={repCellStyle}>{r.name}</td>
                   <td style={numStyle()}>{r.orders.toLocaleString()}</td>
-                  <td style={{ ...cellStyle(r.revenue), color: accent, fontWeight: 700 }}>{fmtK(r.revenue, currency)}</td>
-                  <td style={cellStyle(r.aov)}>{fmtK(r.aov, currency)}</td>
+                  <td style={{ ...cellStyle(r.revenue), color: accent, fontWeight: 700 }}>{money(r.revenue, currency)}</td>
+                  <td style={cellStyle(r.aov)}>{money(r.aov, currency)}</td>
                   {hasMargin && (
                     <td style={{ ...cellStyle(r.grossProfit || 0), color: (r.grossProfit ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                      {r.grossProfit !== null ? fmtK(r.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                      {r.grossProfit !== null ? money(r.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
                     </td>
                   )}
                   {hasMargin && (
@@ -500,8 +512,8 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 return (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                     <td style={repCellStyle}>{rep.name}</td>
-                    {rep.months.map((m, mi) => <td key={mi} style={cellStyle(m.revenue)}>{m.revenue > 0 ? fmtK(m.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                    <td style={{ ...cellStyle(total), color: accent, fontWeight: 700 }}>{fmtK(Math.round(total), currency)}</td>
+                    {rep.months.map((m, mi) => <td key={mi} style={cellStyle(m.revenue)}>{m.revenue > 0 ? money(m.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
+                    <td style={{ ...cellStyle(total), color: accent, fontWeight: 700 }}>{money(keep(total), currency)}</td>
                   </tr>
                 );
               })}
@@ -512,9 +524,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
                   {MONTH_NAMES.map((m, mi) => {
                     const colTotal = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
-                    return <td key={mi} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700 }}>{colTotal > 0 ? fmtK(Math.round(colTotal), currency) : "—"}</td>;
+                    return <td key={mi} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700 }}>{colTotal > 0 ? money(keep(colTotal), currency) : "—"}</td>;
                   })}
-                  <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{fmtK(Math.round(monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0)), currency)}</td>
+                  <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0)), currency)}</td>
                 </tr>
               </tfoot>
             )}
@@ -552,8 +564,8 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 ) : weeklyPivot.map((rep, i) => (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                     <td style={repCellStyle}>{rep.name}</td>
-                    {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? fmtK(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
-                    <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{fmtK(rep.monthTotal, currency)}</td>
+                    {rep.weeks.map((w, wi) => <td key={wi} style={cellStyle(w.revenue)}>{w.revenue > 0 ? money(w.revenue, currency) : <span style={{ color: T.textLabel }}>—</span>}</td>)}
+                    <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700 }}>{money(rep.monthTotal, currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1713,6 +1725,7 @@ export default function EcommerceDashboard() {
                   weeklyMonth={weeklyMonth}
                   onWeeklyMonthChange={setWeeklyMonth}
                   T={T} accent={accent}
+                  exact
                 />
               </div>
             )}
