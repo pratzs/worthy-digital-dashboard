@@ -1252,6 +1252,14 @@ export default function EcommerceDashboard() {
   const kpiOrdGrowth = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiOrd, prevLatestOrd) : null) : ordG;
   const kpiAovGrowth = view === "weekly" ? null : view === "monthly" ? null : aovG;
 
+  // Period-aware footer metrics
+  const kpiNewC = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.newCustomers   || 0), 0)
+                : view === "monthly" ? (latestMonth?.newCustomers   || 0)
+                : totalNewC;
+  const kpiDisc = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.totalDiscounts || 0), 0)
+                : view === "monthly" ? (latestMonth?.totalDiscounts || 0)
+                : totalDisc;
+
   // Helper: compute week date range string, e.g. "1–7 Jun"
   const weekDateRange = (year, month, week) => {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1947,15 +1955,17 @@ export default function EcommerceDashboard() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: T.textHead }}>
                     {view === "weekly"
-                      ? `${MONTH_NAMES[weeklyMonth]} ${selectedYear} — Week by Week`
+                      ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
                       : view === "yoy"
                       ? `All Years — Year on Year`
-                      : `${selectedYear} — Jan to ${MONTH_NAMES[new Date().getMonth()]}`}
+                      : latestMonth
+                      ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}${activeStore.id === "luxe" ? ` · FY${String(selectedYear).slice(2)}` : ""}`
+                      : `${activeStore.id === "luxe" ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}
                   </div>
-                  <div style={{ fontSize: 11, color: T.textMuted }}>Advanced analytics auto-synced to selected period</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>Analytics for the selected period</div>
                 </div>
               </div>
-              <span style={{ fontSize: 11, color: accent, fontWeight: 600, background: `${accent}12`, padding: "4px 12px", borderRadius: 20 }}>
+              <span style={{ fontSize: 10, color: T.textMuted, fontFamily: "monospace", background: T.bgTableHead, padding: "4px 10px", borderRadius: 8, border: `1px solid ${T.border}` }}>
                 {advStartDate} → {advEndDate}
               </span>
             </div>
@@ -2020,22 +2030,6 @@ export default function EcommerceDashboard() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
-              <AdvancedTable
-                title="📉 Declining Products"
-                subtitle={decliningMode === "yoy" ? "Down >20% vs same period last year" : "Down >20% vs prior period"}
-                loading={advLoading}
-                currency={activeStore.currency}
-                data={decliningMode === "yoy" ? displayDeclining : (advancedData.curr?.decliningMoM || []).slice(0, 30)}
-                columns={decliningColumns}
-                aiContext="declining products"
-                headerExtra={
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {[["yoy","YoY"],["mom","MoM"]].map(([m, lbl]) => (
-                      <button key={m} onClick={() => setDecliningMode(m)} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${decliningMode === m ? accent : "rgba(255,255,255,0.1)"}`, background: decliningMode === m ? `${accent}25` : "transparent", color: decliningMode === m ? accent : "#4a4030", cursor: "pointer" }}>{lbl}</button>
-                    ))}
-                  </div>
-                }
-              />
               <AdvancedTable theme={T} title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
             </div>
           </>
@@ -2045,10 +2039,9 @@ export default function EcommerceDashboard() {
         <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
-              ["New Customers",   totalNewC || "—",                                                                                                     "#8aaa8a"],
-              ["Total Discounts", fmtK(totalDisc, activeStore.currency),                                                                                accent],
-              ["Discount Impact", advancedData.curr?.metrics?.discountImpactRatio ? `${(advancedData.curr.metrics.discountImpactRatio * 100).toFixed(1)}%` : "—", "#f87171"],
-              ["Gross Profit",    gp !== null ? fmtK(gp, activeStore.currency) : "—",                                                                   "#C97C9E"],
+              ["New Customers",   kpiNewC > 0 ? kpiNewC.toLocaleString() : "—", "#8aaa8a"],
+              ["Total Discounts", kpiDisc > 0 ? fmtK(kpiDisc, activeStore.currency) : "—", accent],
+              ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "—", "#C97C9E"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.textLabel, marginBottom: 2 }}>{lbl}</div>
@@ -2056,7 +2049,9 @@ export default function EcommerceDashboard() {
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.06em" }}>WORTHY PRODUCTS · FY{selectedYear}</div>
+          <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.06em" }}>
+            {activeStore.id === "luxe" ? `WORTHY PRODUCTS · FY${String(selectedYear).slice(2)}` : activeStore.name?.toUpperCase()}
+          </div>
         </div>
       </div>
     </div>
