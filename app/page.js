@@ -383,10 +383,14 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
 };
 
 // ── Sales Rep Breakdown — ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, T, accent, exact = false }) => {
+const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, T, accent, exact = false }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
   const marginByName = {};
   for (const m of (repMargins || [])) marginByName[m.name] = m;
+  // FY month display order: fyMonths is e.g. ["Apr",...,"Mar"]; null = calendar order
+  const displayMonths = fyMonths || MONTH_NAMES;
+  // Map FY display index → calendar month index (0=Jan..11=Dec)
+  const getCalIdx = (fi) => fyMonths ? (fi <= 8 ? fi + 3 : fi - 9) : fi;
   const [repView, setRepView] = useState("annual");
 
   // `exact` → show full amounts to the cent (NZ$1,277,734.48) and never round
@@ -443,8 +447,8 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
             👤 Sales by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
           </div>
           <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>
-            {repView === "annual"  ? `Annual totals — ${currency}` :
-             repView === "monthly" ? `Monthly breakdown by rep — ${currency}` :
+            {repView === "annual"  ? `${fyMonths ? "FY totals" : "Annual totals"} — ${currency}` :
+             repView === "monthly" ? `${fyMonths ? "FY monthly" : "Monthly"} breakdown by rep — ${currency}` :
                                      `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} — ${currency}`}
           </div>
         </div>
@@ -504,7 +508,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
             <thead>
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
-                {MONTH_NAMES.map(m => <th key={m} style={headStyle}>{m}</th>)}
+                {displayMonths.map(m => <th key={m} style={headStyle}>{m}</th>)}
                 <th style={{ ...headStyle, color: accent }}>Total Rev</th>
                 {hasMargin && <th style={headStyle}>Gross Profit</th>}
                 {hasMargin && <th style={headStyle}>Margin</th>}
@@ -516,16 +520,18 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   {loading ? "Loading…" : "No monthly data"}
                 </td></tr>
               ) : monthlyPivot.map((rep, i) => {
-                const total = rep.months.reduce((s, m) => s + m.revenue, 0);
+                const total = displayMonths.reduce((s, _, fi) => s + (rep.months[getCalIdx(fi)]?.revenue || 0), 0);
                 const marg  = marginByName[rep.name];
                 return (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                     <td style={repCellStyle}>{rep.name}</td>
-                    {rep.months.map((m, mi) => {
+                    {displayMonths.map((mn, fi) => {
+                      const mi = getCalIdx(fi);
+                      const m  = rep.months[mi] || { revenue: 0, orders: 0 };
                       const mm = marginByName[rep.name]?.months?.[mi];
                       const mColor = mm?.marginPct != null ? (mm.marginPct >= 20 ? "#4ade80" : mm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
                       return (
-                        <td key={mi} style={{ ...cellStyle(m.revenue), verticalAlign: "top" }}>
+                        <td key={mn} style={{ ...cellStyle(m.revenue), verticalAlign: "top" }}>
                           {m.revenue > 0 ? (
                             <>
                               <div>{money(m.revenue, currency)}</div>
@@ -554,14 +560,15 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
               <tfoot>
                 <tr style={{ borderTop: `1px solid ${T.border}` }}>
                   <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
-                  {MONTH_NAMES.map((m, mi) => {
+                  {displayMonths.map((mn, fi) => {
+                    const mi        = getCalIdx(fi);
                     const colTotal  = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
                     const colGP     = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.grossProfit || 0), 0) : null;
                     const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.revenue || 0), 0) : 0;
                     const colMargin = colMargRv > 0 && colGP != null ? Math.round((colGP / colMargRv) * 100) : null;
                     const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
                     return (
-                      <td key={mi} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
+                      <td key={mn} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
                         {colTotal > 0 ? (
                           <>
                             <div>{money(keep(colTotal), currency)}</div>
@@ -694,9 +701,13 @@ export default function EcommerceDashboard() {
   const _todayStr    = new Date().toISOString().split('T')[0];
   const advStartDate = view === "weekly"
     ? `${selectedYear}-${String(weeklyMonth + 1).padStart(2, '0')}-01`
+    : activeStore.id === "luxe"
+    ? `${selectedYear}-04-01`                       // FY starts April 1
     : `${selectedYear}-01-01`;
   const advEndDate = view === "weekly"
     ? new Date(selectedYear, weeklyMonth + 1, 0).toISOString().split('T')[0]
+    : activeStore.id === "luxe"
+    ? (selectedYear >= _thisYear ? _todayStr : `${selectedYear + 1}-03-31`) // FY ends March 31 of next cal year
     : (selectedYear === _thisYear ? _todayStr : `${selectedYear}-12-31`);
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -886,8 +897,16 @@ export default function EcommerceDashboard() {
     const storeId = activeStore.id; // capture so async closure stays correct
     advStoreRef.current = storeId;  // mark this store as the active advanced fetch
     const load = async () => {
-      setAdvancedData({});          // clear old store data immediately
-      setAdvLoading(true);
+      const advCacheKey = `adv:${storeId}:${advStartDate}:${advEndDate}:${channelTab}`;
+
+      // Restore from cache immediately — prevents blank tables on view/tab switches
+      if (cacheRef.current[advCacheKey]) {
+        setAdvancedData(cacheRef.current[advCacheKey]);
+        setAdvLoading(false);
+      } else {
+        setAdvancedData({});
+        setAdvLoading(true);
+      }
 
       // Nova store — Odoo only, no advanced analytics
       if (storeId === "nova") {
@@ -919,12 +938,14 @@ export default function EcommerceDashboard() {
         fetchMargins(storeId, selectedYear + 1);
       }
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
+      // Skip expensive fetch if already cached (set above)
+      if (cacheRef.current[advCacheKey]) return;
       try {
+        let result;
         if (storeId === "luxe") {
           const res  = await fetch(`/api/ostendo/advanced?startDate=${advStartDate}&endDate=${advEndDate}`, { cache: "no-store" });
           const data = await res.json();
           if (advStoreRef.current !== storeId) return; // stale — discard
-          // Map Ostendo field names → Shopify-compatible names used by display columns
           const mappedProducts    = (data.products   || []).map(p => ({ name: p.title, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin, category: p.category }));
           const mappedCategories  = (data.categories || []).map(c => ({ name: c.category, qty: c.unitsSold, revenue: c.revenue, margin: c.margin, productCount: c.productCount }));
           const mappedCustomers   = (data.customers  || []).map(c => ({ name: c.customer, orderCount: c.orderCount, revenue: c.totalSpend, status: c.status, email: c.email, aov: c.aov, lastOrderDays: c.lastOrderDays }));
@@ -932,17 +953,23 @@ export default function EcommerceDashboard() {
           const mappedChurned     = (data.churned    || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
           const mappedAtRisk      = (data.atRisk     || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
           const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: c.firstOrder || null }));
-          setAdvancedData({ curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], repMargins: data.repMargins || [], metrics: data.metrics || {} }, prev: {} });
+          result = { curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], repMargins: data.repMargins || [], metrics: data.metrics || {} }, prev: {} };
         } else {
           const channelParam = channelTab !== "odoo" ? `&channel=${channelTab}` : "";
           const res  = await fetch(`/api/shopify/advanced?startDate=${advStartDate}&endDate=${advEndDate}${channelParam}`, { cache: "no-store" });
           const data = await res.json();
           if (advStoreRef.current !== storeId) return; // stale — discard
-          setAdvancedData({ curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} });
+          result = { curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} };
         }
+        // Only cache if result has meaningful data (don't cache empty failures)
+        if (result.curr?.topCategories?.length || result.curr?.topProducts?.length || result.curr?.topCustomers?.length) {
+          cacheRef.current[advCacheKey] = result;
+        }
+        setAdvancedData(result);
       } catch (e) {
         console.error(`[${storeId}] Advanced fetch failed:`, e);
         if (advStoreRef.current !== storeId) return;
+        // Don't cache failures — let the next load retry
         setAdvancedData({ curr: { topProducts: [], topCategories: [], topCustomers: [], slowMoving: [], churned: [], atRisk: [], clv: [], declining: [], metrics: {} }, prev: {} });
       }
       if (advStoreRef.current === storeId) setAdvLoading(false);
@@ -1041,6 +1068,46 @@ export default function EcommerceDashboard() {
   };
   const getLuxeSalespeopleMonthly = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly || [];
   const getLuxeSalespeopleWeekly  = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleWeekly  || [];
+
+  // FY-aware monthly pivot: Apr-Dec from currYear + Jan-Mar from nextYear (FY tail)
+  const getLuxeSalespeopleMonthlyFY = () => {
+    const currData = cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly     || [];
+    const nextData = cacheRef.current[`luxe:${selectedYear + 1}`]?.salespeopleMonthly || [];
+    if (!currData.length) return [];
+    const nextByName = {};
+    for (const r of nextData) nextByName[r.name] = r;
+    const empty = { revenue: 0, orders: 0 };
+    return currData.map(rep => {
+      const nextRep = nextByName[rep.name];
+      // Replace months[0..2] with Jan-Mar of next calendar year (FY tail)
+      const months = [
+        nextRep?.months[0] || empty,
+        nextRep?.months[1] || empty,
+        nextRep?.months[2] || empty,
+        ...rep.months.slice(3),
+      ];
+      return { ...rep, months };
+    });
+  };
+
+  // FY-aware rep margins: replace Jan-Mar with next calendar year's data
+  const getLuxeFYRepMargins = () => {
+    const curr = cacheRef.current[`repMargins:luxe:${selectedYear}`]     || [];
+    const next = cacheRef.current[`repMargins:luxe:${selectedYear + 1}`] || [];
+    if (!curr.length) return [];
+    if (!next.length) return curr;
+    const nextByName = {};
+    for (const r of next) nextByName[r.name] = r;
+    return curr.map(rep => {
+      const nextRep = nextByName[rep.name];
+      if (!nextRep) return rep;
+      const months = [...rep.months];
+      months[0] = nextRep.months[0];
+      months[1] = nextRep.months[1];
+      months[2] = nextRep.months[2];
+      return { ...rep, months };
+    });
+  };
   const isLoading = (year) => {
     if (activeStore.id === "nova") return !!loadingRef.current[`odoo:1:${year}`];
     if (activeStore.id === "worthy" && channelTab === "odoo") return !!loadingRef.current[`odoo:4:${year}`];
@@ -1917,13 +1984,14 @@ export default function EcommerceDashboard() {
               <div style={{ marginBottom: 24 }}>
                 <SalesRepBreakdown
                   salespeople={getSalespeople()}
-                  salespeopleMonthly={getLuxeSalespeopleMonthly()}
+                  salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
                   salespeopleWeekly={getLuxeSalespeopleWeekly()}
-                  repMargins={cacheRef.current[`repMargins:luxe:${selectedYear}`] || advancedData.curr?.repMargins || []}
+                  repMargins={getLuxeFYRepMargins()}
                   loading={isLoading(selectedYear)}
                   currency={activeStore.currency}
                   weeklyMonth={weeklyMonth}
                   onWeeklyMonthChange={setWeeklyMonth}
+                  fyMonths={FY_MONTHS}
                   T={T} accent={accent}
                   exact
                 />
