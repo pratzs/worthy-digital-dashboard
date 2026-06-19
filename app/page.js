@@ -1105,7 +1105,19 @@ export default function EcommerceDashboard() {
       months[0] = nextRep.months[0];
       months[1] = nextRep.months[1];
       months[2] = nextRep.months[2];
-      return { ...rep, months };
+      // Top-level totals were calendar-year; recalculate from the patched FY months
+      const fyRev  = months.reduce((s, m) => s + (m.revenue || 0), 0);
+      const fyCost = months.reduce((s, m) => s + (m.cost    || 0), 0);
+      const fyGP   = fyRev - fyCost;
+      return {
+        ...rep,
+        months,
+        revenue:           Math.round(fyRev),
+        cost:              Math.round(fyCost),
+        grossProfit:       Math.round(fyGP),
+        marginableRevenue: Math.round(fyRev),
+        marginPct:         fyRev > 0 ? Math.round((fyGP / fyRev) * 100) : null,
+      };
     });
   };
   const isLoading = (year) => {
