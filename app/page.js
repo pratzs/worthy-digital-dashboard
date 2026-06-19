@@ -774,9 +774,9 @@ export default function EcommerceDashboard() {
       const mergeMonthly = (arr) => arr.map(m => {
         const cost = mCostMap[m.month];
         if (cost == null || cost === 0) return m;
-        const gp     = Math.round(m.revenue - cost);
-        const margin = m.revenue > 0 ? Math.round((gp / m.revenue) * 100) : 0;
-        return { ...m, totalCost: cost, grossProfit: gp, marginPct: margin, hasCostData: true, marginableRevenue: m.revenue };
+        const gp     = m.revenue - cost;                                          // full precision — rounding here before the division compounds ~2% error
+        const margin = m.revenue > 0 ? Math.round((gp / m.revenue) * 100) : 0;  // round only the final %
+        return { ...m, totalCost: Math.round(cost), grossProfit: Math.round(gp), marginPct: margin, hasCostData: true, marginableRevenue: m.revenue };
       });
       cached.all    = mergeMonthly(cached.all    || []);
       cached.pos    = mergeMonthly(cached.pos    || []);
@@ -790,9 +790,9 @@ export default function EcommerceDashboard() {
       const mergeWeekly = (arr) => arr.map(w => {
         const cost = wCostMap[`${w.month}_${w.week}`];
         if (!cost) return w;
-        const gp     = Math.round(w.revenue - cost);
-        const margin = w.revenue > 0 ? Math.round((gp / w.revenue) * 100) : 0;
-        return { ...w, totalCost: cost, grossProfit: gp, marginPct: margin, hasCostData: true };
+        const gp     = w.revenue - cost;                                          // full precision — rounding here before the division compounds ~2% error
+        const margin = w.revenue > 0 ? Math.round((gp / w.revenue) * 100) : 0;  // round only the final %
+        return { ...w, totalCost: Math.round(cost), grossProfit: Math.round(gp), marginPct: margin, hasCostData: true };
       });
       cached.weekly       = mergeWeekly(cached.weekly       || []);
       cached.weeklyPos    = mergeWeekly(cached.weeklyPos    || []);

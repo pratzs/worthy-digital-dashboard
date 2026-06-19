@@ -150,7 +150,7 @@ export async function GET(request) {
 
     const monthly = MONTH_NAMES.map((m, mi) => ({
       month:       m,
-      totalCost:   Math.round(monthlyCost[mi]),
+      totalCost:   monthlyCost[mi],          // keep full precision — margin calc needs this unrounded
       hasCostData: monthlyHasCost[mi],
     }));
 
@@ -164,7 +164,7 @@ export async function GET(request) {
         weekly.push({
           month:       mi,
           week:        w,
-          totalCost:   Math.round(weeklyCostMap[wkey] || 0),
+          totalCost:   weeklyCostMap[wkey] || 0,  // keep full precision — margin calc needs this unrounded
           hasCostData: !!(weeklyCostMap[wkey]),
         });
       }
@@ -200,31 +200,37 @@ export async function GET(request) {
     }
 
     const repMargins = Object.entries(repAgg).map(([name, r]) => {
-      const rev  = Math.round(r.revenue);
-      const cost = Math.round(r.cost);
-      const gp   = rev - cost;
+      // Use raw (unrounded) values for all intermediate calculations — only round for display.
+      // Rounding revenue/cost before computing GP then rounding the % again compounds errors (~2%).
+      const gp = r.revenue - r.cost;
       const months = r.monthly.map((m, mi) => {
-        const mRev  = Math.round(m.revenue);
-        const mCost = Math.round(m.cost);
-        const mGP   = mRev - mCost;
+        const mGP = m.revenue - m.cost;
         return {
-          month: MONTH_NAMES[mi], revenue: mRev, cost: mCost,
-          grossProfit: mGP, marginPct: mRev > 0 ? Math.round((mGP / mRev) * 100) : null,
+          month: MONTH_NAMES[mi],
+          revenue:     Math.round(m.revenue),
+          cost:        Math.round(m.cost),
+          grossProfit: Math.round(mGP),
+          marginPct:   m.revenue > 0 ? Math.round((mGP / m.revenue) * 100) : null,
         };
       });
       const weeks = Object.entries(r.weekly).map(([key, w]) => {
         const [moIdx, wkIdx] = key.split('_').map(Number);
-        const wRev  = Math.round(w.revenue);
-        const wCost = Math.round(w.cost);
-        const wGP   = wRev - wCost;
+        const wGP = w.revenue - w.cost;
         return {
-          month: moIdx, week: wkIdx, revenue: wRev, cost: wCost,
-          grossProfit: wGP, marginPct: wRev > 0 ? Math.round((wGP / wRev) * 100) : null,
+          month: moIdx, week: wkIdx,
+          revenue:     Math.round(w.revenue),
+          cost:        Math.round(w.cost),
+          grossProfit: Math.round(wGP),
+          marginPct:   w.revenue > 0 ? Math.round((wGP / w.revenue) * 100) : null,
         };
       });
       return {
-        name, revenue: rev, cost, grossProfit: gp, marginableRevenue: rev,
-        marginPct: rev > 0 ? Math.round((gp / rev) * 100) : null,
+        name,
+        revenue:           Math.round(r.revenue),
+        cost:              Math.round(r.cost),
+        grossProfit:       Math.round(gp),
+        marginableRevenue: Math.round(r.revenue),
+        marginPct:         r.revenue > 0 ? Math.round((gp / r.revenue) * 100) : null,
         months, weeks,
       };
     }).sort((a, b) => b.revenue - a.revenue);
