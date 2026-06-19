@@ -1095,17 +1095,19 @@ export default function EcommerceDashboard() {
     const curr = cacheRef.current[`repMargins:luxe:${selectedYear}`]     || [];
     const next = cacheRef.current[`repMargins:luxe:${selectedYear + 1}`] || [];
     if (!curr.length) return [];
-    if (!next.length) return curr;
+    // No early-return when next is empty — current FY is still in progress so
+    // Jan-Mar (FY tail) don't exist yet and should be zeroed, not taken from curr.
     const nextByName = {};
     for (const r of next) nextByName[r.name] = r;
+    const zeroMonth = { revenue: 0, cost: 0, grossProfit: 0, marginPct: null };
     return curr.map(rep => {
       const nextRep = nextByName[rep.name];
-      if (!nextRep) return rep;
-      const months = [...rep.months];
-      months[0] = nextRep.months[0];
-      months[1] = nextRep.months[1];
-      months[2] = nextRep.months[2];
-      // Top-level totals were calendar-year; recalculate from the patched FY months
+      const months  = [...rep.months];
+      // Replace Jan/Feb/Mar with next-year data (or zero when FY tail hasn't happened yet)
+      months[0] = nextRep?.months[0] || zeroMonth;
+      months[1] = nextRep?.months[1] || zeroMonth;
+      months[2] = nextRep?.months[2] || zeroMonth;
+      // Always recalculate top-level totals from the patched FY months
       const fyRev  = months.reduce((s, m) => s + (m.revenue || 0), 0);
       const fyCost = months.reduce((s, m) => s + (m.cost    || 0), 0);
       const fyGP   = fyRev - fyCost;
