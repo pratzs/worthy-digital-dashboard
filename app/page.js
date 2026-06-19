@@ -568,7 +568,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     const colTotal  = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
                     const colGP     = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.grossProfit || 0), 0) : null;
                     const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.revenue || 0), 0) : 0;
-                    const colMargin = colMargRv > 0 && colGP != null ? Math.round((colGP / colMargRv) * 100) : null;
+                    const colMargin = colMargRv > 0 && colGP != null ? parseFloat(((colGP / colMargRv) * 100).toFixed(1)) : null;
                     const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
                     return (
                       <td key={mn} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
@@ -586,7 +586,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     const totalGP    = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.grossProfit || 0), 0) : null;
                     const totalMargRv = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.marginableRevenue || m.revenue || 0), 0) : 0;
                     const totalCostF  = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.cost || 0), 0) : 0;
-                    const totalMarginPct = totalMargRv > 0 ? Math.round(((totalMargRv - totalCostF) / totalMargRv) * 100) : null;
+                    const totalMarginPct = totalMargRv > 0 ? parseFloat((((totalMargRv - totalCostF) / totalMargRv) * 100).toFixed(1)) : null;
                     return (
                       <>
                         <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(grandTotal), currency)}</td>
@@ -1121,7 +1121,7 @@ export default function EcommerceDashboard() {
         cost:              Math.round(fyCost),
         grossProfit:       Math.round(fyGP),
         marginableRevenue: Math.round(fyRev),
-        marginPct:         fyRev > 0 ? Math.round((fyGP / fyRev) * 100) : null,
+        marginPct:         fyRev > 0 ? parseFloat(((fyGP / fyRev) * 100).toFixed(1)) : null,
       };
     });
   };

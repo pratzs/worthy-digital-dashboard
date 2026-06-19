@@ -199,9 +199,9 @@ export async function GET(request) {
       repAgg[rep].weekly[wkey].cost    += cost;
     }
 
+    const pct1 = (num, den) => den > 0 ? parseFloat(((num / den) * 100).toFixed(1)) : null;
+
     const repMargins = Object.entries(repAgg).map(([name, r]) => {
-      // Use raw (unrounded) values for all intermediate calculations — only round for display.
-      // Rounding revenue/cost before computing GP then rounding the % again compounds errors (~2%).
       const gp = r.revenue - r.cost;
       const months = r.monthly.map((m, mi) => {
         const mGP = m.revenue - m.cost;
@@ -210,7 +210,7 @@ export async function GET(request) {
           revenue:     Math.round(m.revenue),
           cost:        Math.round(m.cost),
           grossProfit: Math.round(mGP),
-          marginPct:   m.revenue > 0 ? Math.round((mGP / m.revenue) * 100) : null,
+          marginPct:   pct1(mGP, m.revenue),
         };
       });
       const weeks = Object.entries(r.weekly).map(([key, w]) => {
@@ -221,7 +221,7 @@ export async function GET(request) {
           revenue:     Math.round(w.revenue),
           cost:        Math.round(w.cost),
           grossProfit: Math.round(wGP),
-          marginPct:   w.revenue > 0 ? Math.round((wGP / w.revenue) * 100) : null,
+          marginPct:   pct1(wGP, w.revenue),
         };
       });
       return {
@@ -230,7 +230,7 @@ export async function GET(request) {
         cost:              Math.round(r.cost),
         grossProfit:       Math.round(gp),
         marginableRevenue: Math.round(r.revenue),
-        marginPct:         r.revenue > 0 ? Math.round((gp / r.revenue) * 100) : null,
+        marginPct:         pct1(gp, r.revenue),
         months, weeks,
       };
     }).sort((a, b) => b.revenue - a.revenue);
