@@ -98,11 +98,17 @@ export async function GET(request) {
     const [rawHeaders, rawCosts] = await Promise.all([
       ostendoGet('SALESINVOICEHEADER', yearCond),
       ostendoSql(
-        `SELECT INVOICENUMBER, SUM(INVOICEQTY * INVOICEUNITCOST) AS TOTALCOST ` +
-        `FROM SALESINVOICELINES ` +
-        `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
-        `AND INVOICEUNITCOST > 0 ` +
-        `GROUP BY INVOICENUMBER`
+        // Use AVERAGECOST from ITEMMASTER (current weighted average), falling back to
+        // INVOICEUNITCOST for lines where AVERAGECOST is 0 or item not in ITEMMASTER.
+        // LEFT JOIN ensures services/special lines are included; NULLIF avoids zero-cost
+        // items swallowing INVOICEUNITCOST data.
+        `SELECT sil.INVOICENUMBER, ` +
+        `SUM(sil.INVOICEQTY * COALESCE(NULLIF(im.AVERAGECOST, 0), sil.INVOICEUNITCOST)) AS TOTALCOST ` +
+        `FROM SALESINVOICELINES sil ` +
+        `LEFT JOIN ITEMMASTER im ON sil.LINECODE = im.ITEMCODE ` +
+        `WHERE sil.INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
+        `GROUP BY sil.INVOICENUMBER ` +
+        `HAVING SUM(sil.INVOICEQTY * COALESCE(NULLIF(im.AVERAGECOST, 0), sil.INVOICEUNITCOST)) > 0`
       ).catch(e => {
         console.warn('[Ostendo/margins] sqlquery failed:', e.message);
         return [];

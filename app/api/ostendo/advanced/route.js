@@ -236,6 +236,17 @@ const lineNet = (line) => {
 const lineCostTotal = (line) =>
   parseNum(line.INVOICEQTY) * parseNum(line.INVOICEUNITCOST);
 
+// Override item-level cost with AVERAGECOST from ITEMMASTER where available.
+// Falls back to INVOICEUNITCOST aggregate for lines not in ITEMMASTER or AVERAGECOST=0.
+function applyAverageCost(itemRevMap, itemMap) {
+  for (const [code, entry] of Object.entries(itemRevMap)) {
+    const it  = itemMap[code];
+    const avg = it ? parseNum(it.AVERAGECOST ?? it.ITEMAVERAGECOST) : 0;
+    if (avg > 0) entry.cost = entry.qty * avg;
+    // If avg=0 or item not in ITEMMASTER, keep the INVOICEUNITCOST-based cost
+  }
+}
+
 /**
  * Build a Firebird INVOICEDATE condition using only EXTRACT() and IN() —
  * avoids >= / <= operators which can be problematic in Firebird URL conditions.
@@ -381,7 +392,7 @@ export async function GET(request) {
     if (soldCodes.length > 0) {
       // Primary: POST /sqlquery with full SQL — avoids URL encoding quirks
       try {
-        const itemSql = `SELECT ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY, ONHANDQTY, STDBUYPRICE, STDSELLPRICE FROM ITEMMASTER WHERE ITEMCODE IN (SELECT DISTINCT LINECODE FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
+        const itemSql = `SELECT ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY, ONHANDQTY, STDBUYPRICE, STDSELLPRICE, AVERAGECOST FROM ITEMMASTER WHERE ITEMCODE IN (SELECT DISTINCT LINECODE FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
         console.log(`[Ostendo/adv] item sqlquery: ${itemSql.substring(0, 220)}`);
         const sqlRes = await ostendoSqlQuery(itemSql, 30000);
         itemRows = normalizeRows(sqlRes);
@@ -448,6 +459,10 @@ export async function GET(request) {
     }
 
     const currItemRevMap = buildItemRevMap(currLineRows);
+    // Override INVOICEUNITCOST with AVERAGECOST from ITEMMASTER where available
+    const avgCostCoverage = Object.keys(currItemRevMap).filter(c => itemMap[c] && parseNum(itemMap[c].AVERAGECOST ?? itemMap[c].ITEMAVERAGECOST) > 0).length;
+    console.log(`[Ostendo/adv] AVERAGECOST coverage: ${avgCostCoverage}/${Object.keys(currItemRevMap).length} items`);
+    applyAverageCost(currItemRevMap, itemMap);
 
     // ── TOP PRODUCTS ──────────────────────────────────────────────────────────
     // Use LINEDESCRIPTION / CATALOGUECATEGORY first (always present on line rows).
