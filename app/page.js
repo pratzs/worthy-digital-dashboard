@@ -418,11 +418,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   });
   const hasMargin = annualRows.some(r => r.marginPct !== null && r.marginPct !== undefined);
 
-  // Monthly pivot rows: when repMargins available use it as single source of truth
-  // (revenue, GP, margin all from same invoices — no cross-API merging needed)
-  const monthlyPivot = repMargins?.length > 0
-    ? repMargins.map(r => ({ name: r.name, months: r.months.map(m => ({ revenue: m.revenue || 0, orders: 0 })) }))
-    : (salespeopleMonthly || []);
+  const monthlyPivot = salespeopleMonthly || [];
 
   // Weekly pivot rows for selectedMonth: cols = W1..W5 + Month Total
   const maxWeeks = 5;

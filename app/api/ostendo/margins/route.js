@@ -107,7 +107,7 @@ export async function GET(request) {
         `LEFT JOIN ITEMMASTER im ON sil.LINECODE = im.ITEMCODE ` +
         `WHERE sil.INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
         `GROUP BY sil.INVOICENUMBER ` +
-        `HAVING SUM(sil.INVOICEQTY * COALESCE(im.AVERAGECOST, 0)) > 0`
+        `HAVING SUM(sil.INVOICEQTY * COALESCE(im.AVERAGECOST, 0)) <> 0`
       ).catch(e => {
         console.warn('[Ostendo/margins] sqlquery failed:', e.message);
         return [];
