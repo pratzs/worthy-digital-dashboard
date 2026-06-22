@@ -98,17 +98,17 @@ export async function GET(request) {
     const [rawHeaders, rawCosts] = await Promise.all([
       ostendoGet('SALESINVOICEHEADER', yearCond),
       ostendoSql(
-        // Use AVERAGECOST from ITEMMASTER (current weighted average), falling back to
-        // INVOICEUNITCOST for lines where AVERAGECOST is 0 or item not in ITEMMASTER.
-        // LEFT JOIN ensures services/special lines are included; NULLIF avoids zero-cost
-        // items swallowing INVOICEUNITCOST data.
+        // COGS only for stock lines (im.ITEMCODE IS NOT NULL = item exists in ITEMMASTER).
+        // Service/freight lines have no ITEMMASTER entry — their INVOICEUNITCOST is the
+        // customer charge, not a cost, so we exclude them (ELSE 0).
+        // For stock items: use AVERAGECOST where populated, fall back to INVOICEUNITCOST.
         `SELECT sil.INVOICENUMBER, ` +
-        `SUM(sil.INVOICEQTY * COALESCE(NULLIF(im.AVERAGECOST, 0), sil.INVOICEUNITCOST)) AS TOTALCOST ` +
+        `SUM(sil.INVOICEQTY * CASE WHEN im.ITEMCODE IS NOT NULL THEN COALESCE(NULLIF(im.AVERAGECOST, 0), sil.INVOICEUNITCOST) ELSE 0 END) AS TOTALCOST ` +
         `FROM SALESINVOICELINES sil ` +
         `LEFT JOIN ITEMMASTER im ON sil.LINECODE = im.ITEMCODE ` +
         `WHERE sil.INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
         `GROUP BY sil.INVOICENUMBER ` +
-        `HAVING SUM(sil.INVOICEQTY * COALESCE(NULLIF(im.AVERAGECOST, 0), sil.INVOICEUNITCOST)) > 0`
+        `HAVING SUM(sil.INVOICEQTY * CASE WHEN im.ITEMCODE IS NOT NULL THEN COALESCE(NULLIF(im.AVERAGECOST, 0), sil.INVOICEUNITCOST) ELSE 0 END) > 0`
       ).catch(e => {
         console.warn('[Ostendo/margins] sqlquery failed:', e.message);
         return [];
