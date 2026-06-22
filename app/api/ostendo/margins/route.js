@@ -98,16 +98,17 @@ export async function GET(request) {
     const [rawHeaders, rawCosts] = await Promise.all([
       ostendoGet('SALESINVOICEHEADER', yearCond),
       ostendoSql(
-        // Pure AVERAGECOST from ITEMMASTER — no fallback to INVOICEUNITCOST.
-        // INVOICEUNITCOST in SALESINVOICELINES stores the selling price, not COGS,
-        // so using it as a fallback inflates costs. Items without AVERAGECOST contribute 0.
-        `SELECT sil.INVOICENUMBER, ` +
-        `SUM(sil.INVOICEQTY * COALESCE(im.AVERAGECOST, 0)) AS TOTALCOST ` +
-        `FROM SALESINVOICELINES sil ` +
-        `LEFT JOIN ITEMMASTER im ON sil.LINECODE = im.ITEMCODE ` +
-        `WHERE sil.INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
-        `GROUP BY sil.INVOICENUMBER ` +
-        `HAVING SUM(sil.INVOICEQTY * COALESCE(im.AVERAGECOST, 0)) <> 0`
+        // INVOICEUNITCOST is the average cost at invoice time (Ostendo's Average Cost
+        // valuation method writes it to the line when posted — it is NOT the current
+        // ITEMMASTER.AVERAGECOST, which changes as new stock arrives).
+        // HAVING <> 0 (not WHERE > 0) so return/credit invoices with negative totals
+        // are included and correctly reduce COGS.
+        `SELECT INVOICENUMBER, ` +
+        `SUM(INVOICEQTY * INVOICEUNITCOST) AS TOTALCOST ` +
+        `FROM SALESINVOICELINES ` +
+        `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${yearCond}) ` +
+        `GROUP BY INVOICENUMBER ` +
+        `HAVING SUM(INVOICEQTY * INVOICEUNITCOST) <> 0`
       ).catch(e => {
         console.warn('[Ostendo/margins] sqlquery failed:', e.message);
         return [];
