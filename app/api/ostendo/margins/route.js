@@ -134,7 +134,7 @@ export async function GET(request) {
     for (const row of costRows) {
       const num  = getInvNum(row);
       const cost = parseNum(row.TOTALCOST ?? row.totalcost ?? row.LINECOST);
-      if (num && cost > 0) invCostMap[num] = cost;
+      if (num && cost !== 0) invCostMap[num] = cost;
     }
 
     // ── Overall monthly/weekly aggregates (used by KPI cards) ───────────────────
