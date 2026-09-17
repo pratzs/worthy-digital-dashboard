@@ -164,6 +164,33 @@ shared helper, no micro-dollar arithmetic, no reconciliation — and compared.
       correct `orderCount` then overwrote it with an undefined `c.orders`. A
       sweep of every table on the page now finds no all-blank column.
 
+### 23. The uncosted revenue is NOT missing product costs — corrected
+
+Pratham challenged the claim that NZ$37,029.70 of North's sales carry no cost
+"because Odoo holds no cost for them". He was right to. Checked against Odoo:
+
+- Of the **1,480 products** North sold in FY26, **1,470 carry a cost price**.
+- The **10 that do not** account for **NZ$1,287.52** — and five of those are
+  display stands and promo shirts given away at nil revenue (Pringles display
+  stand, KitKat F1 polo shirt, Warheads towel, Fruity Ice freezer, Fruity Burst
+  stand). The only one of any size is `B0055` BIC Razor Flex 3, NZ$958.32.
+- The real gap is **NZ$35,742.18 across 428 invoice lines with no product on
+  them at all** — freight recharges, pallet rent, expense reimbursements,
+  insurance write-off claims and supplier rebate claims (Nestlé King Share Bar,
+  Bundaberg, Mars), all typed in by hand. Real income, nothing bought to earn
+  it, so no cost of sales exists to show. This is also why the three withheld
+  reps have no margin: it is what they invoice.
+
+The arithmetic was always right; the explanation was not. `/api/odoo/fy` now
+measures the no-product share itself (`nonStockRevenue`) instead of the copy
+guessing at the cause, and the banner and rep note say what it actually is.
+
+**Also checked and ruled out:** `standard_price` is `company_dependent: false`
+on this database, the service login already defaults to Worthy Products Ltd
+(company 4), and **not one of the 1,480 prices changes** when read with company
+context. The cost basis is sound. (`qty_available` *is* company-sensitive —
+that read does carry context.)
+
 ### Known, not a defect
 
 - The service account cannot read `product.product` records belonging to other
