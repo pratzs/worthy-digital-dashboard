@@ -1183,8 +1183,10 @@ export default function EcommerceDashboard() {
   const getSalespeople = () => {
     if (activeStore.id === "luxe") {
       // Same payload as the year total, so the rep rows always add up to it.
+      // Same cost basis as everything else, or the rep table contradicts the
+      // monthly table sitting directly above it.
       return (fyPayload(selectedYear)?.reps || []).map(r => ({
-        name: r.name, revenue: r.revenue, orders: r.invoices, aov: r.aov,
+        name: r.name, revenue: basisOf(r).revenue, orders: r.invoices, aov: r.aov,
         returns: r.credits, returnValue: r.creditValue, unnamed: !r.named,
       }));
     }
@@ -1222,7 +1224,7 @@ export default function EcommerceDashboard() {
   const getLuxeSalespeopleMonthlyFY = () =>
     (fyPayload(selectedYear)?.reps || []).map(r => ({
       name: r.name,
-      months: r.months.map(m => ({ month: m.label, revenue: m.revenue, orders: m.invoices, started: m.started })),
+      months: r.months.map(m => ({ month: m.label, revenue: basisOf(m).revenue, orders: m.invoices, started: m.started })),
     }));
 
   const getLuxeSalespeopleWeekly = () =>
@@ -1230,24 +1232,23 @@ export default function EcommerceDashboard() {
       name: r.name,
       weekly: r.weeks.map(w => ({
         month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
-        week: w.week, revenue: w.revenue, orders: w.invoices,
+        week: w.week, revenue: basisOf(w).revenue, orders: w.invoices,
       })),
     }));
 
   const getLuxeFYRepMargins = () =>
     (fyPayload(selectedYear)?.reps || []).map(r => ({
       name: r.name,
-      revenue: r.revenue, cost: r.cost, grossProfit: r.grossProfit,
-      marginableRevenue: r.revenue, marginPct: r.marginPct,
-      priorRevenue: r.prior.revenue, growthPct: r.growthPct,
+      ...basisOf(r),
+      cost: basisOf(r).cost,
+      marginableRevenue: basisOf(r).revenue,
+      priorRevenue: basisOf(r.prior).revenue, growthPct: r.growthPct,
       months: r.months.map(m => ({
-        month: m.label, revenue: m.revenue, cost: m.cost,
-        grossProfit: m.grossProfit, marginPct: m.marginPct, started: m.started,
+        month: m.label, ...basisOf(m), cost: basisOf(m).cost, started: m.started,
       })),
       weeks: r.weeks.map(w => ({
         month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
-        week: w.week, revenue: w.revenue, cost: w.cost,
-        grossProfit: w.grossProfit, marginPct: w.marginPct,
+        week: w.week, ...basisOf(w), cost: basisOf(w).cost,
       })),
     }));
 
