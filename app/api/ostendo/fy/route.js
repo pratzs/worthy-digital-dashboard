@@ -411,6 +411,10 @@ export async function GET(request) {
     reconcile(repRows, toDollars(currTotal.cost), (r) => r.cost, (r, v) => { r.cost = v; restate(r); });
     repRows.forEach(restate);
 
+    // Discounts are rounded per row too, so they need the same treatment.
+    reconcile(started,  toDollars(currTotal.discount), (r) => r.discounts, (r, v) => { r.discounts = v; });
+    reconcile(repRows,  toDollars(currTotal.discount), (r) => r.discounts, (r, v) => { r.discounts = v; });
+
     // Weeks inside each month, and each rep's months inside that rep.
     for (const m of started) {
       const wk = weekRows.filter((w) => w.monthKey === m.key);
