@@ -59,7 +59,7 @@ export async function GET(request) {
 
     const inPeriod = SALES(start, end);
 
-    const [products, categories, custPeriod, custLifetime, stock, adjustments] = await Promise.all([
+    const [products, categories, custPeriod, custLifetime, stock, soldAll, adjustments] = await Promise.all([
       // 1. Products actually sold in the period (stock lines only).
       //    LEFT JOIN so a product missing from ITEMMASTER still appears, just
       //    without a category, rather than dropping out of the table.
@@ -106,7 +106,17 @@ export async function GET(request) {
                i.ONHANDQTY AS ONHAND, i.STDBUYPRICE AS BUY, i.AVERAGECOST AS AVGCOST
         FROM ITEMMASTER i WHERE i.ONHANDQTY > 0 ORDER BY i.ONHANDQTY * i.STDBUYPRICE DESC`),
 
-      // 6. Rebates, credits and write-offs — non-stock lines carrying no cost.
+      // 6. Units sold for EVERY stock code, not just the top sellers.
+      //     The slow-moving table was looking its quantities up in the top-200
+      //     by revenue, which by definition a slow mover is never in — so every
+      //     row reported "0 sold" even for items that plainly had sold.
+      ostendoSql(`
+        SELECT l.LINECODE AS CODE, SUM(l.INVOICEQTY) AS QTY
+        FROM SALESINVOICELINES l
+        WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
+        GROUP BY l.LINECODE`),
+
+      // 7. Rebates, credits and write-offs — non-stock lines carrying no cost.
       ostendoSql(`
         SELECT l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME, COUNT(*) AS N,
                SUM(l.EXTENDEDNETTPRICE) AS NETT
@@ -163,7 +173,7 @@ export async function GET(request) {
         };
       });
 
-    const soldQty = new Map(productRows.map((p) => [p.code, p.unitsSold]));
+    const soldQty = new Map((soldAll || []).map((r) => [r.CODE, Math.round(Number(r.QTY) || 0)]));
     const slowMoving = stock
       .map((s) => {
         const onHand = Number(s.ONHAND) || 0;

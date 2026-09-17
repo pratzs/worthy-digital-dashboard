@@ -1698,6 +1698,17 @@ export default function EcommerceDashboard() {
                 {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
                 {" "}· sales are counted without GST, and cost is what each item cost on the day it was invoiced.
               </div>
+              {t.suspectLines > 0 && (
+                <div style={{ color: "#b45309" }}>
+                  <strong>Margin is being held down by cost data that needs fixing.</strong>{" "}
+                  {t.suspectLines.toLocaleString()} lines carry {fmtExact(t.suspectCost, activeStore.currency)} of cost
+                  against only {fmtExact(t.suspectRevenue, activeStore.currency)} of sales — a single block of chocolate
+                  invoiced at NZ$63.75 has NZ$6,362.40 of cost on it, and the same item is costed anywhere from
+                  NZ$3.52 to NZ$183.78 across the year. The {t.marginPct}% margin below is what the records actually
+                  say; on the {(100 - (t.suspectRevenue / t.revenue * 100)).toFixed(1)}% of sales whose cost looks sound
+                  it is <strong>{t.marginPctExSuspect}%</strong>.
+                </div>
+              )}
               {t.priorComparable === false ? (
                 <div style={{ color: "#b45309" }}>
                   <strong>No “vs last year” figures are shown for this year.</strong> Ostendo’s records only start{" "}

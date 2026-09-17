@@ -35,8 +35,7 @@ export const maxDuration = 60;
  * and summing INVOICENETTAMOUNT would multiply each invoice by its line count. */
 const headerSql = (start, end) => `
   SELECT h.INVOICEDATE AS D, h.INVOICEORCREDIT AS OC, h.SALESPERSON AS SP,
-         COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT,
-         SUM(h.LINEDISCOUNTAMOUNT) AS DISC
+         COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT
   FROM SALESINVOICEHEADER h
   WHERE h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}
   GROUP BY 1, 2, 3`;
@@ -52,11 +51,38 @@ const firstOrderSql = () => `
         FROM SALESINVOICEHEADER h WHERE h.INVOICEORCREDIT <> 'Credit' GROUP BY 1) F
   GROUP BY 1, 2`;
 
-/* Cost of goods. Credit-note lines carry negative quantities, so they reduce
- * COGS here exactly as they reduce revenue above. */
+/*
+ * Cost of goods, the discount given, and a count of lines whose cost cannot be
+ * right. Credit-note lines carry negative quantities, so they reduce all three
+ * exactly as they reduce revenue above.
+ *
+ * DISCOUNT: this business does not populate DISCOUNTAMOUNT (NZ$146.81 across a
+ * whole year) or the header's LINEDISCOUNTAMOUNT (NZ$14,548.93). The discount
+ * lives in the gap between CUSTOMERUNITPRICE — the customer's agreed price —
+ * and what was actually invoiced, and DISCOUNTPERCENT is populated on 97% of
+ * lines to match. Measured that way FY26 comes to NZ$1.74m, and valuing it the
+ * other way (qty x price x discount %) agrees to within 0.6%.
+ * Only stock lines carry a customer price, so descriptor lines are excluded.
+ *
+ * SUSPECT COST: some lines carry an invoiced unit cost that cannot be a real
+ * cost — a single Cadbury block at NZ$63.75 with NZ$6,362.40 of cost against
+ * it, and the same item costed anywhere from NZ$3.52 to NZ$183.78 across the
+ * year. These are counted so the dashboard can say how much of the margin is
+ * resting on cost data that needs fixing, rather than quietly restating it.
+ */
+const STOCK_LINE = `l.CODETYPE = 'Item Code'`;
+const SUSPECT = `${STOCK_LINE} AND l.INVOICEQTY > 0 AND l.EXTENDEDNETTPRICE > 0
+                 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE`;
+
 const costSql = (start, end) => `
   SELECT h.INVOICEDATE AS D, h.SALESPERSON AS SP,
-         SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+         SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST,
+         SUM(CASE WHEN ${STOCK_LINE}
+                  THEN l.INVOICEQTY * l.CUSTOMERUNITPRICE - l.EXTENDEDNETTPRICE
+                  ELSE 0 END) AS DISC,
+         SUM(CASE WHEN ${SUSPECT} THEN l.INVOICEQTY * l.INVOICEUNITCOST ELSE 0 END) AS SUSCOST,
+         SUM(CASE WHEN ${SUSPECT} THEN l.EXTENDEDNETTPRICE ELSE 0 END) AS SUSREV,
+         SUM(CASE WHEN ${SUSPECT} THEN 1 ELSE 0 END) AS SUSLINES
   FROM SALESINVOICELINES l
   JOIN SALESINVOICEHEADER h ON h.INVOICENUMBER = l.INVOICENUMBER
   WHERE h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}
@@ -66,7 +92,8 @@ const costSql = (start, end) => `
 const dayKey = (v) => normaliseDate(v);
 
 /** Empty accumulator. All money is held as exact integer units, never floats. */
-const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0, discount: 0 });
+const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0,
+                       discount: 0, suspectCost: 0, suspectRevenue: 0, suspectLines: 0 });
 
 const add = (t, s) => {
   t.revenue     += s.revenue;
@@ -74,7 +101,10 @@ const add = (t, s) => {
   t.invoices    += s.invoices;
   t.credits     += s.credits;
   t.creditValue += s.creditValue;
-  t.discount    += s.discount;
+  t.discount       += s.discount;
+  t.suspectCost    += s.suspectCost;
+  t.suspectRevenue += s.suspectRevenue;
+  t.suspectLines   += s.suspectLines;
   return t;
 };
 
@@ -90,6 +120,14 @@ const present = (a) => {
     credits:     a.credits,
     creditValue: toDollars(a.creditValue),
     discounts:   toDollars(a.discount),
+    // What the margin would be if the lines with impossible cost were excluded.
+    // Shown beside the real figure, never instead of it.
+    suspectCost:    toDollars(a.suspectCost),
+    suspectRevenue: toDollars(a.suspectRevenue),
+    suspectLines:   a.suspectLines,
+    marginPctExSuspect: pct1(
+      (a.revenue - a.suspectRevenue) - (a.cost - a.suspectCost),
+      a.revenue - a.suspectRevenue),
     aov:         a.invoices > 0 ? toDollars(a.revenue / a.invoices) : 0,
   };
 };
@@ -148,7 +186,6 @@ function indexDays(headerRows, costRows) {
     const code     = String(r.SP ?? '').trim();
     const isCredit = String(r.OC ?? '').toLowerCase().startsWith('cred');
     const cents    = toCents(r.NETT);
-    const disc     = toCents(r.DISC);
     const n        = Number(r.N) || 0;
 
     const entry = touch(d);
@@ -157,8 +194,7 @@ function indexDays(headerRows, costRows) {
     // Revenue always includes credits — they are how returns and rebates land.
     // Order counts never do: a credit note is not a sale.
     for (const bucket of [entry.total, rep]) {
-      bucket.revenue  += cents;
-      bucket.discount += disc;
+      bucket.revenue += cents;
       if (isCredit) { bucket.credits += n; bucket.creditValue += cents; }
       else          { bucket.invoices += n; }
     }
@@ -167,10 +203,15 @@ function indexDays(headerRows, costRows) {
   for (const r of costRows) {
     const d = dayKey(r.D); if (!d) continue;
     const code  = String(r.SP ?? '').trim();
-    const cents = toCents(r.COST);
     const entry = touch(d);
-    entry.total.cost += cents;
-    touchRep(entry, code).cost += cents;
+    const rep   = touchRep(entry, code);
+    for (const bucket of [entry.total, rep]) {
+      bucket.cost           += toCents(r.COST);
+      bucket.discount       += toCents(r.DISC);
+      bucket.suspectCost    += toCents(r.SUSCOST);
+      bucket.suspectRevenue += toCents(r.SUSREV);
+      bucket.suspectLines   += Number(r.SUSLINES) || 0;
+    }
   }
 
   return days;
