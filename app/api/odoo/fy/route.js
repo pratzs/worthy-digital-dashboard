@@ -564,7 +564,7 @@ export async function GET(request) {
       const cost = v.qty * (costOf.get(id) || 0);
       return {
         code: String(id), title: v.name, category: catOf.get(id) || 'Uncategorised',
-        unitsSold: Math.round(v.qty), revenue: toDollars(v.cents),
+        unitsSold: Math.round(v.qty), rawQty: v.qty, revenue: toDollars(v.cents),
         cost: hasCost ? toDollars(toCents(cost)) : null,
         margin: hasCost ? pct1(v.cents - toCents(cost), v.cents) : null,
       };
@@ -573,11 +573,16 @@ export async function GET(request) {
     const catAgg = new Map();
     for (const p of productRows) {
       const cur = catAgg.get(p.category) || { revenue: 0, cost: 0, units: 0, products: 0 };
-      cur.revenue += p.revenue; cur.cost += p.cost || 0; cur.units += p.unitsSold; cur.products += 1;
+      /* Sum the RAW quantities and round once at the end. Adding up units that
+         were each already rounded to a whole item let half a unit per product
+         accumulate — 2.29 units across Soft Drinks — so the category total did
+         not equal the products beneath it. */
+      cur.revenue += p.revenue; cur.cost += p.cost || 0; cur.units += p.rawQty; cur.products += 1;
       catAgg.set(p.category, cur);
     }
+    for (const p of productRows) delete p.rawQty;
     const categoryRows = [...catAgg].map(([category, v]) => ({
-      category, productCount: v.products, unitsSold: v.units,
+      category, productCount: v.products, unitsSold: Math.round(v.units),
       revenue: Math.round(v.revenue * 100) / 100,
       cost: hasCost ? Math.round(v.cost * 100) / 100 : null,
       margin: hasCost ? pct1(toCents(v.revenue - v.cost), toCents(v.revenue)) : null,
