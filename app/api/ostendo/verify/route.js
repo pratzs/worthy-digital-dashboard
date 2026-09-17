@@ -52,7 +52,35 @@ export async function GET(request) {
                   FROM SALESINVOICEHEADER h WHERE ${W} GROUP BY 1`),
     ]);
 
-    return NextResponse.json({ start, end, total, byRep, byMonth, costTotal, costByRep, invoiceCount });
+    // Rep 461 (Ravi Kumar), September, week by week — the exact query handed to
+    // the client so they can run it in Ostendo themselves.
+    const repCode = searchParams.get('rep');
+    let repWeeks = null, repWeeksSql = null, repWeeksCost = null;
+    if (repCode) {
+      const WEEK = `CASE
+        WHEN EXTRACT(DAY FROM h.INVOICEDATE) <= 7  THEN 'Week 1 (1-7)'
+        WHEN EXTRACT(DAY FROM h.INVOICEDATE) <= 14 THEN 'Week 2 (8-14)'
+        WHEN EXTRACT(DAY FROM h.INVOICEDATE) <= 21 THEN 'Week 3 (15-21)'
+        WHEN EXTRACT(DAY FROM h.INVOICEDATE) <= 28 THEN 'Week 4 (22-28)'
+        ELSE 'Week 5 (29-31)' END`;
+      repWeeksSql = `SELECT ${WEEK} AS WK,
+       COUNT(*) AS DOCUMENTS,
+       SUM(CASE WHEN h.INVOICEORCREDIT <> 'Credit' THEN 1 ELSE 0 END) AS INVOICES,
+       SUM(CASE WHEN h.INVOICEORCREDIT  = 'Credit' THEN 1 ELSE 0 END) AS CREDIT_NOTES,
+       SUM(h.INVOICENETTAMOUNT) AS NETT_SALES
+FROM SALESINVOICEHEADER h
+WHERE h.SALESPERSON = ${q(repCode)} AND ${W}
+GROUP BY 1 ORDER BY 1`;
+      repWeeks = await ostendoSql(repWeeksSql).catch(e => ({ error: e.message }));
+      repWeeksCost = await ostendoSql(
+        `SELECT ${WEEK} AS WK, SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+         FROM SALESINVOICELINES l JOIN SALESINVOICEHEADER h ON h.INVOICENUMBER = l.INVOICENUMBER
+         WHERE h.SALESPERSON = ${q(repCode)} AND ${W} GROUP BY 1 ORDER BY 1`
+      ).catch(e => ({ error: e.message }));
+    }
+
+    return NextResponse.json({ start, end, total, byRep, byMonth, costTotal, costByRep, invoiceCount,
+      repCode, repWeeks, repWeeksCost, repWeeksSql });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 502 });
   }
