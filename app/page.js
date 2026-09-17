@@ -1682,6 +1682,21 @@ export default function EcommerceDashboard() {
                 Financial year {d.fy} · {pretty(d.range.start)} to {pretty(d.range.end)}
                 {!d.range.complete && <span style={{ fontWeight: 500, color: T.textMuted }}> · still in progress ({dayCount} days so far)</span>}
               </div>
+              {/* The API feed can trail the live Ostendo database. Say so out loud,
+                  so a figure here is never mistaken for one typed in this morning. */}
+              {d.dataAvailable?.last && (() => {
+                const lastIso = d.dataAvailable.last.includes("/")
+                  ? d.dataAvailable.last.split("/").reverse().map((x, i) => i === 0 ? x : x.padStart(2, "0")).join("-")
+                  : d.dataAvailable.last;
+                const behind = Math.round((new Date().setHours(0,0,0,0) - new Date(lastIso + "T00:00:00").getTime()) / 86400000);
+                if (behind < 1) return null;
+                return (
+                  <div style={{ color: "#b45309" }}>
+                    <strong>Latest invoice in the feed is {pretty(lastIso)}</strong> — {behind === 1 ? "a day" : `${behind} days`} behind today.
+                    Anything entered into Ostendo since then is not counted here yet.
+                  </div>
+                );
+              })()}
               <div>
                 <strong>{t.invoices.toLocaleString()}</strong> invoices
                 {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
