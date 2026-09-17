@@ -1773,7 +1773,7 @@ export default function EcommerceDashboard() {
                      tonight’s run.</>
                   : <>Figures are live from Odoo, complete to <strong>{pretty(d.range.end)}</strong>.</>}
               </div>
-              {t.rebates !== 0 && (
+              {activeStore.id === "luxe" && typeof t.rebates === "number" && t.rebates !== 0 && (
                 <div>
                   Sales below are <strong>before rebates</strong> ({fmtExact(t.revenue, activeStore.currency)}), which is
                   the basis finance report on. Ostendo's own invoice total is{" "}
