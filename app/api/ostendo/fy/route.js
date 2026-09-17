@@ -53,7 +53,7 @@ const costSql = (start, end) => `
 /* Ostendo hands dates back as D/M/YYYY, not ISO. Normalise before comparing. */
 const dayKey = (v) => normaliseDate(v);
 
-/** Empty accumulator, all money in integer cents. */
+/** Empty accumulator. All money is held as exact integer units, never floats. */
 const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0 });
 
 const add = (t, s) => {
@@ -65,7 +65,7 @@ const add = (t, s) => {
   return t;
 };
 
-/** Turn a cents accumulator into the dollars shape the UI renders. */
+/** Turn an accumulator into the dollars shape the UI renders, rounding once. */
 const present = (a) => {
   const grossProfit = a.revenue - a.cost;
   return {
@@ -76,7 +76,7 @@ const present = (a) => {
     invoices:    a.invoices,
     credits:     a.credits,
     creditValue: toDollars(a.creditValue),
-    aov:         a.invoices > 0 ? toDollars(Math.round(a.revenue / a.invoices)) : 0,
+    aov:         a.invoices > 0 ? toDollars(a.revenue / a.invoices) : 0,
   };
 };
 
