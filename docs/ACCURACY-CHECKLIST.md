@@ -259,3 +259,56 @@ each product's standard cost as it stands today; South's is what the item
 actually cost on the day it was invoiced.** North's figures round to the dollar,
 South's are exact to the cent. The two margins are both correct and are not
 measuring quite the same thing.
+
+## Both companies checked against their own source systems — 18 Sep 2026
+
+North had been recomputed from Odoo's raw records; South had only ever been
+checked screen-against-API, which proves the page matches the payload, not that
+the payload matches Ostendo. Both now have an outside check.
+
+**South** — a temporary route recomputed every figure from Ostendo sharing
+nothing with the route it checks: `>= start AND < day-after-end` instead of
+`BETWEEN` (so a boundary bug cannot hide behind the same predicate — an earlier
+check reused `BETWEEN` and could never have caught one), aggregation per invoice
+rather than per day and salesperson, and `COUNT(DISTINCT)` for the document
+count. **104 figures agree**: FY24, FY25 and FY26 totals, the prior-comparison
+window, all six months queried as separate windows, and all eight reps on
+revenue, cost, invoices and credits. `netSales` independently equals the sum of
+header nett amounts and GST comes out at exactly 1.1500.
+
+**North** — FY25 rebuilt from 13,015 invoices and 213,571 lines, FY26 from
+7,692 and 132,402, every count matching Odoo's own, no orphaned lines.
+
+- [x] **30. The year's totals were two cents wrong.** They were built by adding
+      up twelve already-rounded months, so half a cent per month accumulated.
+      FY25's cost came out two cents above the true sum — and because per-rep
+      costs are reconciled to that company figure, the two cents were pushed onto
+      the largest rep, where they showed. Totals now add the untouched
+      accumulators and round once.
+
+- [x] **31. Fixing that broke the column.** With the year rounded once and each
+      month rounded on its own, the twelve months no longer summed to the total
+      printed beneath them. The same largest-remainder pass used for the reps now
+      settles the months, so the column adds up and the year stays right.
+
+- [x] **32. The screen still did not add up, a level above the cents.** North
+      printed whole dollars, so six visible cost figures came to NZ$6,732,940
+      against a footer of NZ$6,732,941 — a dollar that existed only in the
+      display. Precision now follows the data, not the source system: every
+      financial-year view shows cents, as South already did.
+
+- [x] **33. The rep Gross Profit column is legitimately short, and says so.**
+      Three reps show a blank gross profit because their cost is unknown, so the
+      column adds to NZ$42,176.05 less than its total. Both figures are right;
+      the note now states the gap and its size rather than leaving a reader to
+      find it.
+
+### Reconciliation audit
+
+**1,238 checks across both companies and both years**: months sum to the year,
+reps sum to the year, each rep's months sum to that rep, each rep's weeks sum to
+that rep's month, company weeks sum to the company month, and gross profit is
+exactly revenue minus cost everywhere both are shown. Zero failures. Re-run on
+screen afterwards: every additive column on both companies now equals the total
+printed under it (AOV excepted — it is an average, and its footer correctly
+shows the period figure, not the sum of monthly ones).
