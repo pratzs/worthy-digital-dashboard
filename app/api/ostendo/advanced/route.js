@@ -61,13 +61,17 @@ export async function GET(request) {
 
     const [products, categories, custPeriod, custLifetime, stock, adjustments] = await Promise.all([
       // 1. Products actually sold in the period (stock lines only).
+      //    LEFT JOIN so a product missing from ITEMMASTER still appears, just
+      //    without a category, rather than dropping out of the table.
       ostendoSql(`
         SELECT FIRST 200 l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME,
+               MAX(i.ITEMCATEGORY) AS CAT,
                SUM(l.INVOICEQTY) AS QTY, SUM(l.EXTENDEDNETTPRICE) AS NETT,
                SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
         FROM SALESINVOICELINES l
+        LEFT JOIN ITEMMASTER i ON i.ITEMCODE = l.LINECODE
         WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
-        GROUP BY l.LINECODE ORDER BY 4 DESC`),
+        GROUP BY l.LINECODE ORDER BY 5 DESC`),
 
       // 2. Categories — from the item master, because the line column is blank.
       ostendoSql(`
@@ -116,6 +120,7 @@ export async function GET(request) {
 
     const productRows = products.map((p) => ({
       code: p.CODE, title: p.NAME || p.CODE,
+      category: (p.CAT || '').trim() || 'Uncategorised',
       unitsSold: Math.round(Number(p.QTY) || 0),
       revenue: money(p.NETT), cost: money(p.COST),
       grossProfit: money(Number(p.NETT) - Number(p.COST)),

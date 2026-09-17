@@ -2302,7 +2302,15 @@ export default function EcommerceDashboard() {
             ))}
           </div>
           <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.06em" }}>
-            {activeStore.id === "luxe" ? `WORTHY PRODUCTS · FY${String(selectedYear).slice(2)}` : activeStore.name?.toUpperCase()}
+            {(() => {
+              const scope = view === "weekly"  ? `WEEK ${selectedWeek} OF ${MONTH_NAMES[weeklyMonth].toUpperCase()}`
+                          : view === "monthly" ? (latestMonth ? `${latestMonth.month.toUpperCase()} ONLY` : "")
+                          : activeStore.id === "luxe" ? `FULL FY${String(selectedYear).slice(2)}` : `FULL ${selectedYear}`;
+              const who = activeStore.id === "luxe"
+                ? `WORTHY PRODUCTS SOUTH · FY${String(selectedYear).slice(2)}`
+                : activeStore.name?.toUpperCase();
+              return `${who} · ${scope}`;
+            })()}
           </div>
         </div>
       </div>
