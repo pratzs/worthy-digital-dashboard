@@ -1,707 +1,204 @@
+/**
+ * Worthy Products South (Dutch Rusk) — analytics tables.
+ *
+ * WHAT CHANGED AND WHY
+ * The previous version pulled every invoice LINE for the period over HTTP, 60
+ * invoice numbers at a time. A financial year is ~20,000 invoices and ~330,000
+ * lines, so that was ~345 round trips and it exceeded the 60s function limit
+ * every single time. The whole analytics half of the dashboard showed
+ * "No data available" as a result — silently, because the failure was caught
+ * and replaced with empty arrays.
+ *
+ * Everything is now aggregated inside Firebird: six queries, a few hundred rows
+ * back, about three seconds.
+ *
+ * Other corrections:
+ *  - Categories come from ITEMMASTER.ITEMCATEGORY. The line-level
+ *    CATALOGUECATEGORY column is empty for every row in this database, which is
+ *    why the category table could never populate.
+ *  - Cost is INVOICEUNITCOST, the cost recorded when the invoice was raised.
+ *    The old code overwrote it with today's ITEMMASTER.AVERAGECOST, which
+ *    priced last year's sales at this year's cost.
+ *  - Customer lifetime value and "days since last order" are measured over all
+ *    of history and against the end of the period being viewed — not against
+ *    today, which made every customer look lapsed whenever a past year was open.
+ *  - Rebates and credits (descriptor-code lines, no cost) are reported in their
+ *    own table instead of appearing as products with impossible margins.
+ */
 import { NextResponse } from 'next/server';
-import https from 'node:https';
+import {
+  ostendoSql, toCents, toDollars, pct1, fyRange, parseIso, iso, q, normaliseDate,
+} from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const agent = new https.Agent({ rejectUnauthorized: false });
-
-/**
- * CONFIRMED column names (from Vercel logs + Table for Queries.rps):
- *
- *  SALESINVOICEHEADER → INVOICENUMBER, INVOICEDATE, CUSTOMER,
- *                        INVOICENETTAMOUNT, INVOICETOTALAMOUNT, INVOICESTATUS,
- *                        INVOICEORCREDIT, LINEDISCOUNTAMOUNT, BILLINGEMAIL,
- *                        SALESPERSON, CURRENCYCODE, SITENAME, ...
- *
- *  SALESINVOICELINES  → INVOICENUMBER (FK),
- *                        LINECODE          ← item/product code (NOT ITEMCODE)
- *                        LINEDESCRIPTION   ← product name (direct on line)
- *                        CATALOGUECATEGORY ← product category (direct on line)
- *                        INVOICEQTY        ← quantity (NOT INVOICEDQTY)
- *                        EXTENDEDNETTPRICE ← pre-calculated net line total (most accurate)
- *                        INVOICEUNITPRICE  ← unit sell price (ex-tax)
- *                        CUSTOMERUNITPRICE ← customer-specific price
- *                        INVOICEUNITCOST   ← cost per unit
- *                        INVOICEUNITTAX    ← unit tax
- *                        DISCOUNTAMOUNT, DISCOUNTPERCENT
- *
- *  ITEMMASTER         → ITEMCODE (= LINECODE from lines), ITEMDESCRIPTION,
- *                        ITEMCATEGORY, ITEMSUBCATEGORY, ITEMUNIT, ITEMSTATUS,
- *                        ONHANDQTY    ← stock on hand (slow-moving only)
- *                        STDBUYPRICE  ← standard buy price (capital tied)
- *                        STDSELLPRICE
- *
- * Ostendo API (confirmed from official docs):
- *   GET  /tabledata?tablename=X&apikey=KEY&format=json&condition=SQL_WHERE
- *   POST /sqlquery?apikey=KEY&format=json   Body = full SQL SELECT text
- *   Spaces in condition → %20, single quotes → %27
- */
-
-async function ostendoFetch(tablename, condition = null, timeoutMs = 18000) {
-  const base   = process.env.OSTENDO_BASE_URL;
-  const apiKey = process.env.OSTENDO_API_KEY;
-  const params = new URLSearchParams({ tablename, apikey: apiKey, format: 'json' });
-  // Encode spaces as %20 (Firebird rejects + from URLSearchParams)
-  // Encode single quotes as %27 (bare ' in URL breaks Firebird string literals)
-  const conditionStr = condition
-    ? `&condition=${condition.replace(/ /g, '%20').replace(/'/g, '%27')}`
-    : '';
-  const fullPath = `/tabledata?${params.toString()}${conditionStr}`;
-
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(base);
-    const options = {
-      hostname: urlObj.hostname,
-      port:     parseInt(urlObj.port) || 443,
-      path:     fullPath,
-      method:   'GET',
-      agent,
-    };
-    const req = https.request(options, (res) => {
-      let raw = '';
-      res.on('data', chunk => (raw += chunk));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(raw));
-        } catch {
-          // Log non-JSON response so we can diagnose Firebird/Ostendo errors
-          console.error(`[Ostendo:${tablename}] non-JSON (${raw.length}b): ${raw.substring(0, 300)}`);
-          resolve([]);
-        }
-      });
-    });
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(`timeout:${tablename}`)); });
-    req.on('error', reject);
-    req.end();
-  });
-}
-
-/**
- * Execute a raw SQL SELECT via the Ostendo sqlquery endpoint (POST).
- * Confirmed in Ostendo API docs — more reliable than tabledata + condition
- * for complex multi-level subqueries.
- * API docs: POST /sqlquery?apikey=...&format=json   Body = SQL SELECT text
- */
-async function ostendoSqlQuery(sql, timeoutMs = 30000) {
-  const base   = process.env.OSTENDO_BASE_URL;
-  const apiKey = process.env.OSTENDO_API_KEY;
-  const urlObj = new URL(base);
-  const body   = Buffer.from(sql, 'utf8');
-  const fullPath = `/sqlquery?apikey=${encodeURIComponent(apiKey)}&format=json`;
-
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: urlObj.hostname,
-      port:     parseInt(urlObj.port) || 443,
-      path:     fullPath,
-      method:   'POST',
-      agent,
-      headers: {
-        'Content-Type':   'text/plain',
-        'Content-Length': body.length,
-      },
-    };
-    const req = https.request(options, (res) => {
-      let raw = '';
-      res.on('data', chunk => (raw += chunk));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(raw));
-        } catch {
-          console.error(`[Ostendo/sqlquery] non-JSON (${raw.length}b): ${raw.substring(0, 300)}`);
-          resolve([]);
-        }
-      });
-    });
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout:sqlquery')); });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
-
-const normalizeRows = (res) =>
-  Array.isArray(res) ? res : res?.rows || res?.data || res?.records || [];
-
-const safe = async (fn) => { try { return normalizeRows(await fn()); } catch { return []; } };
-
-/** Run async tasks with at most `limit` concurrent */
-async function parallelLimit(tasks, limit = 4) {
-  const results = new Array(tasks.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, tasks.length) }, async () => {
-      while (next < tasks.length) {
-        const idx = next++;
-        results[idx] = await tasks[idx]();
-      }
-    })
-  );
-  return results;
-}
-
-/**
- * Format a value for a Firebird IN() clause — ALWAYS as a single-quoted string.
- *
- * IMPORTANT: Do NOT use unquoted integers even for numeric-looking codes.
- * SALESINVOICELINES.LINECODE (and ITEMMASTER.ITEMCODE) are VARCHAR fields.
- * Mixing unquoted integers like 278241 with quoted strings like 'PEZSWT'
- * in the same IN() list causes Firebird to attempt integer coercion of ALL
- * values → "conversion error from string PEZSWT".
- * Always quoting everything as strings avoids this completely.
- */
-const fmtInVal = (v) => `'${String(v).trim().replace(/'/g, "''")}'`;
-
-/**
- * Fetch SALESINVOICELINES using a Firebird subquery so the DB filters server-side.
- * Avoids: (1) large IN() lists that Ostendo rejects, (2) full-table "Out of memory".
- */
-async function fetchLinesViaSubquery(headerDateCond) {
-  const cond = `INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${headerDateCond})`;
-  console.log(`[Ostendo/lines] subquery: ${cond}`);
-  const rows = await safe(() => ostendoFetch('SALESINVOICELINES', cond, 45000));
-  console.log(`[Ostendo/lines] subquery rows returned: ${rows.length}`);
-  return rows;
-}
-
-/**
- * Fallback path: fetch SALESINVOICELINES by chunked INVOICENUMBER IN (...).
- * Used when the subquery returns nothing (Firebird sometimes can't optimise
- * the join, or the lines table is too large for a single response).
- */
-async function fetchLinesByInvoiceNums(invoiceNums, chunkSize = 60) {
-  if (!invoiceNums.length) return [];
-  const chunks = [];
-  for (let i = 0; i < invoiceNums.length; i += chunkSize) {
-    chunks.push(invoiceNums.slice(i, i + chunkSize));
-  }
-  console.log(`[Ostendo/lines] chunked fetch: ${chunks.length} chunks × ${chunkSize}, parallel=10`);
-  const results = await parallelLimit(
-    chunks.map(chunk => () => {
-      const inList = chunk.map(fmtInVal).join(',');
-      return safe(() => ostendoFetch('SALESINVOICELINES', `INVOICENUMBER IN (${inList})`, 20000));
-    }),
-    10
-  );
-  return results.flat();
-}
-
-/**
- * Batch-fetch ITEMMASTER by ITEMCODE IN (...) — parallel chunks, all values quoted as strings.
- * ITEMMASTER.ITEMCODE is VARCHAR — always use string literals in the IN() list.
- */
-async function fetchByItemCodes(codes, chunkSize = 50) {
-  if (!codes.length) return [];
-  const chunks = [];
-  for (let i = 0; i < codes.length; i += chunkSize) {
-    chunks.push(codes.slice(i, i + chunkSize));
-  }
-  const results = await parallelLimit(
-    chunks.map(chunk => () => {
-      const inList = chunk.map(fmtInVal).join(',');
-      return safe(() => ostendoFetch('ITEMMASTER', `ITEMCODE IN (${inList})`));
-    }),
-    4
-  );
-  return results.flat();
-}
-
-const parseNum  = (v) => (v === null || v === undefined || v === '') ? 0 : parseFloat(v) || 0;
-const parseDate = (v) => {
-  if (!v) return null;
-  const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10));
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
-    const [d, m, y] = s.split('/');
-    return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
-  }
-  const d = new Date(s);
-  return isNaN(d) ? null : d;
-};
-
-/**
- * Line net revenue — uses EXTENDEDNETTPRICE (pre-calculated by Ostendo, most accurate).
- * Falls back to INVOICEQTY × (CUSTOMERUNITPRICE or INVOICEUNITPRICE) − tax if absent.
- */
-const lineNet = (line) => {
-  const pre = parseNum(line.EXTENDEDNETTPRICE ?? line.LOCALEXTENDEDNETTPRICE);
-  if (pre !== 0) return pre;
-  const qty       = parseNum(line.INVOICEQTY);
-  const unitPrice = parseNum(line.CUSTOMERUNITPRICE) || parseNum(line.INVOICEUNITPRICE);
-  const unitTax   = parseNum(line.INVOICEUNITTAX);
-  return qty * Math.max(unitPrice - unitTax, 0);
-};
-
-const lineCostTotal = (line) =>
-  parseNum(line.INVOICEQTY) * parseNum(line.INVOICEUNITCOST);
-
-// Override item-level cost with AVERAGECOST from ITEMMASTER where available.
-// Falls back to INVOICEUNITCOST aggregate for lines not in ITEMMASTER or AVERAGECOST=0.
-function applyAverageCost(itemRevMap, itemMap) {
-  for (const [code, entry] of Object.entries(itemRevMap)) {
-    const it  = itemMap[code];
-    const avg = it ? parseNum(it.AVERAGECOST ?? it.ITEMAVERAGECOST) : 0;
-    if (avg > 0) entry.cost = entry.qty * avg;
-    // If avg=0 or item not in ITEMMASTER, keep the INVOICEUNITCOST-based cost
-  }
-}
-
-/**
- * Build a Firebird INVOICEDATE condition using only EXTRACT() and IN() —
- * avoids >= / <= operators which can be problematic in Firebird URL conditions.
- *
- * Same-year example: Jan–Apr 2026
- *   → EXTRACT(YEAR FROM INVOICEDATE) = 2026
- *     AND EXTRACT(MONTH FROM INVOICEDATE) IN (1,2,3,4)
- *
- * Multi-year example: Oct 2025–Apr 2026
- *   → EXTRACT(YEAR FROM INVOICEDATE) IN (2025,2026)
- *   (over-fetches slightly; JS filters rows to exact date range after)
- */
-function buildDateCond(startIso, endIso) {
-  const s  = new Date(startIso);
-  const e  = new Date(endIso);
-  const sy = s.getFullYear(), sm = s.getMonth() + 1; // months 1-12
-  const ey = e.getFullYear(), em = e.getMonth() + 1;
-
-  if (sy === ey) {
-    if (sm === 1 && em === 12) {
-      return `EXTRACT(YEAR FROM INVOICEDATE) = ${sy}`;
-    }
-    const months = Array.from({ length: em - sm + 1 }, (_, i) => sm + i);
-    if (months.length === 1) {
-      return `EXTRACT(YEAR FROM INVOICEDATE) = ${sy} AND EXTRACT(MONTH FROM INVOICEDATE) = ${sm}`;
-    }
-    return `EXTRACT(YEAR FROM INVOICEDATE) = ${sy} AND EXTRACT(MONTH FROM INVOICEDATE) IN (${months.join(',')})`;
-  }
-
-  // Multi-year span: use IN() for the year list
-  const years = Array.from({ length: ey - sy + 1 }, (_, i) => sy + i);
-  return `EXTRACT(YEAR FROM INVOICEDATE) IN (${years.join(',')})`;
-}
-
-/** Same date range shifted back 1 year (for prior-year comparison) */
-function buildPrevYearCond(startIso, endIso) {
-  const s  = new Date(startIso);
-  const e  = new Date(endIso);
-  const py = s.getFullYear() - 1;
-  const sm = s.getMonth() + 1;
-  const em = e.getMonth() + 1;
-
-  if (sm === 1 && em === 12) {
-    return `EXTRACT(YEAR FROM INVOICEDATE) = ${py}`;
-  }
-  const months = Array.from({ length: em - sm + 1 }, (_, i) => sm + i);
-  if (months.length === 1) {
-    return `EXTRACT(YEAR FROM INVOICEDATE) = ${py} AND EXTRACT(MONTH FROM INVOICEDATE) = ${sm}`;
-  }
-  return `EXTRACT(YEAR FROM INVOICEDATE) = ${py} AND EXTRACT(MONTH FROM INVOICEDATE) IN (${months.join(',')})`;
-}
+const SALES = (start, end) =>
+  `SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}`;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const today      = new Date();
-  const startParam = searchParams.get('startDate') || `${today.getFullYear()}-01-01`;
-  const endParam   = searchParams.get('endDate')   || today.toISOString().split('T')[0];
+  const today = new Date();
+  const fyParam = parseInt(searchParams.get('fy') || '', 10);
+  const fy = fyParam || (today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1);
+
+  let start = searchParams.get('startDate');
+  let end   = searchParams.get('endDate');
+  if (!start || !end) { const r = fyRange(fy, today); start = r.start; end = r.end; }
 
   try {
-    const startDate = new Date(startParam);
-    const endDate   = new Date(endParam);
+    const inPeriod = SALES(start, end);
 
-    // Conditions respect the exact date range chosen in the UI
-    const currCond = buildDateCond(startParam, endParam);
-    const prevCond = buildPrevYearCond(startParam, endParam);
+    const [products, categories, custPeriod, custLifetime, stock, adjustments] = await Promise.all([
+      // 1. Products actually sold in the period (stock lines only).
+      ostendoSql(`
+        SELECT FIRST 200 l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME,
+               SUM(l.INVOICEQTY) AS QTY, SUM(l.EXTENDEDNETTPRICE) AS NETT,
+               SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+        FROM SALESINVOICELINES l
+        WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
+        GROUP BY l.LINECODE ORDER BY 4 DESC`),
 
-    console.log(`[Ostendo/adv] curr cond: ${currCond}`);
-    console.log(`[Ostendo/adv] prev cond: ${prevCond}`);
+      // 2. Categories — from the item master, because the line column is blank.
+      ostendoSql(`
+        SELECT i.ITEMCATEGORY AS CAT, COUNT(DISTINCT l.LINECODE) AS NPROD,
+               SUM(l.INVOICEQTY) AS QTY, SUM(l.EXTENDEDNETTPRICE) AS NETT,
+               SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+        FROM SALESINVOICELINES l
+        JOIN ITEMMASTER i ON i.ITEMCODE = l.LINECODE
+        WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
+        GROUP BY i.ITEMCATEGORY ORDER BY 4 DESC`),
 
-    // ── PHASE 1: headers for current period + same-period prior year ──────────
-    //
-    // Prior-year LINES are not fetched — header INVOICENETTAMOUNT is accurate
-    // for all customer spend calculations (lapsed / at-risk / CLV).
-    //
-    const [currInvRows, prevInvRows] = await Promise.all([
-      safe(() => ostendoFetch('SALESINVOICEHEADER', currCond)),
-      safe(() => ostendoFetch('SALESINVOICEHEADER', prevCond)),
+      // 3. Spend inside the period.
+      ostendoSql(`
+        SELECT h.CUSTOMER AS NAME, COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT
+        FROM SALESINVOICEHEADER h
+        WHERE h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)} AND h.INVOICEORCREDIT <> 'Credit'
+        GROUP BY h.CUSTOMER`),
+
+      // 4. Whole trading history — the only honest basis for lifetime value and
+      //    for how long a customer has actually been quiet.
+      ostendoSql(`
+        SELECT h.CUSTOMER AS NAME, COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT,
+               MIN(h.INVOICEDATE) AS FIRSTD, MAX(h.INVOICEDATE) AS LASTD,
+               MAX(h.BILLINGEMAIL) AS EMAIL
+        FROM SALESINVOICEHEADER h
+        WHERE h.INVOICEORCREDIT <> 'Credit'
+        GROUP BY h.CUSTOMER`),
+
+      // 5. Stock on hand, for capital tied up in slow movers.
+      ostendoSql(`
+        SELECT FIRST 400 i.ITEMCODE AS CODE, i.ITEMDESCRIPTION AS NAME, i.ITEMCATEGORY AS CAT,
+               i.ONHANDQTY AS ONHAND, i.STDBUYPRICE AS BUY, i.AVERAGECOST AS AVGCOST
+        FROM ITEMMASTER i WHERE i.ONHANDQTY > 0 ORDER BY i.ONHANDQTY * i.STDBUYPRICE DESC`),
+
+      // 6. Rebates, credits and write-offs — non-stock lines carrying no cost.
+      ostendoSql(`
+        SELECT l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME, COUNT(*) AS N,
+               SUM(l.EXTENDEDNETTPRICE) AS NETT
+        FROM SALESINVOICELINES l
+        WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE <> 'Item Code'
+        GROUP BY l.LINECODE ORDER BY 4`),
     ]);
 
-    // JS-side date filter for multi-year fetches that may over-fetch
-    const inRange = (inv) => {
-      const d = parseDate(inv.INVOICEDATE);
-      return d && d >= startDate && d <= endDate;
-    };
-    const filteredCurrInvRows = currInvRows.filter(inRange);
-    // prev rows: already month-filtered by SQL
-    const filteredPrevInvRows = prevInvRows;
-    // Log actual field names from first row so we can verify column names
-    if (filteredCurrInvRows.length > 0) {
-      console.log(`[Ostendo/adv] header keys: ${Object.keys(filteredCurrInvRows[0]).join(', ')}`);
-    }
-    console.log(`[Ostendo/adv] curr headers: ${filteredCurrInvRows.length}, prev headers: ${filteredPrevInvRows.length}`);
+    const money = (v) => toDollars(toCents(v));
+    const marginOf = (nett, cost) => pct1(toCents(nett) - toCents(cost), toCents(nett));
 
-    // ── PHASE 2: current-period lines ────────────────────────────────────────
-    // SALESINVOICEHEADER may return INVOICENO or INVOICENUMBER depending on version
-    const getInvNum = (r) => r.INVOICENUMBER ?? r.INVOICENO ?? r.InvoiceNumber ?? r.InvoiceNo;
-    const currInvNums    = [...new Set(filteredCurrInvRows.map(getInvNum).filter(Boolean))];
-    const currInvNumSet  = new Set(currInvNums.map(String));
-    console.log(`[Ostendo/adv] invoice nums sample: ${currInvNums.slice(0,3).join(', ')}`);
+    const productRows = products.map((p) => ({
+      code: p.CODE, title: p.NAME || p.CODE,
+      unitsSold: Math.round(Number(p.QTY) || 0),
+      revenue: money(p.NETT), cost: money(p.COST),
+      grossProfit: money(Number(p.NETT) - Number(p.COST)),
+      margin: marginOf(p.NETT, p.COST),
+    }));
 
-    // Skip the subquery path — on production it returns 0 rows for years with
-    // 9k+ invoices (Firebird response size limit / planner issue) and just
-    // burns the 60s Vercel budget. Go straight to chunked INVOICENUMBER IN
-    // fetches using the invoice numbers we already have from headers.
-    const currLineRows = await fetchLinesByInvoiceNums(currInvNums, 60);
-    console.log(`[Ostendo/adv] curr lines via chunked fetch: ${currLineRows.length} (from ${currInvNums.length} invoices)`);
+    const categoryRows = categories
+      .map((c) => ({
+        category: (c.CAT || '').trim() || 'Uncategorised',
+        productCount: Number(c.NPROD) || 0,
+        unitsSold: Math.round(Number(c.QTY) || 0),
+        revenue: money(c.NETT), cost: money(c.COST),
+        margin: marginOf(c.NETT, c.COST),
+      }))
+      .filter((c) => c.revenue !== 0);
 
-    // Log actual column names from the first line row to identify the item code field
-    if (currLineRows.length > 0) {
-      console.log(`[Ostendo/lines] line keys: ${Object.keys(currLineRows[0]).join(', ')}`);
-    }
-
-    // ── PHASE 3: item master for sold codes ───────────────────────────────────
-    // CONFIRMED from logs: actual column in SALESINVOICELINES is LINECODE (not ITEMCODE).
-    // LINEDESCRIPTION and CATALOGUECATEGORY are also directly on every line row.
-    const getItemCode = (r) => r.LINECODE ?? r.ITEMCODE ?? r.DESCRIPTORCODE ?? r.STOCKCODE ?? r.PRODUCTCODE ?? r.ITEMNO;
-
-    // Log the unique CODETYPEs present so we know which to include
-    const codeTypeSet = new Set(currLineRows.map(r => r.CODETYPE).filter(Boolean));
-    console.log(`[Ostendo/adv] CODETYPE values: ${[...codeTypeSet].join(', ')}`);
-
-    // Filter to only stock/catalogue item lines for ITEMMASTER lookup.
-    // Common Ostendo CODETYPEs: 'Stock', 'Descriptor', 'Comment', 'Service'.
-    // We include any line that has a non-empty LINECODE — ITEMMASTER will simply
-    // return nothing for codes that don't exist (credits, adjustments, etc.).
-    const soldCodes = [...new Set(
-      currLineRows
-        .map(getItemCode)
-        .filter(Boolean)
-        .filter(c => c.length <= 30) // skip suspiciously long codes (line notes, etc.)
-    )];
-    console.log(`[Ostendo/adv] soldCodes count: ${soldCodes.length}, sample: ${soldCodes.slice(0,5).join(', ')}`);
-
-    // ITEMMASTER is used ONLY for ONHANDQTY + STDBUYPRICE (slow-moving inventory).
-    // Products/Categories use LINEDESCRIPTION + CATALOGUECATEGORY directly — no ITEMMASTER needed.
-    //
-    // Strategy:
-    //   1. Try sqlquery POST (most reliable — avoids URL condition encoding issues).
-    //      Requires "SQL Allowed" to be ticked in Ostendo API Security for the API key.
-    //   2. If sqlquery returns 0, fallback to chunked ITEMCODE IN (...) fetches.
-    //      All values are quoted as strings — ITEMMASTER.ITEMCODE is VARCHAR.
-    let itemRows = [];
-    if (soldCodes.length > 0) {
-      // Primary: POST /sqlquery with full SQL — avoids URL encoding quirks
-      try {
-        const itemSql = `SELECT ITEMCODE, ITEMDESCRIPTION, ITEMCATEGORY, ITEMSUBCATEGORY, ONHANDQTY, STDBUYPRICE, STDSELLPRICE, AVERAGECOST FROM ITEMMASTER WHERE ITEMCODE IN (SELECT DISTINCT LINECODE FROM SALESINVOICELINES WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${currCond}))`;
-        console.log(`[Ostendo/adv] item sqlquery: ${itemSql.substring(0, 220)}`);
-        const sqlRes = await ostendoSqlQuery(itemSql, 30000);
-        itemRows = normalizeRows(sqlRes);
-        console.log(`[Ostendo/adv] itemRows (sqlquery): ${itemRows.length}, raw type: ${typeof sqlRes}, isArray: ${Array.isArray(sqlRes)}`);
-        if (itemRows.length === 0 && sqlRes && !Array.isArray(sqlRes)) {
-          // Log unexpected shape so we can diagnose auth / format issues
-          console.log(`[Ostendo/adv] sqlquery raw keys: ${Object.keys(sqlRes).join(', ')}`);
-        }
-      } catch (e) {
-        console.error(`[Ostendo/adv] sqlquery error: ${e.message}`);
-      }
-
-      // Fallback: chunked ITEMCODE IN ('code1','code2',...) — all quoted as strings
-      if (itemRows.length === 0) {
-        console.log(`[Ostendo/adv] falling back to chunked ITEMMASTER fetch (${soldCodes.length} codes)`);
-        itemRows = await fetchByItemCodes(soldCodes, 50);
-        console.log(`[Ostendo/adv] itemRows (chunked): ${itemRows.length}`);
-        if (itemRows.length === 0 && soldCodes.length > 0) {
-          // Last resort: fetch first chunk alone to log the actual Ostendo error
-          const sample = soldCodes.slice(0, 5).map(fmtInVal).join(',');
-          console.log(`[Ostendo/adv] sample ITEMMASTER condition: ITEMCODE IN (${sample})`);
-        }
-      }
-    }
-
-    // Build item map keyed by both ITEMCODE and DESCRIPTORCODE for flexible lookup
-    const itemMap = {};
-    for (const it of itemRows) {
-      if (it.ITEMCODE)      itemMap[it.ITEMCODE]      = it;
-      if (it.DESCRIPTORCODE) itemMap[it.DESCRIPTORCODE] = it;
-    }
-
-    // ── BUILD per-item revenue map from current lines ─────────────────────────
-    // LINEDESCRIPTION and CATALOGUECATEGORY are on every line row — use them directly.
-    // This means products/categories populate even if ITEMMASTER returns nothing.
-    const buildItemRevMap = (lines) => {
-      const map = {};
-      for (const line of lines) {
-        const code = getItemCode(line); // LINECODE is the confirmed column
-        if (!code) continue;
-        const rev  = lineNet(line);
-        const qty  = parseNum(line.INVOICEQTY);
-        const cost = lineCostTotal(line);
-        if (!map[code]) {
-          map[code] = {
-            revenue:  0,
-            qty:      0,
-            cost:     0,
-            name:     line.LINEDESCRIPTION     || code,      // direct from line
-            category: line.CATALOGUECATEGORY   || 'Uncategorised', // direct from line
-          };
-        }
-        map[code].revenue += rev;
-        map[code].qty     += qty;
-        map[code].cost    += cost;
-      }
-      return map;
-    };
-
-    const invDateMap = {};
-    for (const inv of filteredCurrInvRows) {
-      const n = getInvNum(inv);
-      if (n) invDateMap[n] = parseDate(inv.INVOICEDATE);
-    }
-
-    const currItemRevMap = buildItemRevMap(currLineRows);
-    // Override INVOICEUNITCOST with AVERAGECOST from ITEMMASTER where available
-    const avgCostCoverage = Object.keys(currItemRevMap).filter(c => itemMap[c] && parseNum(itemMap[c].AVERAGECOST ?? itemMap[c].ITEMAVERAGECOST) > 0).length;
-    console.log(`[Ostendo/adv] AVERAGECOST coverage: ${avgCostCoverage}/${Object.keys(currItemRevMap).length} items`);
-    applyAverageCost(currItemRevMap, itemMap);
-
-    // ── TOP PRODUCTS ──────────────────────────────────────────────────────────
-    // Use LINEDESCRIPTION / CATALOGUECATEGORY first (always present on line rows).
-    // Fall back to ITEMMASTER only for any missing fields.
-    const products = Object.entries(currItemRevMap)
-      .map(([code, v]) => {
-        const it     = itemMap[code] || {};
-        const gp     = v.revenue - v.cost;
-        const margin = v.revenue > 0 ? Math.round((gp / v.revenue) * 100) : 0;
+    // Customer view: lifetime history, annotated with what they spent this period.
+    const periodByName = new Map(custPeriod.map((r) => [r.NAME, r]));
+    const asOf = parseIso(end);
+    const customers = custLifetime
+      .filter((r) => r.NAME)
+      .map((r) => {
+        const lastIso  = normaliseDate(r.LASTD);
+        const firstIso = normaliseDate(r.FIRSTD);
+        const daysSince = lastIso ? Math.floor((asOf - parseIso(lastIso)) / 86400000) : null;
+        const inPeriodRow = periodByName.get(r.NAME);
         return {
-          title:       v.name     || it.ITEMDESCRIPTION || code,
-          category:    (v.category && v.category !== 'Uncategorised') ? v.category
-                        : (it.ITEMCATEGORY || it.ITEMSUBCATEGORY || 'Uncategorised'),
-          revenue:     Math.round(v.revenue),
-          unitsSold:   Math.round(v.qty),
-          grossProfit: Math.round(gp),
-          margin,
-        };
-      })
-      .filter(p => p.revenue > 0)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 50);
-
-    // ── TOP CATEGORIES ────────────────────────────────────────────────────────
-    const catMap = {};
-    for (const p of products) {
-      const c = p.category;
-      if (!catMap[c]) catMap[c] = { category: c, revenue: 0, unitsSold: 0, grossProfit: 0, productCount: 0 };
-      catMap[c].revenue     += p.revenue;
-      catMap[c].unitsSold   += p.unitsSold;
-      catMap[c].grossProfit += p.grossProfit;
-      catMap[c].productCount++;
-    }
-    const categories = Object.values(catMap)
-      .sort((a, b) => b.revenue - a.revenue)
-      .map(c => ({ ...c, margin: c.revenue > 0 ? Math.round((c.grossProfit / c.revenue) * 100) : 0 }));
-
-    // ── CUSTOMERS — uses header-level INVOICENETTAMOUNT (confirmed accurate) ──
-    // Combine curr + prev headers so lapsed 2025 customers appear
-    const custMap = {};
-    for (const inv of [...filteredCurrInvRows, ...filteredPrevInvRows]) {
-      const name = inv.CUSTOMER ?? inv.INVOICECUSTOMER;
-      if (!name) continue;
-      const d   = parseDate(inv.INVOICEDATE);
-      const rev = parseNum(inv.INVOICENETTAMOUNT ?? inv.INVOICETOTALAMOUNT ?? inv.INVOICEVALUE);
-      if (!custMap[name]) {
-        custMap[name] = { customer: name, email: inv.BILLINGEMAIL || '', totalSpend: 0, orderCount: 0, lastOrder: null, firstOrder: null };
-      }
-      custMap[name].totalSpend += rev;
-      custMap[name].orderCount += 1;
-      if (d) {
-        if (!custMap[name].lastOrder  || d > custMap[name].lastOrder)  custMap[name].lastOrder  = d;
-        if (!custMap[name].firstOrder || d < custMap[name].firstOrder) custMap[name].firstOrder = d;
-      }
-    }
-
-    const todayMs = Date.now();
-    const customerList = Object.values(custMap)
-      .sort((a, b) => b.totalSpend - a.totalSpend)
-      .slice(0, 100)
-      .map(c => {
-        const daysSince = c.lastOrder
-          ? Math.floor((todayMs - c.lastOrder.getTime()) / 86400000)
-          : null;
-        return {
-          customer:      c.customer,
-          email:         c.email,
-          totalSpend:    Math.round(c.totalSpend),
-          orderCount:    c.orderCount,
-          aov:           c.orderCount > 0 ? Math.round(c.totalSpend / c.orderCount) : 0,
-          lastOrder:     c.lastOrder  ? c.lastOrder.toISOString()  : null,
-          firstOrder:    c.firstOrder ? c.firstOrder.toISOString() : null,
-          lastOrderDays: daysSince,
+          customer: r.NAME,
+          email: r.EMAIL || '',
+          lifetimeRevenue: money(r.NETT),
+          lifetimeOrders: Number(r.N) || 0,
+          revenue: money(inPeriodRow?.NETT || 0),
+          orderCount: Number(inPeriodRow?.N || 0),
+          aov: inPeriodRow && Number(inPeriodRow.N) > 0
+            ? money(Number(inPeriodRow.NETT) / Number(inPeriodRow.N)) : 0,
+          firstOrder: firstIso, lastOrder: lastIso, lastOrderDays: daysSince,
           status: daysSince === null ? 'Unknown'
-                : daysSince > 90    ? 'Lapsed'
-                : daysSince > 45    ? 'At Risk'
-                : 'Active',
+                : daysSince > 90 ? 'Lapsed'
+                : daysSince > 45 ? 'At Risk' : 'Active',
         };
       });
 
-    const churned = customerList.filter(c => c.status === 'Lapsed')
-      .sort((a, b) => b.totalSpend - a.totalSpend);
-    const atRisk  = customerList.filter(c => c.status === 'At Risk')
-      .sort((a, b) => (b.lastOrderDays ?? 0) - (a.lastOrderDays ?? 0));
-    const clv     = [...customerList].sort((a, b) => b.totalSpend - a.totalSpend).slice(0, 50);
-
-    // ── SLOW-MOVING INVENTORY ─────────────────────────────────────────────────
-    // Use ONHANDQTY + STDBUYPRICE from itemMap (items that appeared in any sale)
-    const slowMoving = Object.values(itemMap)
-      .filter(it => parseNum(it.ONHANDQTY) > 0)
-      .map(it => {
-        const code      = it.ITEMCODE;
-        const onHand    = parseNum(it.ONHANDQTY);
-        const soldQty   = currItemRevMap[code]?.qty || 0;
-        const buyPrice  = parseNum(it.STDBUYPRICE) ||
-                          parseNum(it.ITEMAVERAGECOST) ||
-                          parseNum(it.STDSELLPRICE) * 0.7;
-        const capitalTied = Math.round(onHand * buyPrice);
-        if (capitalTied <= 0) return null;
-        const turnover  = soldQty / Math.max(onHand, 1);
-        const slowScore = capitalTied * (1 - Math.min(turnover, 1));
-        return { title: it.ITEMDESCRIPTION || code, category: it.ITEMCATEGORY || 'Uncategorised', stockOnHand: Math.round(onHand), soldInPeriod: Math.round(soldQty), capitalTied, slowScore };
+    const soldQty = new Map(productRows.map((p) => [p.code, p.unitsSold]));
+    const slowMoving = stock
+      .map((s) => {
+        const onHand = Number(s.ONHAND) || 0;
+        const buy    = Number(s.BUY) || Number(s.AVGCOST) || 0;
+        const tied   = money(onHand * buy);
+        const sold   = soldQty.get(s.CODE) || 0;
+        return {
+          code: s.CODE, title: s.NAME || s.CODE, category: (s.CAT || '').trim() || 'Uncategorised',
+          stockOnHand: Math.round(onHand), soldInPeriod: sold, capitalTied: tied,
+          turnover: onHand > 0 ? Math.round((sold / onHand) * 100) / 100 : 0,
+        };
       })
-      .filter(Boolean)
-      .sort((a, b) => b.slowScore - a.slowScore)
-      .slice(0, 20)
-      .map(({ slowScore: _s, ...rest }) => rest);
+      .filter((s) => s.capitalTied > 0)
+      .sort((a, b) => (a.turnover - b.turnover) || (b.capitalTied - a.capitalTied))
+      .slice(0, 25);
 
-    // ── DECLINING PRODUCTS (MoM — last complete month vs month before) ────────
-    const endMon   = new Date(endParam).getMonth(); // 0-indexed
-    const priorMon = endMon === 0 ? 11 : endMon - 1;
+    const adjustmentRows = adjustments
+      .map((a) => ({ code: a.CODE, title: a.NAME || a.CODE, count: Number(a.N) || 0, value: money(a.NETT) }))
+      .filter((a) => a.value !== 0);
 
-    const moMRevMap = (targetMon, lines) => {
-      const map = {};
-      for (const line of lines) {
-        const d = invDateMap[line.INVOICENUMBER ?? line.INVOICENO];
-        if (!d || d.getMonth() !== targetMon) continue;
-        const code = getItemCode(line); // FIXED: use LINECODE via getItemCode
-        if (!code) continue;
-        const rev = lineNet(line);
-        const qty = parseNum(line.INVOICEQTY);
-        if (!map[code]) map[code] = { revenue: 0, qty: 0 };
-        map[code].revenue += rev;
-        map[code].qty     += qty;
-      }
-      return map;
-    };
-
-    const currMonMap  = moMRevMap(endMon,   currLineRows);
-    const priorMonMap = moMRevMap(priorMon, currLineRows);
-
-    const decliningMoM = Object.entries(currMonMap)
-      .filter(([code, curr]) => {
-        const prev = priorMonMap[code];
-        return prev && prev.revenue > 50 && curr.revenue < prev.revenue * 0.8;
-      })
-      .map(([code, curr]) => {
-        const prev   = priorMonMap[code];
-        const it     = itemMap[code] || {};
-        const rv     = currItemRevMap[code] || {};
-        const change = Math.round(((curr.revenue - prev.revenue) / prev.revenue) * 100);
-        return { name: rv.name || it.ITEMDESCRIPTION || code, revenue: Math.round(curr.revenue), prevRevenue: Math.round(prev.revenue), change, qtySold: Math.round(curr.qty), prevQtySold: Math.round(prev.qty) };
-      })
-      .sort((a, b) => a.change - b.change)
-      .slice(0, 20);
-
-    // YoY declining: only meaningful if there is prior-year line data.
-    // Since Dutch Rusk started Oct 2025, prior-year product lines are not yet available.
-    // Return empty — will populate once a full year of data exists.
-    const declining = [];
-
-    // ── PER-REP MARGINS ──────────────────────────────────────────────────────
-    // Map invoice number → SALESPERSON via header rows, with the same code-to-
-    // name resolution used by the main /api/ostendo route.
-    const REP_NAMES = {
-      '410': 'Kevin', '420': 'Michelle', '430': 'Keith',
-      '450': 'Nelson Office Online Sales', '460': 'Chris',
-      '461': 'Ravi Kumar',
-      '470': 'Lynette', '490': 'Leith',
-    };
-    const resolveRep = (raw) => {
-      if (!raw) return 'Unassigned';
-      const code = String(raw).trim();
-      const base = code.replace(/-\d+$/, '');
-      return REP_NAMES[base] || REP_NAMES[code] || code;
-    };
-    const invToRep = {};
-    for (const inv of filteredCurrInvRows) {
-      const num = getInvNum(inv);
-      if (num) invToRep[String(num).trim()] = resolveRep(inv.SALESPERSON);
-    }
-    const MONTH_NAMES_ADV = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const repAgg = {};
-    for (const line of currLineRows) {
-      const num  = String(line.INVOICENUMBER ?? line.INVOICENO ?? '').trim();
-      const rep  = invToRep[num] || 'Unassigned';
-      const d    = invDateMap[num];
-      const mi   = d ? d.getMonth() : -1;
-      if (!repAgg[rep]) repAgg[rep] = { revenue: 0, cost: 0, monthly: Array.from({length: 12}, () => ({revenue: 0, cost: 0})), weekly: {} };
-      const lineRev  = lineNet(line);
-      const lineCost = lineCostTotal(line);
-      repAgg[rep].revenue += lineRev;
-      repAgg[rep].cost    += lineCost;
-      if (mi >= 0 && d) {
-        repAgg[rep].monthly[mi].revenue += lineRev;
-        repAgg[rep].monthly[mi].cost    += lineCost;
-        const wk   = Math.ceil(d.getDate() / 7);
-        const wkey = `${mi}_${wk}`;
-        if (!repAgg[rep].weekly[wkey]) repAgg[rep].weekly[wkey] = { revenue: 0, cost: 0 };
-        repAgg[rep].weekly[wkey].revenue += lineRev;
-        repAgg[rep].weekly[wkey].cost    += lineCost;
-      }
-    }
-    const repMargins = Object.entries(repAgg).map(([name, r]) => {
-      const cost = Math.round(r.cost);
-      const rev  = Math.round(r.revenue);
-      const gp   = rev - cost;
-      const months = r.monthly.map((m, mi) => {
-        const mRev  = Math.round(m.revenue);
-        const mCost = Math.round(m.cost);
-        const mGP   = mRev - mCost;
-        return { month: MONTH_NAMES_ADV[mi], revenue: mRev, cost: mCost, grossProfit: mGP, marginPct: mRev > 0 ? Math.round((mGP / mRev) * 100) : null };
-      });
-      const weeks = Object.entries(r.weekly).map(([key, w]) => {
-        const [moIdx, wkIdx] = key.split('_').map(Number);
-        const wRev  = Math.round(w.revenue);
-        const wCost = Math.round(w.cost);
-        const wGP   = wRev - wCost;
-        return { month: moIdx, week: wkIdx, revenue: wRev, cost: wCost, grossProfit: wGP, marginPct: wRev > 0 ? Math.round((wGP / wRev) * 100) : null };
-      });
-      return { name, revenue: rev, cost, marginableRevenue: rev, grossProfit: gp, marginPct: rev > 0 ? Math.round((gp / rev) * 100) : null, months, weeks };
-    }).sort((a, b) => b.revenue - a.revenue);
+    const byRevenueDesc = (a, b) => b.revenue - a.revenue;
 
     return NextResponse.json({
-      products,
-      categories,
-      customers:   customerList,
+      fy, range: { start, end },
+      products:   productRows.slice(0, 50),
+      categories: categoryRows.slice(0, 30),
+      fastMoving: [...productRows].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 25),
+      customers:  [...customers].filter((c) => c.orderCount > 0).sort(byRevenueDesc).slice(0, 100),
+      clv:        [...customers].sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
+      churned:    customers.filter((c) => c.status === 'Lapsed' && c.lifetimeRevenue > 0)
+                           .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
+      atRisk:     customers.filter((c) => c.status === 'At Risk')
+                           .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
       slowMoving,
-      churned,
-      atRisk,
-      clv,
-      declining,
-      decliningMoM,
-      repMargins,
+      adjustments: adjustmentRows,
       metrics: {
-        totalRevenue:    Math.round(filteredCurrInvRows.reduce((s, r) => s + parseNum(r.INVOICENETTAMOUNT ?? r.INVOICETOTALAMOUNT), 0)),
-        totalOrders:     filteredCurrInvRows.length,
-        uniqueCustomers: Object.keys(custMap).length,
-        lineCount:       currLineRows.length,
-        invoiceCount:    currInvNums.length,
+        productsSold:    productRows.length,
+        categoriesSold:  categoryRows.length,
+        customersInPeriod: [...periodByName.keys()].length,
+        customersAllTime:  customers.length,
+        adjustmentTotal: adjustmentRows.reduce((s, a) => s + a.value, 0),
       },
     });
-
   } catch (err) {
-    console.error('[Ostendo/advanced] fatal:', err.message, err.stack);
+    console.error('[ostendo/advanced]', err.message);
+    // Surface the failure instead of returning empty arrays that read as "no sales".
     return NextResponse.json({
-      products: [], categories: [], customers: [], slowMoving: [],
-      churned: [], atRisk: [], clv: [], declining: [], decliningMoM: [],
-      metrics: {}, error: err.message,
-    });
+      fy, range: { start, end }, error: err.message,
+      products: [], categories: [], fastMoving: [], customers: [], clv: [],
+      churned: [], atRisk: [], slowMoving: [], adjustments: [], metrics: {},
+    }, { status: 502 });
   }
 }
