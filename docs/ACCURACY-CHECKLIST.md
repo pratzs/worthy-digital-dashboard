@@ -5,7 +5,7 @@ system. Evidence is recorded beside each one.
 
 ## Worthy Products North (Odoo company 4)
 
-- [ ] **1. January 2026 is missing entirely — NZ$936,451.83 and 835 invoices.**
+- [x] **1. January 2026 is missing entirely — NZ$936,451.83 and 835 invoices.** FIXED.
   The invoice fetch carries `limit: 10000`. Odoo holds **10,870** matching
   invoices for 2026, and `account.move` returns newest first, so the 870 oldest
   were dropped. Reported FY-to-date revenue is understated by roughly NZ$936k.
@@ -27,14 +27,14 @@ system. Evidence is recorded beside each one.
 
 ## Worthy Products South / Dutch Rusk (Ostendo)
 
-- [ ] **6. Total Discounts is wrong — it reads NZ$282.78 for September.**
+- [x] **6. Total Discounts is wrong — it reads NZ$282.78 for September.** FIXED.
   `DISCOUNTAMOUNT` sums to NZ$146.81 for the whole year and the header's
   `LINEDISCOUNTAMOUNT` to NZ$14,548.93, because neither column is how this
   business records a discount. `DISCOUNTPERCENT` is populated on 208,736 of
   215,148 lines with real values (11–29%), and the money sits in the gap between
   `CUSTOMERUNITPRICE` and the price actually charged.
 
-- [ ] **7. Margin is understated by cost data that cannot be right.**
+- [x] **7. Margin is understated by cost data that cannot be right.** SURFACED (not restated).
   Of FY26 stock sales: 97.0% of revenue runs at a **19.7%** margin. The
   remaining 3.0% carries NZ$554,321 of cost against NZ$244,735 of revenue — one
   band has cost at **4.3x** the revenue earned. That drags the reported figure to
@@ -43,8 +43,11 @@ system. Evidence is recorded beside each one.
   price, which points at a pack-size/unit-of-measure problem in Ostendo rather
   than real trading.
 
-- [ ] **8. Fast-Moving SKU margins follow from item 7** — the four Mars lines
+- [x] **8. Fast-Moving SKU margins follow from item 7** — same root cause, now explained on screen. — the four Mars lines
   showing −4.6% to −6.7% are the same bad-cost lines, not loss-making trade.
+
+- [x] **9. Slow-Moving "Sold" read 0 on every row** — it looked quantities up in
+  the top 200 products by revenue, which a slow mover is never in. FIXED.
 
 ## Done
 
