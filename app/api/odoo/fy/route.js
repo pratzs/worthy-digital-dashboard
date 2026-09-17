@@ -129,14 +129,45 @@ export async function GET(request) {
     const range = lastLoaded && lastLoaded < full.end ? { ...full, end: lastLoaded } : full;
     const prior = priorRange(range);
 
+    const problems = [];
     const pull = async (start, end) => {
       const [moves, prodMonth, discRows] = await Promise.all([
         // Revenue and counts, per day, per rep, per type.
         exec('account.move', 'read_group', [moveDomain(cid, start, end),
           ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }),
         // Quantity per product per month — cost is a per-product figure.
+        /* Grouping by product asks Odoo to build each product's display name, and
+         * Worthy Oceania has variants whose attributes are incomplete, so the
+         * whole call fails with "expected str instance, bool found". Reading the
+         * lines directly avoids the grouping; if that fails too the reason is
+         * reported rather than leaving an empty table with no explanation. */
         exec('account.move.line', 'read_group', [costLineDomain(cid, start, end),
-          ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }).catch(() => []),
+          ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false })
+          .catch(async (e) => {
+            problems.push(`grouping lines by product failed (${e.message.slice(0, 90)}); read line by line instead`);
+            const rows = [];
+            for (let offset = 0; ; offset += 2000) {
+              const page = await exec('account.move.line', 'search_read', [costLineDomain(cid, start, end)],
+                { fields: ['product_id', 'quantity', 'price_subtotal', 'date'], limit: 2000, offset, order: 'id asc' })
+                .catch((e2) => { problems.push(`reading lines failed: ${e2.message.slice(0, 90)}`); return null; });
+              if (!page) return [];
+              rows.push(...page);
+              if (page.length < 2000) break;
+            }
+            // Fold into the same shape read_group would have produced.
+            const agg = new Map();
+            for (const l of rows) {
+              const pid = l.product_id && l.product_id[0]; if (!pid || !l.date) continue;
+              const month = String(l.date).substring(0, 7);
+              const k = `${pid}|${month}`;
+              if (!agg.has(k)) agg.set(k, { product_id: l.product_id, quantity: 0, price_subtotal: 0,
+                                            __range: { 'date:month': { from: `${month}-01` } } });
+              const a = agg.get(k);
+              a.quantity += Number(l.quantity) || 0;
+              a.price_subtotal += Number(l.price_subtotal) || 0;
+            }
+            return [...agg.values()];
+          }),
         // Discount value recovered from the rate each line was sold at.
         exec('account.move.line', 'read_group', [
           [...lineDomain(cid, start, end), ['date', '!=', false]],
@@ -419,6 +450,8 @@ export async function GET(request) {
         ? "product standard cost as it stands today, not the cost at the time of sale"
         : "no product costs are held in Odoo for this company, so margin cannot be calculated",
       hasCost,
+      // Anything that could not be read, said out loud rather than left blank.
+      problems: [...new Set(problems)],
       months: monthRows,
       weeks: weekRows,
       reps: repRows,
