@@ -1,4 +1,4 @@
-/** TEMPORARY. Which cost basis is trustworthy, and are the bad costs clustered? */
+/** TEMPORARY. Does a per-item typical cost give a defensible margin? */
 import { NextResponse } from 'next/server';
 import { ostendoSql } from '@/lib/ostendo';
 
@@ -9,42 +9,52 @@ const FY = `h.INVOICEDATE BETWEEN '2026-04-01' AND '2026-09-16'`;
 const L  = `SALESINVOICELINES l JOIN SALESINVOICEHEADER h ON h.INVOICENUMBER = l.INVOICENUMBER`;
 
 export async function GET() {
-  const out = {};
-  const run = async (k, sql) => { out[k] = await ostendoSql(sql).catch(e => ({ error: e.message })); };
+  // Every distinct unit cost each item was invoiced at, with how much quantity
+  // went out at that cost. The typical cost is then the quantity-weighted median.
+  const rows = await ostendoSql(`
+    SELECT l.LINECODE AS CODE, l.INVOICEUNITCOST AS UC,
+           SUM(l.INVOICEQTY) AS QTY, COUNT(*) AS LINES
+    FROM ${L} WHERE ${FY} AND l.CODETYPE='Item Code' AND l.INVOICEQTY > 0
+    GROUP BY 1, 2`).catch(e => ({ error: e.message }));
+  if (rows.error) return NextResponse.json(rows, { status: 502 });
 
-  // Every cost-ish column the item master offers.
-  await run('itemFields', `SELECT FIRST 1 * FROM ITEMMASTER`);
+  const byItem = new Map();
+  for (const r of rows) {
+    const code = r.CODE, uc = Number(r.UC) || 0, qty = Number(r.QTY) || 0;
+    if (!byItem.has(code)) byItem.set(code, []);
+    byItem.get(code).push({ uc, qty });
+  }
+  const typical = new Map();
+  for (const [code, list] of byItem) {
+    list.sort((a, b) => a.uc - b.uc);
+    const total = list.reduce((s, x) => s + x.qty, 0);
+    let run = 0, pick = list[0]?.uc ?? 0;
+    for (const x of list) { run += x.qty; if (run >= total / 2) { pick = x.uc; break; } }
+    typical.set(code, pick);
+  }
 
-  // Are the impossible costs clustered on particular days? A bad stock receipt
-  // corrupts the running average and every sale after it is costed wrong.
-  await run('badByDay', `SELECT h.INVOICEDATE AS D, COUNT(*) AS LINES,
-      SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS BADCOST, SUM(l.EXTENDEDNETTPRICE) AS BADREV
-    FROM ${L} WHERE ${FY} AND l.CODETYPE='Item Code' AND l.INVOICEQTY>0
-      AND l.EXTENDEDNETTPRICE>0 AND l.INVOICEQTY*l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE*2
-    GROUP BY 1 ORDER BY 3 DESC`);
+  // Apply it back across the year.
+  const actual = await ostendoSql(`
+    SELECT l.LINECODE AS CODE, SUM(l.INVOICEQTY) AS QTY,
+           SUM(l.EXTENDEDNETTPRICE) AS NETT, SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+    FROM ${L} WHERE ${FY} AND l.CODETYPE='Item Code' AND l.INVOICEQTY > 0
+    GROUP BY 1`);
 
-  // For the worst items: how does the invoiced cost sit against the sell price
-  // across the year? If most lines are sane and a few are wild, a per-item
-  // typical cost is recoverable.
-  await run('perItemSpread', `SELECT FIRST 12 l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME,
-      COUNT(*) AS LINES,
-      SUM(CASE WHEN l.INVOICEUNITCOST <= l.INVOICEUNITPRICE THEN 1 ELSE 0 END) AS SANE_LINES,
-      MIN(l.INVOICEUNITCOST) AS MINC, MAX(l.INVOICEUNITCOST) AS MAXC,
-      AVG(l.INVOICEUNITPRICE) AS AVGSELL,
-      SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS TOTCOST,
-      SUM(l.EXTENDEDNETTPRICE) AS TOTREV
-    FROM ${L} WHERE ${FY} AND l.CODETYPE='Item Code' AND l.INVOICEQTY>0
-    GROUP BY l.LINECODE ORDER BY SUM(l.INVOICEQTY*l.INVOICEUNITCOST) - SUM(l.EXTENDEDNETTPRICE) DESC`);
+  let rev = 0, costInvoiced = 0, costTypical = 0;
+  const worst = [];
+  for (const r of actual) {
+    const q = Number(r.QTY) || 0, nett = Number(r.NETT) || 0, ci = Number(r.COST) || 0;
+    const ct = q * (typical.get(r.CODE) ?? 0);
+    rev += nett; costInvoiced += ci; costTypical += ct;
+    if (ci - ct > 500) worst.push({ code: r.CODE, overstated: Math.round(ci - ct) });
+  }
+  worst.sort((a, b) => b.overstated - a.overstated);
 
-  // What would the margin be if every line were costed at that item's CHEAPEST
-  // observed cost that is still at or below the price it sold for?
-  await run('marginBases', `SELECT
-      SUM(l.EXTENDEDNETTPRICE) AS REV,
-      SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST_INVOICED,
-      SUM(l.INVOICEQTY * i.AVERAGECOST) AS COST_AVG,
-      SUM(l.INVOICEQTY * i.STDBUYPRICE) AS COST_STDBUY
-    FROM ${L} JOIN ITEMMASTER i ON i.ITEMCODE = l.LINECODE
-    WHERE ${FY} AND l.CODETYPE='Item Code' AND l.INVOICEQTY>0`);
-
-  return NextResponse.json(out);
+  return NextResponse.json({
+    revenue: rev,
+    costInvoiced, marginInvoiced: ((rev - costInvoiced) / rev * 100).toFixed(1),
+    costTypical,  marginTypical:  ((rev - costTypical)  / rev * 100).toFixed(1),
+    costOverstatedBy: costInvoiced - costTypical,
+    itemsAffected: worst.length, worstItems: worst.slice(0, 12),
+  });
 }
