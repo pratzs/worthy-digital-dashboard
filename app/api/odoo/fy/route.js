@@ -239,6 +239,34 @@ export async function GET(request) {
       };
     });
 
+    /* Weeks inside each month: 1-7, 8-14, 15-21, 22-28, 29-end. `days` says how
+     * long the bucket actually is, so a short month-end stub is never mistaken
+     * for a collapse in trade. Cost is only held per month, so a week reports
+     * revenue and counts without a margin. */
+    const weekRows = [];
+    for (const m of monthRows) {
+      if (!m.started) continue;
+      for (let w = 1; w <= 5; w++) {
+        const from = (w - 1) * 7 + 1;
+        if (from > m.daysInMonth) continue;
+        const to = Math.min(w * 7, m.daysInMonth);
+        const fromIso = `${m.key}-${String(from).padStart(2, '0')}`;
+        const toIso = `${m.key}-${String(to).padStart(2, '0')}`;
+        if (fromIso > todayIso) continue;
+        const cappedTo = toIso <= todayIso ? toIso : todayIso;
+        weekRows.push({
+          monthKey: m.key, monthLabel: m.label, week: w,
+          label: `${m.label} W${w}`,
+          dateRange: `${from}–${to} ${m.label}`,
+          start: fromIso, end: cappedTo,
+          days: Math.round((parseIso(cappedTo) - parseIso(fromIso)) / 86400000) + 1,
+          expectedDays: to - from + 1,
+          complete: toIso <= todayIso,
+          ...present(sumRange(days, fromIso, cappedTo), false),
+        });
+      }
+    }
+
     const repNames = new Set();
     for (const [, e] of days) for (const k of e.reps.keys()) repNames.add(k);
     for (const [, e] of daysPrior) for (const k of e.reps.keys()) repNames.add(k);
@@ -256,6 +284,10 @@ export async function GET(request) {
         months: monthRows.map((m) => ({
           key: m.key, label: m.label, started: m.started,
           ...present(m.started ? sumRange(days, `${m.key}-01`, m.through, name) : blank(), false),
+        })),
+        weeks: weekRows.map((w) => ({
+          monthKey: w.monthKey, week: w.week,
+          ...present(sumRange(days, w.start, w.end, name), false),
         })),
       };
     }).filter((r) => r.revenue !== 0 || r.invoices > 0 || r.credits > 0)
@@ -285,6 +317,7 @@ export async function GET(request) {
         : "no product costs are held in Odoo for this company, so margin cannot be calculated",
       hasCost,
       months: monthRows,
+      weeks: weekRows,
       reps: repRows,
       repMarginAvailable: false,
       totals: {
