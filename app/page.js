@@ -2020,7 +2020,7 @@ export default function EcommerceDashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="month" interval={0} tick={{ fontSize: 11, fill: T.textMuted }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "grossProfit" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "marginPct" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
                   <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
@@ -2036,9 +2036,9 @@ export default function EcommerceDashboard() {
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
                 <div style={{ fontSize: 11, color: T.textSub, marginBottom: 18 }}>% vs same month {selectedYear - 1}</div>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={momData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                  <BarChart data={momData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#4a4030" }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="month" interval={0} tick={{ fontSize: 10, fill: "#4a4030" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
                     <Tooltip content={<CustomTooltip accent={accent} />} />
                     <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
@@ -2162,7 +2162,7 @@ export default function EcommerceDashboard() {
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 12, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="label" interval={0} tick={{ fontSize: 12, fill: T.textMuted }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
                           tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
                         <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
