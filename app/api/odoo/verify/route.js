@@ -52,6 +52,18 @@ export async function GET(request) {
   try {
     const exec = await connect();
 
+    // TEMP probe: how expensive is stock-on-hand for this company?
+    if (p.get('probe') === 'stock') {
+      const ids = await exec('product.product', 'search',
+        [[['type', '=', 'consu']]], { limit: parseInt(p.get('n') || '200', 10) });
+      const t0 = Date.now();
+      const rows = await exec('product.product', 'read', [ids],
+        { fields: ['qty_available', 'standard_price'], context: { allowed_company_ids: [cid], company_id: cid } });
+      return NextResponse.json({ probe: 'stock', company: cid, products: rows.length,
+        ms: Date.now() - t0, withStock: rows.filter((r) => Number(r.qty_available) > 0).length,
+        sample: rows.slice(0, 3).map((r) => ({ id: r.id, qty: r.qty_available })) });
+    }
+
     // Every posted customer invoice and credit note, one record at a time.
     const moves = await readAll(exec, 'account.move',
       [['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
