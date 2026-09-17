@@ -404,8 +404,11 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
       orders:  s.orders,
       revenue: keep(s.revenue),
       aov:     s.orders > 0 ? keep(s.revenue / s.orders) : 0,
-      cost:    m ? keep(m.cost || 0) : null,
-      grossProfit: m ? keep(m.grossProfit || 0) : null,
+      /* `|| 0` would turn a withheld gross profit into a confident NZ$0, which
+         reads as "this rep made nothing" rather than "we do not know". A missing
+         value stays missing all the way to the cell. */
+      cost:    m && m.cost != null ? keep(m.cost) : null,
+      grossProfit: m && m.grossProfit != null ? keep(m.grossProfit) : null,
       marginPct:   m ? m.marginPct : null,
     };
   });
