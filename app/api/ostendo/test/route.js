@@ -46,29 +46,27 @@ const Y = 'EXTRACT(YEAR FROM INVOICEDATE) = 2026';
 
 export async function GET() {
   const queries = {
-    // Q1 — credit notes: how many, and is the amount signed?
-    byOrCredit: `SELECT INVOICEORCREDIT, COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT, ` +
-                `MIN(INVOICENETTAMOUNT) AS MINV, MAX(INVOICENETTAMOUNT) AS MAXV ` +
-                `FROM SALESINVOICEHEADER WHERE ${Y} GROUP BY INVOICEORCREDIT`,
+    // Do CREDIT notes carry a salesperson? If not, credits never reduce a rep's revenue.
+    creditsByRep: `SELECT SALESPERSON, INVOICEORCREDIT, COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT ` +
+                  `FROM SALESINVOICEHEADER WHERE ${Y} GROUP BY SALESPERSON, INVOICEORCREDIT ORDER BY SALESPERSON`,
 
-    // Q2 — statuses present, and the value sitting behind each
-    byStatus:   `SELECT INVOICESTATUS, COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT ` +
-                `FROM SALESINVOICEHEADER WHERE ${Y} GROUP BY INVOICESTATUS`,
+    // Is there a salesperson master table we can resolve names from dynamically?
+    spTable1: `SELECT FIRST 5 * FROM SALESPERSON`,
+    spTable2: `SELECT FIRST 5 * FROM SALESPEOPLE`,
+    spTable3: `SELECT FIRST 5 * FROM EMPLOYEEMASTER`,
 
-    // Q3 — how many headers carry a negative nett (i.e. credits already signed)
-    negatives:  `SELECT COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT FROM SALESINVOICEHEADER ` +
-                `WHERE ${Y} AND INVOICENETTAMOUNT < 0`,
+    // Rebates: zero-cost lines with a negative net — what are they called?
+    rebateLines: `SELECT FIRST 20 LINECODE, LINEDESCRIPTION, CATALOGUECATEGORY, COUNT(*) AS N, ` +
+                 `SUM(EXTENDEDNETTPRICE) AS NETT FROM SALESINVOICELINES ` +
+                 `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${Y}) ` +
+                 `AND INVOICEUNITCOST = 0 AND EXTENDEDNETTPRICE < 0 ` +
+                 `GROUP BY LINECODE, LINEDESCRIPTION, CATALOGUECATEGORY ORDER BY 5`,
 
-    // Q4 — header total vs line total for the same year (revenue-base reconciliation)
-    headerTotal: `SELECT COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT FROM SALESINVOICEHEADER WHERE ${Y}`,
-    lineTotal:   `SELECT SUM(EXTENDEDNETTPRICE) AS LINENETT, SUM(INVOICEQTY * INVOICEUNITCOST) AS LINECOST ` +
-                 `FROM SALESINVOICELINES WHERE INVOICENUMBER IN ` +
-                 `(SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${Y})`,
-
-    // Q5 — lines carrying revenue but no cost (inflates margin)
-    zeroCostLines: `SELECT COUNT(*) AS N, SUM(EXTENDEDNETTPRICE) AS NETT FROM SALESINVOICELINES ` +
-                   `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${Y}) ` +
-                   `AND INVOICEUNITCOST = 0 AND EXTENDEDNETTPRICE <> 0`,
+    // What CODETYPEs exist on lines (stock vs descriptor vs service)?
+    codeTypes: `SELECT CODETYPE, COUNT(*) AS N, SUM(EXTENDEDNETTPRICE) AS NETT, ` +
+               `SUM(INVOICEQTY * INVOICEUNITCOST) AS COST FROM SALESINVOICELINES ` +
+               `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${Y}) ` +
+               `GROUP BY CODETYPE`,
   };
 
   const out = {};
