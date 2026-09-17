@@ -69,6 +69,11 @@ const lineDomain = (cid, start, end) => [
   ['move_id.state', '=', 'posted'], ['move_id.invoice_date', '>=', start],
   ['move_id.invoice_date', '<=', end], ['display_type', '=', 'product'],
 ];
+/* Grouping by product breaks on lines with no product or no accounting date.
+ * Neither can carry a cost, so they are excluded from the cost query only. */
+const costLineDomain = (cid, start, end) => [
+  ...lineDomain(cid, start, end), ['product_id', '!=', false], ['date', '!=', false],
+];
 
 const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0, discount: 0 });
 const add = (t, s) => {
@@ -108,12 +113,17 @@ export async function GET(request) {
   try {
     const exec = await connect();
 
-    // Stop at the last invoice Odoo actually holds for this company.
-    const bounds = await exec('account.move', 'read_group',
-      [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']], ['state', '=', 'posted']],
-       ['invoice_date:max', 'invoice_date:min'], []], { lazy: false }).catch(() => []);
-    const lastLoaded  = dayOf(bounds?.[0]?.invoice_date_max ?? bounds?.[0]?.invoice_date);
-    const firstLoaded = dayOf(bounds?.[0]?.invoice_date_min ?? bounds?.[0]?.invoice_date);
+    /* Stop at the last invoice Odoo actually holds for this company.
+     * Asking read_group for min AND max of the same field is rejected
+     * ("Output name 'invoice_date' is used twice"), so take the first and last
+     * rows instead. */
+    const allPosted = [['company_id', '=', cid],
+                       ['move_type', 'in', ['out_invoice', 'out_refund']], ['state', '=', 'posted']];
+    const edge = (order) => exec('account.move', 'search_read', [allPosted],
+      { fields: ['invoice_date'], order, limit: 1 }, 20000).catch(() => []);
+    const [newest, oldest] = await Promise.all([edge('invoice_date desc'), edge('invoice_date asc')]);
+    const lastLoaded  = dayOf(newest?.[0]?.invoice_date);
+    const firstLoaded = dayOf(oldest?.[0]?.invoice_date);
 
     const full = fyRange(fy, today);
     const range = lastLoaded && lastLoaded < full.end ? { ...full, end: lastLoaded } : full;
@@ -125,11 +135,12 @@ export async function GET(request) {
         exec('account.move', 'read_group', [moveDomain(cid, start, end),
           ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }),
         // Quantity per product per month — cost is a per-product figure.
-        exec('account.move.line', 'read_group', [lineDomain(cid, start, end),
-          ['quantity:sum'], ['product_id', 'date:month']], { lazy: false }),
+        exec('account.move.line', 'read_group', [costLineDomain(cid, start, end),
+          ['quantity:sum'], ['product_id', 'date:month']], { lazy: false }).catch(() => []),
         // Discount value recovered from the rate each line was sold at.
-        exec('account.move.line', 'read_group', [lineDomain(cid, start, end),
-          ['price_subtotal:sum'], ['date:month', 'discount']], { lazy: false }),
+        exec('account.move.line', 'read_group', [
+          [...lineDomain(cid, start, end), ['date', '!=', false]],
+          ['price_subtotal:sum'], ['date:month', 'discount']], { lazy: false }).catch(() => []),
       ]);
       return { moves, prodMonth, discRows };
     };
