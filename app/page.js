@@ -64,7 +64,9 @@ const fmtPct = (n) => (n === null || n === undefined) ? "—" : `${n > 0 ? "+" :
 const GrowthBadge = ({ value }) => {
   if (value === null || value === undefined) return <span style={{ color: "#888" }}>—</span>;
   const pos = value >= 0;
-  return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}>{pos ? "▲" : "▼"} {Math.abs(value)}%</span>;
+  // Round at the point of display — a percentage that arrives as binary noise
+  // must never reach the screen as "0.5999999999999996%".
+  return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}>{pos ? "▲" : "▼"} {Math.round(Math.abs(value) * 10) / 10}%</span>;
 };
 
 const MarginBar = ({ value, accent = "#3f7bdd" }) => {
@@ -118,7 +120,7 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
         <div style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: growth === null ? textMuted : isPos ? "#4ade80" : "#f87171", background: growth === null ? (darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)") : isPos ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)" }}>
-          {growth === null ? "No prior yr" : `${isPos ? "▲" : "▼"} ${Math.abs(growth)}%`}
+          {growth === null ? "No prior yr" : `${isPos ? "▲" : "▼"} ${Math.round(Math.abs(growth) * 10) / 10}%`}
         </div>
       </div>
       <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
@@ -1600,12 +1602,15 @@ export default function EcommerceDashboard() {
   const prevCost       = prev.reduce((s, d) => s + (d.totalCost || 0), 0);
   const prevMargRev    = prev.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const prevTrueMargin = prevMargRev > 0 ? (prevMargRev - prevCost) / prevMargRev : null;
-  const prevGPMargin   = prevTrueMargin !== null ? Math.round(prevTrueMargin * 100) : null;
+  const prevGPMargin   = prevTrueMargin !== null ? Math.round(prevTrueMargin * 1000) / 10 : null;
   // Absolute percentage-point change in margin vs prior year (e.g. "▲ 2%" = improved 2pp)
+  /* Round the DIFFERENCE, not just its parts. Two one-decimal margins subtract
+     to binary noise — 12.1 − 11.5 printed as "▲ 0.5999999999999996%" on the card. */
+  const ppChange = (a, b) => Math.round((a - b) * 10) / 10;
   const kpiMarginGrowth = view === "yoy" && prevLoaded && kpiGPMargin !== null && prevGPMargin !== null
-    ? kpiGPMargin - prevGPMargin
+    ? ppChange(kpiGPMargin, prevGPMargin)
     : view === "monthly" && prevLoaded && kpiGPMargin !== null && prevLatestMargin !== null
-    ? kpiGPMargin - prevLatestMargin
+    ? ppChange(kpiGPMargin, prevLatestMargin)
     : null;
 
   // YoY comparison text shown under each KPI card
