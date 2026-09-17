@@ -34,7 +34,17 @@ system. Evidence is recorded beside each one.
   215,148 lines with real values (11–29%), and the money sits in the gap between
   `CUSTOMERUNITPRICE` and the price actually charged.
 
-- [x] **7. Margin is understated by cost data that cannot be right.** SURFACED (not restated).
+- [x] **7. Margin is understated by cost data that cannot be right.** ROOT CAUSE FOUND.
+  Recorded margin swings 3.6%–18.4% across six months and tracks the cost faults
+  exactly: June carries NZ$320,423 of impossible cost and reads 3.6%; April
+  NZ$118,993 and reads 11.9%; May, August and September carry almost none and
+  read 17.2%, 18.4%, 16.9%. Excluding only lines whose cost exceeds the sale —
+  nothing estimated — every month lands 17.1%–18.7% and the year at 17.9%. The
+  damage clusters on **22–30 June and 8–9 April**: the signature of a stock
+  receipt corrupting the running average cost. No derived basis repairs it
+  (item master 28.9%, per-item median 28.7%, invoiced 14.7%), so a
+  **Margin (clean)** column sits beside the recorded one and the cost data needs
+  correcting in Ostendo.
   Of FY26 stock sales: 97.0% of revenue runs at a **19.7%** margin. The
   remaining 3.0% carries NZ$554,321 of cost against NZ$244,735 of revenue — one
   band has cost at **4.3x** the revenue earned. That drags the reported figure to
