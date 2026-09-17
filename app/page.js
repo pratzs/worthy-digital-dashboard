@@ -712,7 +712,11 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
           without a product on the line. Their invoicing is counted in full
           ({money(keep(withheld.reduce((s, w) => s + (w.revenue || 0), 0)), currency)} in total),
           but there is no cost of sales to set against it, so a margin would have read close to
-          100%. It is left blank rather than shown as something it is not.
+          100%. It is left blank rather than shown as something it is not.{" "}
+          {/* Say what that does to the column, so nobody has to wonder why it is short. */}
+          Because of those blanks the Gross Profit column adds up to{" "}
+          {money(keep(withheld.reduce((s, w) => s + ((w.revenue || 0) - (w.cost || 0)), 0)), currency)}{" "}
+          less than the total beneath it; the total is the company's, and is right.
         </div>
       )}
     </div>
