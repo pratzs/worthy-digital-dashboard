@@ -352,7 +352,10 @@ export async function GET(request) {
         weeks:  perWeek,
       };
     })
-      .filter((r) => r.revenue !== 0 || r.invoices > 0 || r.prior.revenue !== 0)
+      // Only reps who actually traded in this period. Codes that carried sales in
+      // an earlier year but have nothing allocated to them now were listing as
+      // rows of zeros, which is noise rather than information.
+      .filter((r) => r.revenue !== 0 || r.invoices > 0 || r.credits > 0)
       .sort((a, b) => b.revenue - a.revenue);
 
     /* ── Year totals ─────────────────────────────────────────────────────── */
