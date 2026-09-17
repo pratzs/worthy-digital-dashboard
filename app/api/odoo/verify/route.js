@@ -59,7 +59,7 @@ export async function GET(request) {
       ['amount_untaxed', 'amount_total', 'move_type', 'invoice_user_id', 'invoice_date', 'partner_id']);
 
     let revenue = 0, invoices = 0, credits = 0, creditValue = 0;
-    const byRep = new Map(), byMonth = new Map(), repOfMove = new Map();
+    const byRep = new Map(), byMonth = new Map(), repOfMove = new Map(), byCustomer = new Map();
     for (const m of moves.rows) {
       const credit = m.move_type === 'out_refund';
       const amt = (Number(m.amount_untaxed) || 0) * (credit ? -1 : 1);
@@ -72,6 +72,14 @@ export async function GET(request) {
       const r = byRep.get(rep);
       r.revenue += amt; if (credit) r.credits += 1; else r.invoices += 1;
       byMonth.set(mk, (byMonth.get(mk) || 0) + amt);
+
+      const cust = m.partner_id ? m.partner_id[1] : 'Unknown';
+      if (!byCustomer.has(cust)) byCustomer.set(cust, { revenue: 0, orders: 0, first: null, last: null });
+      const cu = byCustomer.get(cust);
+      cu.revenue += amt; if (!credit) cu.orders += 1;
+      const day = String(m.invoice_date);
+      if (!cu.first || day < cu.first) cu.first = day;
+      if (!cu.last || day > cu.last) cu.last = day;
     }
 
     // Every product line of those documents, one record at a time.
@@ -83,16 +91,21 @@ export async function GET(request) {
       ['move_id', 'product_id', 'quantity', 'price_subtotal', 'date']);
 
     const pids = [...new Set(lines.rows.map((l) => l.product_id[0]))];
-    const priceOf = new Map();
+    const priceOf = new Map(), meta = new Map();
     for (let i = 0; i < pids.length; i += 500) {
-      const got = await exec('product.product', 'read', [pids.slice(i, i + 500)], { fields: ['standard_price'] });
-      for (const g of got) priceOf.set(g.id, Number(g.standard_price) || 0);
+      const got = await exec('product.product', 'read', [pids.slice(i, i + 500)],
+        { fields: ['standard_price', 'categ_id', 'default_code', 'display_name'] });
+      for (const g of got) {
+        priceOf.set(g.id, Number(g.standard_price) || 0);
+        meta.set(g.id, { cat: g.categ_id ? g.categ_id[1] : null, code: g.default_code || null, name: g.display_name || null });
+      }
     }
 
     // The move decides the sign; Odoo stores credit-note lines positive.
     const signOf = new Map(moves.rows.map((m) => [m.id, m.move_type === 'out_refund' ? -1 : 1]));
     let cost = 0, costedRevenue = 0, linesWithoutDate = 0, linesWithoutMove = 0;
     const costByRep = new Map(), costedByRep = new Map(), costByMonth = new Map();
+    const byProduct = new Map(), byCat = new Map();
     for (const l of lines.rows) {
       const mid = l.move_id && l.move_id[0];
       const sign = signOf.get(mid);
@@ -110,6 +123,18 @@ export async function GET(request) {
       }
       const mk = String(l.date || '').substring(0, 7);
       if (mk) costByMonth.set(mk, (costByMonth.get(mk) || 0) + c);
+
+      const pid = l.product_id[0];
+      if (!byProduct.has(pid)) byProduct.set(pid, { units: 0, revenue: 0, cost: 0 });
+      const pr = byProduct.get(pid);
+      pr.units += (Number(l.quantity) || 0) * sign;
+      pr.revenue += sub;
+      pr.cost += c;
+
+      const cat = meta.get(pid)?.cat || 'Uncategorised';
+      if (!byCat.has(cat)) byCat.set(cat, { units: 0, revenue: 0, cost: 0, products: new Set() });
+      const ca = byCat.get(cat);
+      ca.units += (Number(l.quantity) || 0) * sign; ca.revenue += sub; ca.cost += c; ca.products.add(pid);
     }
 
     return NextResponse.json({
@@ -125,6 +150,19 @@ export async function GET(request) {
         name, revenue: round2(r.revenue), cost: round2(costByRep.get(name) || 0),
         costedRevenue: round2(costedByRep.get(name) || 0), invoices: r.invoices, credits: r.credits,
       })).sort((a, b) => b.revenue - a.revenue),
+      products: [...byProduct].map(([pid, x]) => ({
+        id: pid, code: meta.get(pid)?.code, title: meta.get(pid)?.name, category: meta.get(pid)?.cat,
+        unitsSold: Math.round(x.units * 100) / 100, revenue: round2(x.revenue), cost: round2(x.cost),
+        margin: x.revenue > 0 ? Math.round(((x.revenue - x.cost) / x.revenue) * 1000) / 10 : null,
+      })).sort((a, b) => b.revenue - a.revenue).slice(0, 60),
+      categories: [...byCat].map(([cat, x]) => ({
+        category: cat, unitsSold: Math.round(x.units * 100) / 100, revenue: round2(x.revenue),
+        cost: round2(x.cost), productCount: x.products.size,
+        margin: x.revenue > 0 ? Math.round(((x.revenue - x.cost) / x.revenue) * 1000) / 10 : null,
+      })).sort((a, b) => b.revenue - a.revenue).slice(0, 40),
+      customers: [...byCustomer].map(([name, x]) => ({
+        name, revenue: round2(x.revenue), orders: x.orders, first: x.first, last: x.last,
+      })).sort((a, b) => b.revenue - a.revenue).slice(0, 60),
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 502 });
