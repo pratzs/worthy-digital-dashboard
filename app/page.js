@@ -696,10 +696,6 @@ export default function EcommerceDashboard() {
    * shared link, or the back button) lands exactly where you were.
    * `restored` gates the data loader so we never fetch the default company's
    * data first and then throw it away.                                        */
-  /* Which cost basis the whole South view uses. Two margin columns side by side
-   * asked the reader to arbitrate between them; one basis at a time, applied to
-   * revenue, cost, gross profit and margin together, always adds up. */
-  const [costBasis, setCostBasis] = useState("invoiced"); // "invoiced" = exactly as Ostendo
   const [restored, setRestored] = useState(false);
 
   useEffect(() => {
@@ -716,7 +712,6 @@ export default function EcommerceDashboard() {
       const wk = parseInt(p.get("w") || "", 10);
       if (wk >= 1 && wk <= 5) setSelectedWeek(wk);
       if (p.get("dark") === "1") setDarkMode(true);
-      if (["clean", "invoiced"].includes(p.get("cost"))) setCostBasis(p.get("cost"));
     } catch { /* a malformed hash should never stop the dashboard loading */ }
     setRestored(true);
   }, []);
@@ -731,12 +726,11 @@ export default function EcommerceDashboard() {
       m:     String(weeklyMonth),
       w:     String(selectedWeek),
       dark:  darkMode ? "1" : "0",
-      cost:  costBasis,
     });
     try {
       window.history.replaceState(null, "", `${window.location.pathname}#${p.toString()}`);
     } catch { /* replaceState can throw in embedded contexts; the view still works */ }
-  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, darkMode, costBasis]);
+  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, darkMode]);
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
@@ -901,7 +895,7 @@ export default function EcommerceDashboard() {
     const storeId = activeStore.id; // capture so async closure stays correct
     advStoreRef.current = storeId;  // mark this store as the active advanced fetch
     const load = async () => {
-      const advCacheKey = `adv:${storeId}:${advStartDate}:${advEndDate}:${channelTab}:${costBasis}`;
+      const advCacheKey = `adv:${storeId}:${advStartDate}:${advEndDate}:${channelTab}`;
 
       // Restore from cache immediately — prevents blank tables on view/tab switches
       if (cacheRef.current[advCacheKey]) {
@@ -953,26 +947,22 @@ export default function EcommerceDashboard() {
           if (advStoreRef.current !== storeId) return; // stale — discard
           if (data.error) throw new Error(data.error);
 
-          // Product and category tables use whichever cost basis the monthly
-          // table is on, so a SKU can never show a loss beside a month showing 18%.
-          const clean = costBasis === "clean";
-          const pick  = (o, a, b) => (clean && o[b] != null ? o[b] : o[a]);
+          const pick = (o, a) => o[a];
           const products = (data.products || []).map(p => ({
             name: p.title, title: p.title, category: p.category || "—",
-            qtySold: pick(p, "unitsSold", "unitsSoldClean"), unitsSold: pick(p, "unitsSold", "unitsSoldClean"),
-            revenue: pick(p, "revenue", "revenueClean"), cost: pick(p, "cost", "costClean"),
-            grossProfit: pick(p, "revenue", "revenueClean") - pick(p, "cost", "costClean"),
-            margin: pick(p, "margin", "marginClean"),
+            qtySold: p.unitsSold, unitsSold: p.unitsSold,
+            revenue: p.revenue, cost: p.cost,
+            grossProfit: p.revenue - p.cost, margin: p.margin,
           }));
           const fastMoving = (data.fastMoving || []).map(p => ({
             name: p.title, title: p.title, category: p.category || "—",
-            qtySold: pick(p, "unitsSold", "unitsSoldClean"), unitsSold: pick(p, "unitsSold", "unitsSoldClean"),
-            revenue: pick(p, "revenue", "revenueClean"), margin: pick(p, "margin", "marginClean"),
+            qtySold: p.unitsSold, unitsSold: p.unitsSold,
+            revenue: p.revenue, margin: p.margin,
           }));
           const categories = (data.categories || []).map(c => ({
             name: c.category, category: c.category,
-            qty: pick(c, "unitsSold", "unitsSoldClean"), unitsSold: pick(c, "unitsSold", "unitsSoldClean"),
-            revenue: pick(c, "revenue", "revenueClean"), margin: pick(c, "margin", "marginClean"),
+            qty: c.unitsSold, unitsSold: c.unitsSold,
+            revenue: c.revenue, margin: c.margin,
             productCount: c.productCount,
           }));
           const customers = (data.customers || []).map(c => ({
@@ -1026,7 +1016,7 @@ export default function EcommerceDashboard() {
       if (advStoreRef.current === storeId) setAdvLoading(false);
     };
     load();
-  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab, costBasis]); // eslint-disable-line
+  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
@@ -1057,24 +1047,18 @@ export default function EcommerceDashboard() {
     return d && !d.failed ? d : null;
   };
 
-  /* On the clean basis the lines whose recorded cost exceeds the sale are left
-     out of BOTH sides — their sales and their cost — so the row still balances. */
-  const useClean = (m) => costBasis === "clean" && m.suspectLines > 0;
-  const basisOf  = (m) => useClean(m)
-    ? { revenue: m.revenue - m.suspectRevenue,
-        cost:    m.cost - m.suspectCost,
-        grossProfit: (m.revenue - m.suspectRevenue) - (m.cost - m.suspectCost),
-        marginPct:   m.marginPctExSuspect }
-    : { revenue: m.revenue, cost: m.cost, grossProfit: m.grossProfit, marginPct: m.marginPct };
+  /* One set of figures, exactly as Ostendo holds them. Revenue is the product
+     lines, which is what Worthy's finance team reports; rebates are shown as
+     their own number instead of being netted off sales. */
+  const basisOf = (m) => ({ revenue: m.revenue, cost: m.cost,
+                            grossProfit: m.grossProfit, marginPct: m.marginPct });
 
   const fyMonthRow = (m) => ({
     month:             m.label,
     ...basisOf(m),
-    totalCost:         basisOf(m).cost,
-    revenueAsInvoiced: m.revenue,
-    excludedSales:     useClean(m) ? m.suspectRevenue : 0,
-    excludedCost:      useClean(m) ? m.suspectCost : 0,
-    excludedLines:     useClean(m) ? m.suspectLines : 0,
+    totalCost:         m.cost,
+    rebates:           m.rebates,
+    netSales:          m.netSales,
     orders:            m.invoices,     // credit notes are NOT orders
     returns:           m.credits,      // ...they are reported here instead
     returnValue:       m.creditValue,
@@ -1099,8 +1083,9 @@ export default function EcommerceDashboard() {
   const fyPriorRow = (m) => ({
     ...fyMonthRow(m),
     ...basisOf(m.prior),
-    totalCost:         basisOf(m.prior).cost,
-    excludedSales:     0, excludedCost: 0, excludedLines: 0,
+    totalCost:         m.prior.cost,
+    rebates:           m.prior.rebates,
+    netSales:          m.prior.netSales,
     orders:            m.prior.invoices,
     returns:           m.prior.credits,
     totalDiscounts:    m.prior.discounts,
@@ -1479,11 +1464,7 @@ export default function EcommerceDashboard() {
   const prevGP      = prevHasCost ? Math.round(prevRev - prevCost) : null;
   const yoyCompare  = view === "yoy" && prevLoaded;
   const cmpYear     = selectedYear - 1;
-  const invoicedRev = activeStore.id === "luxe" && costBasis === "clean"
-    ? curr.reduce((s, d) => s + (d.revenueAsInvoiced || 0), 0) : null;
-  const cmpRev      = yoyCompare ? `${cmpYear}: ${fmtK(prevRev, activeStore.currency)}`
-                    : (invoicedRev && Math.round(invoicedRev) !== Math.round(totalRev))
-                      ? `${fmtExact(invoicedRev, activeStore.currency)} as invoiced` : null;
+  const cmpRev      = yoyCompare ? `${cmpYear}: ${fmtK(prevRev, activeStore.currency)}` : null;
   const cmpOrd      = yoyCompare ? `${cmpYear}: ${prevOrd.toLocaleString()} orders` : null;
   const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null;
   const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;
@@ -1745,11 +1726,8 @@ export default function EcommerceDashboard() {
                     In {worst.label} it put {fmtExact(worst.suspectCost, activeStore.currency)} of cost against{" "}
                     {fmtExact(worst.suspectRevenue, activeStore.currency)} of sales, which is why that month reads{" "}
                     {worst.marginPct}% instead of about {worst.marginPctExSuspect}%.{" "}
-                    {costBasis === "invoiced"
-                      ? <>The table shows <strong>exactly what Ostendo holds</strong>. Switch to “Ignoring faulty cost
-                         lines” to see those months without the mis-costed lines.</>
-                      : <>Those lines are currently left out of both sales and cost — a check on what trade looked
-                         like, not what Ostendo holds.</>}
+                    Sales are unaffected — this only touches cost, so it is the margin that reads low in those months,
+                    not the revenue.
                   </div>
                 );
               })()}
@@ -1867,22 +1845,9 @@ export default function EcommerceDashboard() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
-                    {activeStore.id === "luxe" ? (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        <span>Cost basis</span>
-                        {[["invoiced", "Exactly as Ostendo"], ["clean", "Ignoring faulty cost lines"]].map(([id, label]) => (
-                          <button key={id} onClick={() => setCostBasis(id)} style={{
-                            padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                            border: costBasis === id ? `1px solid ${accent}` : `1px solid ${T.border}`,
-                            background: costBasis === id ? `${accent}18` : "transparent",
-                            color: costBasis === id ? accent : T.textMuted, letterSpacing: "0.03em",
-                          }}>{label}</button>
-                        ))}
-                        <span>· {activeStore.currency}</span>
-                      </span>
-                    ) : (
-                      <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>
-                    )}
+                    {activeStore.id === "luxe"
+                      ? <>✦ Sales are product lines, as finance reports them · cost as invoiced · {activeStore.currency}</>
+                      : <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -1930,14 +1895,6 @@ export default function EcommerceDashboard() {
                     </tfoot>
                   </table>
                 </div>
-                {activeStore.id === "luxe" && costBasis === "clean" && curr.some(m => m.excludedLines > 0) && (
-                  <div style={{ marginTop: 10, fontSize: 11, color: T.textMuted }}>
-                    Excludes {curr.reduce((a, m) => a + (m.excludedLines || 0), 0).toLocaleString()} lines whose recorded
-                    cost exceeds the sale — {fmtExact(curr.reduce((a, m) => a + (m.excludedSales || 0), 0), activeStore.currency)} of
-                    sales and {fmtExact(curr.reduce((a, m) => a + (m.excludedCost || 0), 0), activeStore.currency)} of cost.
-                    Revenue as invoiced is {fmtExact(curr.reduce((a, m) => a + (m.revenueAsInvoiced || 0), 0), activeStore.currency)}.
-                  </div>
-                )}
               </div>
             </div>
           </>
@@ -2365,6 +2322,11 @@ export default function EcommerceDashboard() {
         <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
+              ...(activeStore.id === "luxe" ? [["Rebates", (() => {
+                const r = view === "monthly" ? (latestMonth?.rebates ?? null)
+                        : curr.reduce((a, m) => a + (m.rebates || 0), 0);
+                return r ? fmtExact(r, activeStore.currency) : "—";
+              })(), "#aa8a6a"]] : []),
               ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "—", "#8aaa8a"],
               ["Total Discounts", kpiDisc != null && kpiDisc !== 0
                                     ? (isOstendo ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
