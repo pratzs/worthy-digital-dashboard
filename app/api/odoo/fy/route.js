@@ -363,6 +363,10 @@ export async function GET(request) {
         key, label, year, started, complete, through,
         daysInMonth: lastDay,
         newCustomers: started ? newCustFor(key) : null,
+        /* The untouched accumulators, so the year's totals can be rounded once
+           from the raw figures instead of adding up twelve already-rounded
+           months. Stripped before the response goes out. */
+        __acc: acc, __pAcc: pAcc,
         ...present(acc, hasCost),
         prior: present(pAcc, hasCost),
         priorComparable: started && covered(shift(first)),
@@ -504,19 +508,15 @@ export async function GET(request) {
       .sort((a, b) => b.revenue - a.revenue);
 
     const started = monthRows.filter((m) => m.started);
+    /* Add up the RAW accumulators. Summing the rounded months instead let half a
+       cent per month accumulate — the year's cost landed two cents above the true
+       figure, and reconciliation then pushed those two cents onto the largest
+       rep, where they showed. Round once, at the end. */
     const total = blank();
-    for (const m of started) {
-      add(total, { revenue: toCents(m.revenue), cost: toCents(m.cost || 0), invoices: m.invoices,
-                   credits: m.credits, creditValue: toCents(m.creditValue), discount: toCents(m.discounts),
-                   costedRevenue: toCents(m.costedRevenue || 0) });
-    }
+    for (const m of started) add(total, m.__acc);
     const priorTotal = blank();
-    for (const m of started) {
-      add(priorTotal, { revenue: toCents(m.prior.revenue), cost: toCents(m.prior.cost || 0),
-                        invoices: m.prior.invoices, credits: m.prior.credits,
-                        creditValue: toCents(m.prior.creditValue), discount: toCents(m.prior.discounts),
-                        costedRevenue: toCents(m.prior.costedRevenue || 0) });
-    }
+    for (const m of started) add(priorTotal, m.__pAcc);
+    for (const m of monthRows) { delete m.__acc; delete m.__pAcc; }
 
     /* ── Analytics tables, on the same financial year as everything else ───── */
     const netBy = (rows) => {
