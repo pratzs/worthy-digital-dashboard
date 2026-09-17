@@ -1,92 +1,79 @@
 /**
- * DEBUG ONLY — visit /api/ostendo/test to diagnose Ostendo connectivity.
- * Shows raw response, status code, and any errors.
- * Remove or protect this route before going to production.
+ * TEMPORARY DIAGNOSTIC — answers three questions the dashboard depends on:
+ *   1. How does Ostendo represent credit notes (INVOICEORCREDIT + sign of the amount)?
+ *   2. What INVOICESTATUS values exist, and do any represent non-posted invoices?
+ *   3. Does header INVOICENETTAMOUNT reconcile to SUM(line EXTENDEDNETTPRICE)?
+ *
+ * DELETE THIS ROUTE once the answers are recorded.
  */
 import { NextResponse } from 'next/server';
 import https from 'node:https';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const agent = new https.Agent({ rejectUnauthorized: false });
 
-function rawFetch(hostname, port, path) {
+function ostendoSql(sql, timeoutMs = 25000) {
+  const base   = process.env.OSTENDO_BASE_URL;
+  const apiKey = process.env.OSTENDO_API_KEY;
+  const urlObj = new URL(base);
+  const body   = Buffer.from(sql, 'utf8');
   return new Promise((resolve) => {
-    const options = { hostname, port, path, method: 'GET', agent };
-    const req = https.request(options, (res) => {
+    const req = https.request({
+      hostname: urlObj.hostname,
+      port:     parseInt(urlObj.port) || 443,
+      path:     `/sqlquery?apikey=${encodeURIComponent(apiKey)}&format=json`,
+      method:   'POST',
+      agent,
+      headers: { 'Content-Type': 'text/plain', 'Content-Length': body.length },
+    }, (res) => {
       let raw = '';
       res.on('data', c => (raw += c));
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: raw }));
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)); }
+        catch { resolve({ _nonJson: raw.substring(0, 400) }); }
+      });
     });
-    req.setTimeout(15000, () => { req.destroy(); resolve({ status: 0, headers: {}, body: 'TIMEOUT' }); });
-    req.on('error', (e) => resolve({ status: -1, headers: {}, body: e.message }));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve({ _timeout: true }); });
+    req.on('error', (e) => resolve({ _error: e.message }));
+    req.write(body);
     req.end();
   });
 }
 
+const Y = 'EXTRACT(YEAR FROM INVOICEDATE) = 2026';
+
 export async function GET() {
-  const base   = process.env.OSTENDO_BASE_URL  || '(not set)';
-  const rawKey = process.env.OSTENDO_API_KEY   || '(not set)';
+  const queries = {
+    // Q1 — credit notes: how many, and is the amount signed?
+    byOrCredit: `SELECT INVOICEORCREDIT, COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT, ` +
+                `MIN(INVOICENETTAMOUNT) AS MINV, MAX(INVOICENETTAMOUNT) AS MAXV ` +
+                `FROM SALESINVOICEHEADER WHERE ${Y} GROUP BY INVOICEORCREDIT`,
 
-  const results = {};
+    // Q2 — statuses present, and the value sitting behind each
+    byStatus:   `SELECT INVOICESTATUS, COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT ` +
+                `FROM SALESINVOICEHEADER WHERE ${Y} GROUP BY INVOICESTATUS`,
 
-  if (base === '(not set)' || rawKey === '(not set)') {
-    return NextResponse.json({ error: 'Env vars not set', OSTENDO_BASE_URL: base });
+    // Q3 — how many headers carry a negative nett (i.e. credits already signed)
+    negatives:  `SELECT COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT FROM SALESINVOICEHEADER ` +
+                `WHERE ${Y} AND INVOICENETTAMOUNT < 0`,
+
+    // Q4 — header total vs line total for the same year (revenue-base reconciliation)
+    headerTotal: `SELECT COUNT(*) AS N, SUM(INVOICENETTAMOUNT) AS NETT FROM SALESINVOICEHEADER WHERE ${Y}`,
+    lineTotal:   `SELECT SUM(EXTENDEDNETTPRICE) AS LINENETT, SUM(INVOICEQTY * INVOICEUNITCOST) AS LINECOST ` +
+                 `FROM SALESINVOICELINES WHERE INVOICENUMBER IN ` +
+                 `(SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${Y})`,
+
+    // Q5 — lines carrying revenue but no cost (inflates margin)
+    zeroCostLines: `SELECT COUNT(*) AS N, SUM(EXTENDEDNETTPRICE) AS NETT FROM SALESINVOICELINES ` +
+                   `WHERE INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE ${Y}) ` +
+                   `AND INVOICEUNITCOST = 0 AND EXTENDEDNETTPRICE <> 0`,
+  };
+
+  const out = {};
+  for (const [name, sql] of Object.entries(queries)) {
+    out[name] = { sql, result: await ostendoSql(sql) };
   }
-
-  try {
-    const urlObj = new URL(base);
-    const host   = urlObj.hostname;
-    const port   = parseInt(urlObj.port) || 443;
-
-    // Test 1: no condition, no table — just root ping
-    const ping = await rawFetch(host, port, '/');
-    results.ping = { status: ping.status, body: ping.body.substring(0, 300) };
-
-    // Test 2: tabledata with SALESINVOICEHEADER, no condition, apikey as raw (let URLSearchParams encode)
-    const p2 = new URLSearchParams({
-      tablename: 'SALESINVOICEHEADER',
-      apikey:    rawKey,
-      format:    'json',
-    });
-    const t2 = await rawFetch(host, port, `/tabledata?${p2.toString()}`);
-    results.salesInvoiceHeader = {
-      status: t2.status,
-      bodyPreview: t2.body.substring(0, 500),
-      isJSON: (() => { try { JSON.parse(t2.body); return true; } catch { return false; } })(),
-    };
-
-    // Test 3: same but with condition
-    const year = new Date().getFullYear();
-    const p3 = new URLSearchParams({
-      tablename: 'SALESINVOICEHEADER',
-      apikey:    rawKey,
-      format:    'json',
-      condition: `INVOICEDATE >= '${year}-01-01' AND INVOICEDATE <= '${year}-12-31'`,
-    });
-    const t3 = await rawFetch(host, port, `/tabledata?${p3.toString()}`);
-    results.salesInvoiceHeaderFiltered = {
-      status: t3.status,
-      bodyPreview: t3.body.substring(0, 500),
-      isJSON: (() => { try { JSON.parse(t3.body); return true; } catch { return false; } })(),
-    };
-
-    // Test 4: try lowercase table name
-    const p4 = new URLSearchParams({ tablename: 'salesinvoiceheader', apikey: rawKey, format: 'json' });
-    const t4 = await rawFetch(host, port, `/tabledata?${p4.toString()}`);
-    results.salesInvoiceHeaderLower = { status: t4.status, bodyPreview: t4.body.substring(0, 300) };
-
-    // Test 5: try the /salesinvoice direct endpoint (some Ostendo versions use this)
-    const p5 = new URLSearchParams({ apikey: rawKey, format: 'json' });
-    const t5 = await rawFetch(host, port, `/salesinvoice?${p5.toString()}`);
-    results.salesInvoiceDirect = { status: t5.status, bodyPreview: t5.body.substring(0, 300) };
-
-  } catch (err) {
-    results.fatalError = err.message;
-  }
-
-  return NextResponse.json({
-    env: { base, keyLength: rawKey.length, keyEnd: rawKey.slice(-4) },
-    results,
-  });
+  return NextResponse.json(out);
 }
