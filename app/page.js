@@ -54,6 +54,11 @@ const fmtExact = (n, cur = "NZD") => {
   return `${sign}${s}${Math.abs(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 const round2 = (n) => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
+/* Every margin on this page is quoted to one decimal. Rounding some of them to
+   whole numbers put 14% in the monthly footer and 12% on a KPI card beside
+   13.8% and 12.1% for the same trading, which reads as two systems disagreeing
+   rather than one number formatted two ways. */
+const marginPct1 = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : null);
 const fmtPct = (n) => (n === null || n === undefined) ? "—" : `${n > 0 ? "+" : ""}${n}%`;
 
 const GrowthBadge = ({ value }) => {
@@ -1444,14 +1449,14 @@ export default function EcommerceDashboard() {
     const rev       = d.revenue   || 0;
     const cst       = d.totalCost || 0;
     const dynGp     = d.hasCostData ? rev - cst : null;
-    const dynMargin = (d.hasCostData && rev > 0) ? Math.round((dynGp / rev) * 100) : null;
+    const dynMargin = (d.hasCostData && rev > 0) ? marginPct1(dynGp, rev) : null;
     return {
       ...d,
       grossProfit: d.grossProfit !== undefined ? d.grossProfit : dynGp,
       marginPct:   d.marginPct   !== undefined ? d.marginPct   : dynMargin,
       prevRevenue:  prev[i]?.revenue || 0,
       prevOrders:   prev[i]?.orders  || 0,
-      prevMarginPct: (() => { const pr = prev[i]?.revenue || 0, pc = prev[i]?.totalCost || 0; return (prev[i]?.hasCostData && pr > 0) ? Math.round(((pr - pc) / pr) * 100) : null; })(),
+      prevMarginPct: (() => { const pr = prev[i]?.revenue || 0, pc = prev[i]?.totalCost || 0; return (prev[i]?.hasCostData && pr > 0) ? marginPct1(pr - pc, pr) : null; })(),
       momGrowth:    (prevLoaded && d.priorComparable !== false && monthStarted(i))
                       ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
     };
@@ -1476,7 +1481,7 @@ export default function EcommerceDashboard() {
   const gp       = trueMargin !== null ? (isOstendo ? round2(totalRev * trueMargin) : Math.round(totalRev * trueMargin))
                  : hasCost    ? totalRev - totalCost
                  : null;
-  const gpMargin = trueMargin !== null ? Math.round(trueMargin * 100) : null;
+  const gpMargin = trueMargin !== null ? Math.round(trueMargin * 1000) / 10 : null;
 
   const accent  = activeStore.color;
   const accent2 = activeStore.accent2 || activeStore.color;
@@ -1548,7 +1553,7 @@ export default function EcommerceDashboard() {
   const prevLatestCost    = prevLatestMonth?.totalCost  || 0;
   const prevLatestHasCost = prevLatestMonth?.hasCostData || false;
   const prevLatestMargin  = prevLatestHasCost && prevLatestRev > 0
-    ? Math.round(((prevLatestRev - prevLatestCost) / prevLatestRev) * 100) : null;
+    ? marginPct1(prevLatestRev - prevLatestCost, prevLatestRev) : null;
 
   const kpiRev  = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.revenue   || 0), 0)
                 : view === "monthly" ? (latestMonth?.revenue    || 0)
@@ -1567,7 +1572,7 @@ export default function EcommerceDashboard() {
     ? (isOstendo ? round2(kpiRev - kpiCost) : Math.round(kpiRev - kpiCost))
     : (view === "yoy" ? gp : null);
   const kpiGPMargin = kpiHasCost && kpiRev > 0
-    ? Math.round(((kpiRev - kpiCost) / kpiRev) * 100)
+    ? marginPct1(kpiRev - kpiCost, kpiRev)
     : (view === "yoy" ? gpMargin : null);
   const kpiGrowth    = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiRev, prevLatestRev) : null) : revG;
   const kpiOrdGrowth = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiOrd, prevLatestOrd) : null) : ordG;
@@ -1625,7 +1630,7 @@ export default function EcommerceDashboard() {
       year: String(yr), revenue: rev, orders: ord,
       aov: ord ? Math.round(rev / ord) : 0,
       grossProfit: gpY,
-      margin: (gpY !== null && rev > 0) ? Math.round((gpY / rev) * 100) : null,
+      margin: (gpY !== null && rev > 0) ? marginPct1(gpY, rev) : null,
       loaded: hasData(yr),
     };
   });
@@ -2097,7 +2102,7 @@ export default function EcommerceDashboard() {
             const wHasCost   = weeklyData.some(w => w.hasCostData);
             const wTotalCost = weeklyData.reduce((s, w) => s + (w.totalCost || 0), 0);
             const wTotalGP   = wHasCost ? wTotalRev - wTotalCost : null;
-            const wMarginPct = wHasCost && wTotalRev > 0 ? Math.round(((wTotalRev - wTotalCost) / wTotalRev) * 100) : null;
+            const wMarginPct = wHasCost && wTotalRev > 0 ? marginPct1(wTotalRev - wTotalCost, wTotalRev) : null;
             return (
               <>
                 {/* Month selector */}
@@ -2302,7 +2307,9 @@ export default function EcommerceDashboard() {
                 loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
                 columns={[
                   { key: "name",    label: "Customer", color: T.text },
-                  { key: "orders",  label: "Orders",   align: "center", color: "#7C9EC9" },
+                  /* `orderCount`, not `orders` — the getter's own field name. Reading
+                     the wrong key left this column blank on every row. */
+                  { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
                   { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
                   { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
                   { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
@@ -2312,13 +2319,13 @@ export default function EcommerceDashboard() {
               />
               <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 days)" subtitle="Overdue for reorder — call before they lapse"
                 loading={isLoading(selectedYear)} currency={activeStore.currency}
-                data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orders }))}
+                data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orderCount }))}
                 columns={atRiskColumns} aiContext="at-risk Odoo customers"
                 aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
               />
               <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 days)" subtitle="Stopped ordering — win-back priority"
                 loading={isLoading(selectedYear)} currency={activeStore.currency}
-                data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orders }))}
+                data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orderCount }))}
                 columns={churnedColumns} aiContext="lapsed Odoo customers"
                 aiExtra="Likely lost to DKSH, Gilmours, or Stock4Shop. Recommend a visit + offer for the top 5 by revenue."
               />
