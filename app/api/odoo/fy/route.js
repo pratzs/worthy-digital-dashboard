@@ -653,6 +653,10 @@ export async function GET(request) {
       atRisk:     customers.filter((c) => c.status === 'At Risk')
                            .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
       generatedAt: new Date().toISOString(),
+      /* The New Zealand date this was built against. The period can still end
+         earlier when the newest invoice on file is older than today; this says
+         what the dashboard believes "today" is, so the two are never confused. */
+      asOfNZ: today,
       range, prior,
       dataAvailable: { first: firstLoaded, last: lastLoaded,
                        coversWholeYear: Boolean(firstLoaded && firstLoaded <= range.start) },

@@ -479,6 +479,10 @@ export async function GET(request) {
     return NextResponse.json({
       fy,
       generatedAt: new Date().toISOString(),
+      /* The New Zealand date this was built against. The period can still end
+         earlier when the newest invoice on file is older than today; this says
+         what the dashboard believes "today" is, so the two are never confused. */
+      asOfNZ: today,
       range: { ...range, throughLabel: range.complete ? 'full year' : `to ${range.end}` },
       prior,
       dataAvailable: {
