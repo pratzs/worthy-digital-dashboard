@@ -588,6 +588,26 @@ export async function GET(request) {
       margin: hasCost ? pct1(toCents(v.revenue - v.cost), toCents(v.revenue)) : null,
     })).sort((a, b) => b.revenue - a.revenue);
 
+    /* The month column has a TOTAL under it, so it has to add up to it. The
+       year is rounded once from the raw figures and each month is rounded on its
+       own, which leaves a cent or two between them; the same largest-remainder
+       pass used for the reps settles it, so every month keeps its own correct
+       value except the largest, which carries the odd cent. */
+    {
+      const fin = present(total, hasCost);
+      const startedRows = monthRows.filter((m) => m.started);
+      reconcile(startedRows, fin.revenue, (m) => m.revenue, (m, v) => { m.revenue = v; });
+      if (hasCost) {
+        const costed = startedRows.filter((m) => m.cost != null);
+        reconcile(costed, fin.cost, (m) => m.cost, (m, v) => { m.cost = v; });
+        costed.forEach(restate);
+      }
+      const withDisc = startedRows.filter((m) => m.discounts != null);
+      reconcile(withDisc, fin.discounts, (m) => m.discounts, (m, v) => { m.discounts = v; });
+      const withCredit = startedRows.filter((m) => m.creditValue != null);
+      reconcile(withCredit, fin.creditValue, (m) => m.creditValue, (m, v) => { m.creditValue = v; });
+    }
+
     /* Rows must add up to the totals printed beneath them. */
     if (hasCost) {
       const costed = repRows.filter((r) => r.cost != null);
