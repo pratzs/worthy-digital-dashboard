@@ -326,6 +326,46 @@ export async function GET(request) {
       }
     }
 
+    /* Cost per salesperson.
+     * Odoo does not store the salesperson on the invoice line, but the line CAN
+     * be filtered through move_id.invoice_user_id, so one grouped query per rep
+     * gives that rep's quantity by product and month — and therefore their cost
+     * and margin. Sixteen reps come back in a few seconds at four at a time. */
+    const repIds = new Map();
+    for (const r of curr.moves) {
+      const id = r.invoice_user_id ? r.invoice_user_id[0] : null;
+      const nm = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
+      if (id) repIds.set(nm, id);
+    }
+    /** rep name -> Map(monthKey -> cost in cents), and a whole-period total */
+    const repCost = new Map();
+    if (hasCost && repIds.size) {
+      const entries = [...repIds];
+      const runOne = async ([name, id]) => {
+        try {
+          const rows = await exec('account.move.line', 'read_group',
+            [[...costLineDomain(cid, range.start, range.end), ['move_id.invoice_user_id', '=', id]],
+             ['quantity:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
+          const byMonth = new Map(); let total = 0;
+          for (const r of rows) {
+            const k = rangeStart(r, 'date:month').substring(0, 7);
+            const unit = costOf.get(r.product_id && r.product_id[0]) || 0;
+            const cents = toCents((Number(r.quantity) || 0) * unit);
+            byMonth.set(k, (byMonth.get(k) || 0) + cents);
+            total += cents;
+          }
+          repCost.set(name, { byMonth, total });
+        } catch (e) {
+          problems.push(`cost for ${name} could not be read (${e.message.slice(0, 80)})`);
+        }
+      };
+      // Four at a time — fast enough, and gentle on Odoo.
+      for (let i = 0; i < entries.length; i += 4) {
+        await Promise.all(entries.slice(i, i + 4).map(runOne));
+      }
+    }
+    const repHasCost = repCost.size > 0;
+
     const repNames = new Set();
     for (const [, e] of days) for (const k of e.reps.keys()) repNames.add(k);
     for (const [, e] of daysPrior) for (const k of e.reps.keys()) repNames.add(k);
@@ -333,17 +373,21 @@ export async function GET(request) {
     const repRows = [...repNames].map((name) => {
       const c = sumRange(days, range.start, range.end, name);
       const p = sumRange(daysPrior, prior.start, prior.end, name);
+      const rc = repCost.get(name);
+      const withCost = (acc, cents) => (rc ? { ...acc, cost: cents || 0 } : acc);
       return {
         name,
-        // Cost cannot be split by salesperson: Odoo does not store the rep on the
-        // invoice line, so margin is reported per month and per company, not per rep.
-        ...present(c, false),
+        ...present(withCost(c, rc?.total), Boolean(rc)),
         prior: present(p, false),
         growthPct: priorComparable ? growth(c.revenue, p.revenue) : null,
-        months: monthRows.map((m) => ({
-          key: m.key, label: m.label, started: m.started,
-          ...present(m.started ? sumRange(days, `${m.key}-01`, m.through, name) : blank(), false),
-        })),
+        months: monthRows.map((m) => {
+          const acc = m.started ? sumRange(days, `${m.key}-01`, m.through, name) : blank();
+          return {
+            key: m.key, label: m.label, started: m.started,
+            ...present(withCost(acc, rc?.byMonth.get(m.key)), Boolean(rc) && m.started),
+          };
+        }),
+        // Cost is held per month, so a week shows revenue and orders without a margin.
         weeks: weekRows.map((w) => ({
           monthKey: w.monthKey, week: w.week,
           ...present(sumRange(days, w.start, w.end, name), false),
@@ -455,7 +499,10 @@ export async function GET(request) {
       months: monthRows,
       weeks: weekRows,
       reps: repRows,
-      repMarginAvailable: false,
+      repMarginAvailable: repHasCost,
+      repMarginNote: repHasCost
+        ? 'Rep margin is available for the year and for each month. Weekly rep figures show revenue and orders only, because cost is held per month.'
+        : 'Rep margin is unavailable for this company.',
       totals: {
         ...present(total, hasCost),
         prior: present(priorTotal, hasCost),
