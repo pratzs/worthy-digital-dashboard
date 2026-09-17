@@ -1898,10 +1898,13 @@ export default function EcommerceDashboard() {
               {activeStore.id !== "luxe" && d.hasCost && t.uncoveredRevenue > 0 && (
                 <div>
                   <strong>{fmtExact(t.uncoveredRevenue, activeStore.currency)}</strong> of these sales
-                  ({(100 - (t.costCoverage ?? 100)).toFixed(1)}%) are freight and service lines that Odoo holds
-                  no cost for. They count as sales in full and as nothing on cost, so the margin above is
-                  flattering by that much. Where a single rep sells almost nothing else, the margin is left
-                  blank rather than shown as 100%.
+                  ({(100 - (t.costCoverage ?? 100)).toFixed(1)}%) carry no cost of sales.
+                  {d.nonStockRevenue > 0 && <> {fmtExact(d.nonStockRevenue, activeStore.currency)} of that is
+                  invoiced with no product on the line — freight recharges, pallet rent, expense
+                  reimbursements and supplier rebate claims.</>} Odoo holds a cost price for practically every
+                  product Worthy sells; this is income earned without buying anything, so there is no cost to
+                  set against it and the margin above is flattering by that much. Where a rep invoices almost
+                  nothing else, the margin is left blank rather than shown as 100%.
                 </div>
               )}
               {(() => {
