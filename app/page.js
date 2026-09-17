@@ -901,7 +901,7 @@ export default function EcommerceDashboard() {
     const storeId = activeStore.id; // capture so async closure stays correct
     advStoreRef.current = storeId;  // mark this store as the active advanced fetch
     const load = async () => {
-      const advCacheKey = `adv:${storeId}:${advStartDate}:${advEndDate}:${channelTab}`;
+      const advCacheKey = `adv:${storeId}:${advStartDate}:${advEndDate}:${channelTab}:${costBasis}`;
 
       // Restore from cache immediately — prevents blank tables on view/tab switches
       if (cacheRef.current[advCacheKey]) {
@@ -953,18 +953,27 @@ export default function EcommerceDashboard() {
           if (advStoreRef.current !== storeId) return; // stale — discard
           if (data.error) throw new Error(data.error);
 
+          // Product and category tables use whichever cost basis the monthly
+          // table is on, so a SKU can never show a loss beside a month showing 18%.
+          const clean = costBasis === "clean";
+          const pick  = (o, a, b) => (clean && o[b] != null ? o[b] : o[a]);
           const products = (data.products || []).map(p => ({
             name: p.title, title: p.title, category: p.category || "—",
-            qtySold: p.unitsSold, unitsSold: p.unitsSold,
-            revenue: p.revenue, cost: p.cost, grossProfit: p.grossProfit, margin: p.margin,
+            qtySold: pick(p, "unitsSold", "unitsSoldClean"), unitsSold: pick(p, "unitsSold", "unitsSoldClean"),
+            revenue: pick(p, "revenue", "revenueClean"), cost: pick(p, "cost", "costClean"),
+            grossProfit: pick(p, "revenue", "revenueClean") - pick(p, "cost", "costClean"),
+            margin: pick(p, "margin", "marginClean"),
           }));
           const fastMoving = (data.fastMoving || []).map(p => ({
             name: p.title, title: p.title, category: p.category || "—",
-            qtySold: p.unitsSold, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin,
+            qtySold: pick(p, "unitsSold", "unitsSoldClean"), unitsSold: pick(p, "unitsSold", "unitsSoldClean"),
+            revenue: pick(p, "revenue", "revenueClean"), margin: pick(p, "margin", "marginClean"),
           }));
           const categories = (data.categories || []).map(c => ({
-            name: c.category, category: c.category, qty: c.unitsSold, unitsSold: c.unitsSold,
-            revenue: c.revenue, margin: c.margin, productCount: c.productCount,
+            name: c.category, category: c.category,
+            qty: pick(c, "unitsSold", "unitsSoldClean"), unitsSold: pick(c, "unitsSold", "unitsSoldClean"),
+            revenue: pick(c, "revenue", "revenueClean"), margin: pick(c, "margin", "marginClean"),
+            productCount: c.productCount,
           }));
           const customers = (data.customers || []).map(c => ({
             name: c.customer, orderCount: c.orderCount, revenue: c.revenue,
@@ -1017,7 +1026,7 @@ export default function EcommerceDashboard() {
       if (advStoreRef.current === storeId) setAdvLoading(false);
     };
     load();
-  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
+  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab, costBasis]); // eslint-disable-line
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
@@ -1469,7 +1478,11 @@ export default function EcommerceDashboard() {
   const prevGP      = prevHasCost ? Math.round(prevRev - prevCost) : null;
   const yoyCompare  = view === "yoy" && prevLoaded;
   const cmpYear     = selectedYear - 1;
-  const cmpRev      = yoyCompare ? `${cmpYear}: ${fmtK(prevRev, activeStore.currency)}` : null;
+  const invoicedRev = activeStore.id === "luxe" && costBasis === "clean"
+    ? curr.reduce((s, d) => s + (d.revenueAsInvoiced || 0), 0) : null;
+  const cmpRev      = yoyCompare ? `${cmpYear}: ${fmtK(prevRev, activeStore.currency)}`
+                    : (invoicedRev && Math.round(invoicedRev) !== Math.round(totalRev))
+                      ? `${fmtExact(invoicedRev, activeStore.currency)} as invoiced` : null;
   const cmpOrd      = yoyCompare ? `${cmpYear}: ${prevOrd.toLocaleString()} orders` : null;
   const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null;
   const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;

@@ -33,6 +33,13 @@ import {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+/* A line whose recorded cost exceeds the sale cannot be right. Product and
+ * category tables report both bases so they stay in step with the monthly
+ * table's Cost basis switch instead of contradicting it. */
+const SUSPECT = `l.INVOICEQTY > 0 AND l.EXTENDEDNETTPRICE > 0
+                 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE`;
+const SOUND = `NOT (${SUSPECT})`;
+
 const SALES = (start, end) =>
   `SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}`;
 
@@ -67,7 +74,10 @@ export async function GET(request) {
         SELECT FIRST 200 l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME,
                MAX(i.ITEMCATEGORY) AS CAT,
                SUM(l.INVOICEQTY) AS QTY, SUM(l.EXTENDEDNETTPRICE) AS NETT,
-               SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+               SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST,
+               SUM(CASE WHEN ${SOUND} THEN l.INVOICEQTY ELSE 0 END) AS QTYC,
+               SUM(CASE WHEN ${SOUND} THEN l.EXTENDEDNETTPRICE ELSE 0 END) AS NETTC,
+               SUM(CASE WHEN ${SOUND} THEN l.INVOICEQTY * l.INVOICEUNITCOST ELSE 0 END) AS COSTC
         FROM SALESINVOICELINES l
         LEFT JOIN ITEMMASTER i ON i.ITEMCODE = l.LINECODE
         WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
@@ -77,7 +87,10 @@ export async function GET(request) {
       ostendoSql(`
         SELECT i.ITEMCATEGORY AS CAT, COUNT(DISTINCT l.LINECODE) AS NPROD,
                SUM(l.INVOICEQTY) AS QTY, SUM(l.EXTENDEDNETTPRICE) AS NETT,
-               SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST
+               SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST,
+               SUM(CASE WHEN ${SOUND} THEN l.INVOICEQTY ELSE 0 END) AS QTYC,
+               SUM(CASE WHEN ${SOUND} THEN l.EXTENDEDNETTPRICE ELSE 0 END) AS NETTC,
+               SUM(CASE WHEN ${SOUND} THEN l.INVOICEQTY * l.INVOICEUNITCOST ELSE 0 END) AS COSTC
         FROM SALESINVOICELINES l
         JOIN ITEMMASTER i ON i.ITEMCODE = l.LINECODE
         WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
@@ -135,6 +148,10 @@ export async function GET(request) {
       revenue: money(p.NETT), cost: money(p.COST),
       grossProfit: money(Number(p.NETT) - Number(p.COST)),
       margin: marginOf(p.NETT, p.COST),
+      // Same figures with the impossible-cost lines left out.
+      unitsSoldClean: Math.round(Number(p.QTYC) || 0),
+      revenueClean: money(p.NETTC), costClean: money(p.COSTC),
+      marginClean: marginOf(p.NETTC, p.COSTC),
     }));
 
     const categoryRows = categories
@@ -144,6 +161,9 @@ export async function GET(request) {
         unitsSold: Math.round(Number(c.QTY) || 0),
         revenue: money(c.NETT), cost: money(c.COST),
         margin: marginOf(c.NETT, c.COST),
+        unitsSoldClean: Math.round(Number(c.QTYC) || 0),
+        revenueClean: money(c.NETTC), costClean: money(c.COSTC),
+        marginClean: marginOf(c.NETTC, c.COSTC),
       }))
       .filter((c) => c.revenue !== 0);
 
