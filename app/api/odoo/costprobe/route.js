@@ -29,6 +29,55 @@ export async function GET(request) {
   try {
     const { exec, uid } = await connect();
 
+    // Split the revenue that has no cost: lines with NO product vs products priced at zero.
+    if (p.get('gap')) {
+      const dom = (extra) => [['move_id.company_id', '=', cid],
+        ['move_id.move_type', 'in', ['out_invoice', 'out_refund']], ['move_id.state', '=', 'posted'],
+        ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end],
+        ['display_type', '=', 'product'], ...extra];
+      const sum = async (extra) => {
+        const rows = await exec('account.move.line', 'search_read', [dom(extra)],
+          { fields: ['move_id', 'name', 'price_subtotal', 'product_id'], limit: 0 });
+        return rows;
+      };
+      const noProduct = await sum([['product_id', '=', false]]);
+      const withProduct = await sum([['product_id', '!=', false]]);
+      const moveType = new Map((await exec('account.move', 'search_read',
+        [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
+          ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end]]],
+        { fields: ['move_type'], limit: 0 })).map((m) => [m.id, m.move_type === 'out_refund' ? -1 : 1]));
+      const signed = (rows) => rows.reduce((a, r) => a + (Number(r.price_subtotal) || 0) * (moveType.get(r.move_id[0]) || 1), 0);
+
+      const pids = [...new Set(withProduct.map((l) => l.product_id[0]))];
+      const prods = [];
+      for (let i = 0; i < pids.length; i += 500) {
+        prods.push(...await exec('product.product', 'read', [pids.slice(i, i + 500)],
+          { fields: ['standard_price', 'default_code', 'display_name'] }));
+      }
+      const zero = new Map(prods.filter((x) => !(Number(x.standard_price) > 0)).map((x) => [x.id, x]));
+      const zeroLines = withProduct.filter((l) => zero.has(l.product_id[0]));
+      const perZero = new Map();
+      for (const l of zeroLines) {
+        const k = l.product_id[0];
+        perZero.set(k, (perZero.get(k) || 0) + (Number(l.price_subtotal) || 0) * (moveType.get(l.move_id[0]) || 1));
+      }
+      // What are the no-product lines called?
+      const labels = new Map();
+      for (const l of noProduct) {
+        const k = String(l.name || '(blank)').replace(/\d/g, '#').trim().slice(0, 40);
+        labels.set(k, (labels.get(k) || 0) + (Number(l.price_subtotal) || 0) * (moveType.get(l.move_id[0]) || 1));
+      }
+      return NextResponse.json({
+        company: cid, period: `${start} .. ${end}`,
+        linesWithNoProduct: noProduct.length,
+        revenueOnLinesWithNoProduct: Math.round(signed(noProduct) * 100) / 100,
+        productsPricedAtZero: zero.size,
+        revenueOnZeroPricedProducts: Math.round(zeroLines.reduce((a, l) => a + (Number(l.price_subtotal) || 0) * (moveType.get(l.move_id[0]) || 1), 0) * 100) / 100,
+        zeroPricedProducts: [...perZero].map(([id, rev]) => ({ code: zero.get(id)?.default_code, name: zero.get(id)?.display_name, revenue: Math.round(rev * 100) / 100 })).sort((a, b) => b.revenue - a.revenue),
+        topNoProductLabels: [...labels].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([k, v]) => ({ label: k, revenue: Math.round(v * 100) / 100 })),
+      });
+    }
+
     // Dump one rep's invoices, EVERY line, product or not.
     if (p.get('rep')) {
       const users = await exec('res.users', 'search_read', [[['name', 'ilike', p.get('rep')]]], { fields: ['name'] });
