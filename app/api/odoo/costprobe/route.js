@@ -29,6 +29,39 @@ export async function GET(request) {
   try {
     const { exec, uid } = await connect();
 
+    // Dump one rep's invoices, EVERY line, product or not.
+    if (p.get('rep')) {
+      const users = await exec('res.users', 'search_read', [[['name', 'ilike', p.get('rep')]]], { fields: ['name'] });
+      if (!users.length) return NextResponse.json({ error: 'rep not found' }, { status: 404 });
+      const moves = await exec('account.move', 'search_read',
+        [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
+          ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end],
+          ['invoice_user_id', '=', users[0].id]]],
+        { fields: ['name', 'invoice_date', 'move_type', 'amount_untaxed', 'partner_id'], limit: 200, order: 'invoice_date asc' });
+      const all = await exec('account.move.line', 'search_read',
+        [[['move_id', 'in', moves.map((m) => m.id)]]],
+        { fields: ['move_id', 'name', 'display_type', 'product_id', 'quantity', 'price_subtotal', 'account_id'], limit: 0 });
+      const pids = [...new Set(all.map((l) => l.product_id && l.product_id[0]).filter(Boolean))];
+      const prods = pids.length ? await exec('product.product', 'read', [pids],
+        { fields: ['standard_price', 'default_code', 'type'] }) : [];
+      const pinfo = new Map(prods.map((x) => [x.id, x]));
+      return NextResponse.json({
+        rep: users[0].name, invoices: moves.length,
+        lineTypes: all.reduce((a, l) => { const k = l.display_type || 'null'; a[k] = (a[k] || 0) + 1; return a; }, {}),
+        moves: moves.slice(0, 6).map((m) => ({
+          ref: m.name, date: m.invoice_date, type: m.move_type, untaxed: m.amount_untaxed,
+          partner: m.partner_id && m.partner_id[1],
+          lines: all.filter((l) => l.move_id[0] === m.id).map((l) => ({
+            display_type: l.display_type, label: l.name, qty: l.quantity, subtotal: l.price_subtotal,
+            account: l.account_id && l.account_id[1],
+            product: l.product_id ? l.product_id[1] : null,
+            productType: l.product_id ? pinfo.get(l.product_id[0])?.type : null,
+            standard_price: l.product_id ? pinfo.get(l.product_id[0])?.standard_price : null,
+          })),
+        })),
+      });
+    }
+
     // Which company does this login default to? That is what a context-free read returns.
     const me = await exec('res.users', 'read', [[uid]], { fields: ['name', 'company_id', 'company_ids'] });
     const companies = await exec('res.company', 'search_read', [[]], { fields: ['name'] });
