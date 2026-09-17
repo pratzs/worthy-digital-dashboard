@@ -1051,10 +1051,10 @@ export default function EcommerceDashboard() {
     orders:            m.invoices,     // credit notes are NOT orders
     returns:           m.credits,      // ...they are reported here instead
     returnValue:       m.creditValue,
-    totalDiscounts:    0,
+    totalDiscounts:    m.discounts,
     sessions:          0,
     convRate:          0,
-    newCustomers:      0,
+    newCustomers:      m.newCustomers,
     aov:               m.aov,
     started:           m.started,
     complete:          m.complete,
@@ -1075,6 +1075,8 @@ export default function EcommerceDashboard() {
     marginPct:         m.prior.marginPct,
     orders:            m.prior.invoices,
     returns:           m.prior.credits,
+    totalDiscounts:    m.prior.discounts,
+    newCustomers:      null,
     aov:               m.prior.aov,
     hasCostData:       Boolean(m.started && m.prior.cost !== 0),
     marginableRevenue: m.started && m.prior.cost !== 0 ? m.prior.revenue : 0,
@@ -1305,7 +1307,8 @@ export default function EcommerceDashboard() {
   const totalOrd  = curr.reduce((s, d) => s + (d.orders         || 0), 0);
   const prevOrd   = prev.reduce((s, d, i) => s + (monthComparable(i) ? (d.orders  || 0) : 0), 0);
   const totalCost = curr.reduce((s, d) => s + (d.totalCost      || 0), 0);
-  const totalNewC = curr.reduce((s, d) => s + (d.newCustomers   || 0), 0);
+  const newCustUnknown = curr.some(d => d.started !== false && d.revenue > 0 && d.newCustomers === null);
+  const totalNewC = newCustUnknown ? null : curr.reduce((s, d) => s + (d.newCustomers || 0), 0);
   const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
   const totalRet  = curr.reduce((s, d) => s + (d.returns        || 0), 0);
   const isOstendo = activeStore.id === "luxe";
@@ -1416,8 +1419,8 @@ export default function EcommerceDashboard() {
   const kpiAovGrowth = view === "weekly" ? null : view === "monthly" ? null : aovG;
 
   // Period-aware footer metrics
-  const kpiNewC = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.newCustomers   || 0), 0)
-                : view === "monthly" ? (latestMonth?.newCustomers   || 0)
+  const kpiNewC = view === "weekly"  ? null   // a week is too short to call a customer new
+                : view === "monthly" ? (latestMonth?.newCustomers ?? null)
                 : totalNewC;
   const kpiDisc = view === "weekly"  ? weeklyDataCtx.reduce((s, w) => s + (w.totalDiscounts || 0), 0)
                 : view === "monthly" ? (latestMonth?.totalDiscounts || 0)
@@ -1836,7 +1839,7 @@ export default function EcommerceDashboard() {
                             <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (isOstendo ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
                           </tr>
@@ -1869,8 +1872,8 @@ export default function EcommerceDashboard() {
             const weeklyData = allWeekly.filter(w => w.month === weeklyMonth);
             const wTotalRev  = weeklyData.reduce((s, w) => s + w.revenue, 0);
             const wTotalOrd  = weeklyData.reduce((s, w) => s + w.orders, 0);
-            const wTotalDisc = weeklyData.reduce((s, w) => s + w.totalDiscounts, 0);
-            const wTotalNewC = weeklyData.reduce((s, w) => s + w.newCustomers, 0);
+            const wTotalDisc = weeklyData.reduce((s, w) => s + (w.totalDiscounts || 0), 0);
+            const wTotalNewC = weeklyData.reduce((s, w) => s + (w.newCustomers || 0), 0);
             const wAvgAOV    = wTotalOrd > 0 ? Math.round(wTotalRev / wTotalOrd) : 0;
             const wHasCost   = weeklyData.some(w => w.hasCostData);
             const wTotalCost = weeklyData.reduce((s, w) => s + (w.totalCost || 0), 0);
@@ -1970,7 +1973,7 @@ export default function EcommerceDashboard() {
                               <td style={{ padding: "10px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px", color: "#aa8a6a" }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#9EC97C" }}>{row.newCustomers > 0 ? row.newCustomers : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
                               <td style={{ padding: "10px 8px" }}><GrowthBadge value={wGrowth} /></td>
                             </tr>
                           );
@@ -2286,8 +2289,10 @@ export default function EcommerceDashboard() {
         <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
-              ["New Customers",   kpiNewC > 0 ? kpiNewC.toLocaleString() : "—", "#8aaa8a"],
-              ["Total Discounts", kpiDisc > 0 ? fmtK(kpiDisc, activeStore.currency) : "—", accent],
+              ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "—", "#8aaa8a"],
+              ["Total Discounts", kpiDisc != null && kpiDisc !== 0
+                                    ? (isOstendo ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
+                                    : "—", accent],
               ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "—", "#C97C9E"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>

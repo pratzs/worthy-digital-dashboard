@@ -35,10 +35,22 @@ export const maxDuration = 60;
  * and summing INVOICENETTAMOUNT would multiply each invoice by its line count. */
 const headerSql = (start, end) => `
   SELECT h.INVOICEDATE AS D, h.INVOICEORCREDIT AS OC, h.SALESPERSON AS SP,
-         COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT
+         COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT,
+         SUM(h.LINEDISCOUNTAMOUNT) AS DISC
   FROM SALESINVOICEHEADER h
   WHERE h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}
   GROUP BY 1, 2, 3`;
+
+/**
+ * When each customer first ever bought. A customer is "new" in the month of
+ * their first invoice across ALL of history, not the first time they appear in
+ * whatever period happens to be on screen.
+ */
+const firstOrderSql = () => `
+  SELECT EXTRACT(YEAR FROM F.FIRSTD) AS YR, EXTRACT(MONTH FROM F.FIRSTD) AS MO, COUNT(*) AS N
+  FROM (SELECT h.CUSTOMER AS C, MIN(h.INVOICEDATE) AS FIRSTD
+        FROM SALESINVOICEHEADER h WHERE h.INVOICEORCREDIT <> 'Credit' GROUP BY 1) F
+  GROUP BY 1, 2`;
 
 /* Cost of goods. Credit-note lines carry negative quantities, so they reduce
  * COGS here exactly as they reduce revenue above. */
@@ -54,7 +66,7 @@ const costSql = (start, end) => `
 const dayKey = (v) => normaliseDate(v);
 
 /** Empty accumulator. All money is held as exact integer units, never floats. */
-const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0 });
+const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0, discount: 0 });
 
 const add = (t, s) => {
   t.revenue     += s.revenue;
@@ -62,6 +74,7 @@ const add = (t, s) => {
   t.invoices    += s.invoices;
   t.credits     += s.credits;
   t.creditValue += s.creditValue;
+  t.discount    += s.discount;
   return t;
 };
 
@@ -76,6 +89,7 @@ const present = (a) => {
     invoices:    a.invoices,
     credits:     a.credits,
     creditValue: toDollars(a.creditValue),
+    discounts:   toDollars(a.discount),
     aov:         a.invoices > 0 ? toDollars(a.revenue / a.invoices) : 0,
   };
 };
@@ -134,6 +148,7 @@ function indexDays(headerRows, costRows) {
     const code     = String(r.SP ?? '').trim();
     const isCredit = String(r.OC ?? '').toLowerCase().startsWith('cred');
     const cents    = toCents(r.NETT);
+    const disc     = toCents(r.DISC);
     const n        = Number(r.N) || 0;
 
     const entry = touch(d);
@@ -142,7 +157,8 @@ function indexDays(headerRows, costRows) {
     // Revenue always includes credits — they are how returns and rebates land.
     // Order counts never do: a credit note is not a sale.
     for (const bucket of [entry.total, rep]) {
-      bucket.revenue += cents;
+      bucket.revenue  += cents;
+      bucket.discount += disc;
       if (isCredit) { bucket.credits += n; bucket.creditValue += cents; }
       else          { bucket.invoices += n; }
     }
@@ -198,12 +214,26 @@ export async function GET(request) {
       : fullRange;
     const prior = priorRange(range);
 
-    const [hdr, cost, hdrPrior, costPrior] = await Promise.all([
+    const [hdr, cost, hdrPrior, costPrior, firstOrders] = await Promise.all([
       ostendoSql(headerSql(range.start, range.end)),
       ostendoSql(costSql(range.start, range.end)),
       ostendoSql(headerSql(prior.start, prior.end)),
       ostendoSql(costSql(prior.start, prior.end)),
+      ostendoSql(firstOrderSql()).catch(() => []),
     ]);
+
+    /* New customers by month. Ostendo's history starts part-way through, so every
+     * customer that already existed then looks "new" in that first month (421 of
+     * them). Counts are withheld for that month and anything before it — the data
+     * cannot tell a genuinely new customer from a pre-existing one. */
+    const newCustByMonth = new Map();
+    for (const r of firstOrders) {
+      const key = `${r.YR}-${String(r.MO).padStart(2, '0')}`;
+      newCustByMonth.set(key, (newCustByMonth.get(key) || 0) + (Number(r.N) || 0));
+    }
+    const firstDataMonth = normaliseDate(bounds?.[0]?.FIRSTD)?.substring(0, 7) || null;
+    const newCustFor = (monthKey) =>
+      (firstDataMonth && monthKey <= firstDataMonth) ? null : (newCustByMonth.get(monthKey) || 0);
 
     const days      = indexDays(hdr, cost);
     const daysPrior = indexDays(hdrPrior, costPrior);
@@ -246,6 +276,7 @@ export async function GET(request) {
         through,
         daysElapsed: started ? Math.round((parseIso(through) - parseIso(first)) / 86400000) + 1 : 0,
         daysInMonth: lastDay,
+        newCustomers: started ? newCustFor(key) : null,
         ...present(curr),
         prior:      present(priorSum),
         priorFull:  present(priorFull),
@@ -365,6 +396,9 @@ export async function GET(request) {
       weeks:  weekRows,
       reps:   repRows,
       totals: {
+        newCustomers: monthRows.some((m) => m.started && m.newCustomers === null)
+          ? null
+          : monthRows.reduce((acc, m) => acc + (m.newCustomers || 0), 0),
         ...present(currTotal),
         prior:      present(priorTotal),
         growthPct:  priorComparable ? growth(currTotal.revenue, priorTotal.revenue) : null,
