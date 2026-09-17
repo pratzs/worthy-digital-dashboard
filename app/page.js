@@ -375,7 +375,15 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   // FY month display order: fyMonths is e.g. ["Apr",...,"Mar"]; null = calendar order
   const displayMonths = fyMonths || MONTH_NAMES;
   // Map FY display index → calendar month index (0=Jan..11=Dec)
-  const getCalIdx = (fi) => fyMonths ? (fi <= 8 ? fi + 3 : fi - 9) : fi;
+  /* Look each month column up by its NAME, not by arithmetic on the position.
+   * The financial-year payload already arrives in April-to-March order; the old
+   * index shift assumed a January-to-December array and so moved every figure
+   * three months along — April's total appeared under January. */
+  const monthAt = (months, fi) => {
+    const label = displayMonths[fi];
+    const list  = months || [];
+    return list.find(m => m.month === label) || null;
+  };
   const [repView, setRepView] = useState("annual");
 
   // `exact` → show full amounts to the cent (NZ$1,277,734.48) and never round
@@ -504,15 +512,14 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   {loading ? "Loading…" : "No monthly data"}
                 </td></tr>
               ) : monthlyPivot.map((rep, i) => {
-                const total = displayMonths.reduce((s, _, fi) => s + (rep.months[getCalIdx(fi)]?.revenue || 0), 0);
+                const total = displayMonths.reduce((s, _, fi) => s + (monthAt(rep.months, fi)?.revenue || 0), 0);
                 const marg  = marginByName[rep.name];
                 return (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                     <td style={repCellStyle}>{rep.name}</td>
                     {displayMonths.map((mn, fi) => {
-                      const mi = getCalIdx(fi);
-                      const m  = rep.months[mi] || { revenue: 0, orders: 0 };
-                      const mm = marginByName[rep.name]?.months?.[mi];
+                      const m  = monthAt(rep.months, fi) || { revenue: 0, orders: 0 };
+                      const mm = monthAt(marginByName[rep.name]?.months, fi);
                       const mColor = mm?.marginPct != null ? (mm.marginPct >= 20 ? "#4ade80" : mm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
                       return (
                         <td key={mn} style={{ ...cellStyle(m.revenue), verticalAlign: "top" }}>
@@ -545,10 +552,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 <tr style={{ borderTop: `1px solid ${T.border}` }}>
                   <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
                   {displayMonths.map((mn, fi) => {
-                    const mi        = getCalIdx(fi);
-                    const colTotal  = monthlyPivot.reduce((s, rep) => s + (rep.months[mi]?.revenue || 0), 0);
-                    const colGP     = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.grossProfit || 0), 0) : null;
-                    const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (r.months?.[mi]?.revenue || 0), 0) : 0;
+                    const colTotal  = monthlyPivot.reduce((s, rep) => s + (monthAt(rep.months, fi)?.revenue || 0), 0);
+                    const colGP     = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.grossProfit || 0), 0) : null;
+                    const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.revenue || 0), 0) : 0;
                     const colMargin = colMargRv > 0 && colGP != null ? parseFloat(((colGP / colMargRv) * 100).toFixed(1)) : null;
                     const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
                     return (
@@ -613,7 +619,10 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     {loading ? "Loading…" : `No data for ${MONTH_NAMES[weeklyMonth]}`}
                   </td></tr>
                 ) : weeklyPivot.map((rep, i) => {
-                  const mo   = marginByName[rep.name]?.months?.[weeklyMonth];
+                  // weeklyMonth is a calendar index (8 = Sep) but the months array
+                  // is in financial-year order, so match on the name.
+                  const mo   = (marginByName[rep.name]?.months || [])
+                                 .find(m => m.month === MONTH_NAMES[weeklyMonth]);
                   const repW = marginByName[rep.name]?.weeks || [];
                   return (
                     <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
