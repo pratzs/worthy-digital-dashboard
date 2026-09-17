@@ -1220,16 +1220,35 @@ export default function EcommerceDashboard() {
       week: w.week, revenue: w.revenue, orders: w.invoices,
     })),
   }));
-  const getOdooCustomers          = () => cacheRef.current[odooCacheKey(selectedYear)]?.customers          || [];
-  const getOdooAtRisk             = () => cacheRef.current[odooCacheKey(selectedYear)]?.atRisk             || [];
-  const getOdooLapsed             = () => cacheRef.current[odooCacheKey(selectedYear)]?.lapsed             || [];
-  const getOdooTopProducts        = () => cacheRef.current[odooCacheKey(selectedYear)]?.topProducts        || [];
-  const getOdooTopCategories      = () => cacheRef.current[odooCacheKey(selectedYear)]?.topCategories      || [];
-  const getOdooFastMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.fastMoving         || [];
-  const getOdooSlowMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.slowMoving         || [];
-  // Odoo does not store the salesperson on the invoice line, so cost cannot be
-  // split by rep. Margin is reported per month and per company instead of being
-  // approximated here.
+  const fyCustomers = () => fyPayload(selectedYear)?.customers || [];
+  const asRiskRow = (c) => ({
+    name: c.customer, revenue: c.lifetimeRevenue, orderCount: c.lifetimeOrders,
+    daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status,
+  });
+  const getOdooCustomers = () => fyCustomers().map(c => ({
+    name: c.customer, orderCount: c.orderCount, revenue: c.revenue,
+    aov: c.orderCount > 0 ? Math.round(c.revenue / c.orderCount) : 0, status: c.status,
+  }));
+  const getOdooAtRisk    = () => (fyPayload(selectedYear)?.atRisk  || []).map(asRiskRow);
+  const getOdooLapsed    = () => (fyPayload(selectedYear)?.churned || []).map(asRiskRow);
+  const getOdooCLV       = () => (fyPayload(selectedYear)?.clv || []).map(c => ({
+    name: c.customer, lifetimeRevenue: c.lifetimeRevenue, totalOrders: c.lifetimeOrders,
+    avgOrderValue: c.lifetimeOrders > 0 ? Math.round(c.lifetimeRevenue / c.lifetimeOrders) : 0,
+    firstOrderDate: c.firstOrder || null,
+  }));
+  const mapProd = (p) => ({
+    name: p.title, title: p.title, category: p.category,
+    qtySold: p.unitsSold, unitsSold: p.unitsSold,
+    revenue: p.revenue, cost: p.cost, margin: p.margin,
+  });
+  const getOdooTopProducts   = () => (fyPayload(selectedYear)?.products   || []).map(mapProd);
+  const getOdooFastMoving    = () => (fyPayload(selectedYear)?.fastMoving || []).map(mapProd);
+  const getOdooTopCategories = () => (fyPayload(selectedYear)?.categories || []).map(c => ({
+    name: c.category, category: c.category, qty: c.unitsSold, unitsSold: c.unitsSold,
+    revenue: c.revenue, margin: c.margin, productCount: c.productCount,
+  }));
+  // Odoo carries no stock-on-hand valuation here, so slow movers are not offered.
+  const getOdooSlowMoving = () => [];
   const getOdooRepMargins = () => [];
   const isOdooAdvLoading          = () => {
     const cid = currentOdooCid();
@@ -1885,7 +1904,9 @@ export default function EcommerceDashboard() {
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
                     {activeStore.id === "luxe"
                       ? <>✦ Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
-                      : <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
+                      : onFYView()
+                        ? <>✦ {fyPayload(selectedYear)?.costBasis || "cost from Odoo"} · {activeStore.currency}</>
+                        : <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>

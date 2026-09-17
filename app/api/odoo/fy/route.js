@@ -136,7 +136,7 @@ export async function GET(request) {
           ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }),
         // Quantity per product per month — cost is a per-product figure.
         exec('account.move.line', 'read_group', [costLineDomain(cid, start, end),
-          ['quantity:sum'], ['product_id', 'date:month']], { lazy: false }).catch(() => []),
+          ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }).catch(() => []),
         // Discount value recovered from the rate each line was sold at.
         exec('account.move.line', 'read_group', [
           [...lineDomain(cid, start, end), ['date', '!=', false]],
@@ -147,11 +147,29 @@ export async function GET(request) {
 
     const [curr, prev] = await Promise.all([pull(range.start, range.end), pull(prior.start, prior.end)]);
 
+    /* Customers: what they spent in this period, and their whole history, so
+       lifetime value and "quiet since" mean what they say. */
+    const custDomain = (start, end) => [...moveDomain(cid, start, end), ['partner_id', '!=', false]];
+    const [custPeriod, custLifetime] = await Promise.all([
+      exec('account.move', 'read_group', [custDomain(range.start, range.end),
+        ['amount_untaxed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
+      exec('account.move', 'read_group',
+        [[...allPosted, ['partner_id', '!=', false]],
+         ['amount_untaxed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
+    ]);
+    // First and last invoice per customer, for new-customer counts and lapse.
+    const [firstSeen, lastSeen] = await Promise.all([
+      exec('account.move', 'read_group', [[...allPosted, ['move_type', '=', 'out_invoice']],
+        ['invoice_date:min'], ['partner_id']], { lazy: false }).catch(() => []),
+      exec('account.move', 'read_group', [[...allPosted, ['move_type', '=', 'out_invoice']],
+        ['invoice_date:max'], ['partner_id']], { lazy: false }).catch(() => []),
+    ]);
+
     // Product costs, once, for everything either period touched.
     const productIds = [...new Set([...curr.prodMonth, ...prev.prodMonth]
       .map((r) => r.product_id && r.product_id[0]).filter(Boolean))];
     const prods = productIds.length
-      ? await exec('product.product', 'read', [productIds], { fields: ['standard_price'] })
+      ? await exec('product.product', 'read', [productIds], { fields: ['standard_price', 'categ_id'] })
       : [];
     const costOf = new Map(prods.map((p) => [p.id, Number(p.standard_price) || 0]));
     const hasCost = prods.some((p) => Number(p.standard_price) > 0);
@@ -198,6 +216,15 @@ export async function GET(request) {
     };
 
     const days = dayIndex(curr), daysPrior = dayIndex(prev);
+
+    // New customers by month: the month a customer's FIRST invoice falls in.
+    const newCustByMonth = new Map();
+    for (const r of firstSeen) {
+      const k = dayOf(r.invoice_date).substring(0, 7);
+      if (k) newCustByMonth.set(k, (newCustByMonth.get(k) || 0) + 1);
+    }
+    const firstDataMonth = firstLoaded ? firstLoaded.substring(0, 7) : null;
+    const newCustFor = (k) => (firstDataMonth && k <= firstDataMonth) ? null : (newCustByMonth.get(k) || 0);
     const extras = monthExtras(curr), extrasPrior = monthExtras(prev);
 
     const sumRange = (idx, from, to, rep = null) => {
@@ -232,6 +259,7 @@ export async function GET(request) {
       return {
         key, label, year, started, complete, through,
         daysInMonth: lastDay,
+        newCustomers: started ? newCustFor(key) : null,
         ...present(acc, hasCost),
         prior: present(pAcc, hasCost),
         priorComparable: started && covered(shift(first)),
@@ -306,8 +334,83 @@ export async function GET(request) {
                         creditValue: toCents(m.prior.creditValue), discount: toCents(m.prior.discounts) });
     }
 
+    /* ── Analytics tables, on the same financial year as everything else ───── */
+    const netBy = (rows) => {
+      const m = new Map();
+      for (const r of rows) {
+        const id = r.partner_id && r.partner_id[0]; if (!id) continue;
+        const sign = r.move_type === 'out_refund' ? -1 : 1;
+        const cur = m.get(id) || { name: r.partner_id[1], cents: 0, orders: 0 };
+        cur.cents += toCents(r.amount_untaxed ?? 0) * sign;
+        if (sign > 0) cur.orders += Number(r.__count) || 0;
+        m.set(id, cur);
+      }
+      return m;
+    };
+    const periodBy = netBy(custPeriod), lifetimeBy = netBy(custLifetime);
+    const lastBy = new Map(lastSeen.map((r) => [r.partner_id && r.partner_id[0], dayOf(r.invoice_date)]));
+    const firstBy = new Map(firstSeen.map((r) => [r.partner_id && r.partner_id[0], dayOf(r.invoice_date)]));
+    const asOf = parseIso(range.end);
+
+    const customers = [...lifetimeBy].map(([id, v]) => {
+      const last = lastBy.get(id) || null;
+      const daysSince = last ? Math.floor((asOf - parseIso(last)) / 86400000) : null;
+      const p = periodBy.get(id);
+      return {
+        customer: v.name,
+        revenue: toDollars(p?.cents || 0), orderCount: p?.orders || 0,
+        lifetimeRevenue: toDollars(v.cents), lifetimeOrders: v.orders,
+        firstOrder: firstBy.get(id) || null, lastOrder: last, lastOrderDays: daysSince,
+        status: daysSince === null ? 'Unknown' : daysSince > 90 ? 'Lapsed'
+              : daysSince > 45 ? 'At Risk' : 'Active',
+      };
+    });
+
+    // Products and categories from the same aggregate the cost came from.
+    const prodAgg = new Map();
+    for (const r of curr.prodMonth) {
+      const id = r.product_id && r.product_id[0]; if (!id) continue;
+      const cur = prodAgg.get(id) || { name: r.product_id[1], qty: 0, cents: 0 };
+      cur.qty += Number(r.quantity) || 0;
+      cur.cents += toCents(r.price_subtotal ?? 0);
+      prodAgg.set(id, cur);
+    }
+    const catOf = new Map(prods.map((p) => [p.id, p.categ_id ? p.categ_id[1] : 'Uncategorised']));
+    const productRows = [...prodAgg].map(([id, v]) => {
+      const cost = v.qty * (costOf.get(id) || 0);
+      return {
+        code: String(id), title: v.name, category: catOf.get(id) || 'Uncategorised',
+        unitsSold: Math.round(v.qty), revenue: toDollars(v.cents),
+        cost: hasCost ? toDollars(toCents(cost)) : null,
+        margin: hasCost ? pct1(v.cents - toCents(cost), v.cents) : null,
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    const catAgg = new Map();
+    for (const p of productRows) {
+      const cur = catAgg.get(p.category) || { revenue: 0, cost: 0, units: 0, products: 0 };
+      cur.revenue += p.revenue; cur.cost += p.cost || 0; cur.units += p.unitsSold; cur.products += 1;
+      catAgg.set(p.category, cur);
+    }
+    const categoryRows = [...catAgg].map(([category, v]) => ({
+      category, productCount: v.products, unitsSold: v.units,
+      revenue: Math.round(v.revenue * 100) / 100,
+      cost: hasCost ? Math.round(v.cost * 100) / 100 : null,
+      margin: hasCost ? pct1(toCents(v.revenue - v.cost), toCents(v.revenue)) : null,
+    })).sort((a, b) => b.revenue - a.revenue);
+
+    const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
       fy, company: cid,
+      products:   productRows.slice(0, 50),
+      fastMoving: [...productRows].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 25),
+      categories: categoryRows.slice(0, 30),
+      customers:  customers.filter((c) => c.orderCount > 0).sort(byRev).slice(0, 100),
+      clv:        [...customers].sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
+      churned:    customers.filter((c) => c.status === 'Lapsed' && c.lifetimeRevenue > 0)
+                           .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
+      atRisk:     customers.filter((c) => c.status === 'At Risk')
+                           .sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
       generatedAt: new Date().toISOString(),
       range, prior,
       dataAvailable: { first: firstLoaded, last: lastLoaded,
