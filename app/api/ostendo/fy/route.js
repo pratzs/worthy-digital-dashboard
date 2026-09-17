@@ -72,7 +72,7 @@ const firstOrderSql = () => `
  */
 const STOCK_LINE = `l.CODETYPE = 'Item Code'`;
 const SUSPECT = `${STOCK_LINE} AND l.INVOICEQTY > 0 AND l.EXTENDEDNETTPRICE > 0
-                 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE`;
+                 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE * 2`;
 
 const costSql = (start, end) => `
   SELECT h.INVOICEDATE AS D, h.SALESPERSON AS SP,

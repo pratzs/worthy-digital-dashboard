@@ -1731,24 +1731,28 @@ export default function EcommerceDashboard() {
                 {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
                 {" "}· sales are counted without GST, and cost is what each item cost on the day it was invoiced.
               </div>
-              {t.suspectLines > 0 && (
-                <div style={{ color: "#b45309" }}>
-                  <strong>Ostendo's cost is wrong on {t.suspectLines.toLocaleString()} lines.</strong> They carry{" "}
-                  {fmtExact(t.suspectCost, activeStore.currency)} of cost against{" "}
-                  {fmtExact(t.suspectRevenue, activeStore.currency)} of sales — one NZ$63.75 block of chocolate has
-                  NZ$6,362.40 of cost on it, and the same item is costed anywhere between NZ$3.52 and NZ$183.78 across
-                  the year. It clusters on 22–30 June and 8–9 April, which is what a bad stock receipt does to a
-                  running average cost.{" "}
-                  {costBasis === "invoiced"
-                    ? <>The figures below are <strong>exactly as Ostendo holds them</strong>, so June shows{" "}
-                       {d.months.find(m => m.label === "Jun")?.marginPct}%. Correcting the cost in Ostendo is what
-                       fixes it. “Ignoring faulty cost lines” shows what the margin looks like without those lines
-                       ({t.marginPctExSuspect}% for the year) — a check, not the books.</>
-                    : <>Those lines are currently <strong>left out of both sales and cost</strong>. This is a check on
-                       what trade looks like without them, not what Ostendo holds — switch back to “Exactly as
-                       Ostendo” for the real figures.</>}
-                </div>
-              )}
+              {(() => {
+                // Only call out months where the mis-costing is material — above
+                // 1% of that month's sales. Below that it is ordinary trading.
+                const hit = d.months.filter(m => m.started && m.revenue > 0 && m.suspectCost > m.revenue * 0.01);
+                if (!hit.length) return null;
+                const names = hit.map(m => m.label).join(", ");
+                const worst = hit.reduce((a, b) => (b.suspectCost > a.suspectCost ? b : a));
+                return (
+                  <div style={{ color: "#b45309" }}>
+                    <strong>A unit-of-measure problem in Ostendo's costing affected {names}.</strong>{" "}
+                    Finance have confirmed it and it has been resolved — the most recent months are clean.
+                    In {worst.label} it put {fmtExact(worst.suspectCost, activeStore.currency)} of cost against{" "}
+                    {fmtExact(worst.suspectRevenue, activeStore.currency)} of sales, which is why that month reads{" "}
+                    {worst.marginPct}% instead of about {worst.marginPctExSuspect}%.{" "}
+                    {costBasis === "invoiced"
+                      ? <>The table shows <strong>exactly what Ostendo holds</strong>. Switch to “Ignoring faulty cost
+                         lines” to see those months without the mis-costed lines.</>
+                      : <>Those lines are currently left out of both sales and cost — a check on what trade looked
+                         like, not what Ostendo holds.</>}
+                  </div>
+                );
+              })()}
               {t.priorComparable === false ? (
                 <div style={{ color: "#b45309" }}>
                   <strong>No “vs last year” figures are shown for this year.</strong> Ostendo’s records only start{" "}

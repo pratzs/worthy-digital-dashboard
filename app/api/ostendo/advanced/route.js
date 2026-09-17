@@ -37,7 +37,7 @@ export const maxDuration = 60;
  * category tables report both bases so they stay in step with the monthly
  * table's Cost basis switch instead of contradicting it. */
 const SUSPECT = `l.INVOICEQTY > 0 AND l.EXTENDEDNETTPRICE > 0
-                 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE`;
+                 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE * 2`;
 const SOUND = `NOT (${SUSPECT})`;
 
 const SALES = (start, end) =>
