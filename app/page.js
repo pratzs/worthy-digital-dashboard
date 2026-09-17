@@ -21,27 +21,12 @@ const STORES = [
 ];
 
 const ALL_YEARS = [2022, 2023, 2024, 2025, 2026];
-const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-const seed = (s) => { let x = Math.sin(s) * 10000; return x - Math.floor(x); };
-const generateMonthlyData = (storeId, year) => {
-  const base  = { worthy: 84000, luxe: 62000, nova: 45000 }[storeId] || 60000;
-  const seas   = [0.75,0.72,0.88,0.92,0.95,0.98,1.0,1.05,1.08,1.12,1.35,1.55];
-  return MONTH_NAMES.map((m, i) => {
-    const yf  = { 2022: 0.65, 2023: 0.78, 2024: 0.91, 2025: 1, 2026: 1.1 }[year] || 1;
-    const rev = Math.round(base * seas[i] * yf * (0.92 + seed(i * 7 + storeId.length + year) * 0.16));
-    const cst = Math.round(rev * 0.58);
-    const ord = Math.round(rev / (85 + seed(i + year) * 30));
-    const ret = Math.round(ord * (0.04 + seed(i * 3) * 0.04));
-    const ses = Math.round(ord / (0.024 + seed(i * 2) * 0.01));
-    return {
-      month: m, revenue: rev, totalCost: cst, grossProfit: rev - cst, marginPct: 42,
-      orders: ord, returns: ret, sessions: ses, totalDiscounts: Math.round(rev * 0.08),
-      aov: Math.round(rev / ord), convRate: +((ord / ses) * 100).toFixed(2),
-      newCustomers: Math.round(ord * (0.55 + seed(i * 5) * 0.2)), hasCostData: true,
-    };
-  });
+// A date lands in financial year Y when it falls between 1 Apr Y and 31 Mar Y+1.
+const fyOf = (isoDate) => {
+  const [y, m] = String(isoDate).split("-").map(Number);
+  return m >= 4 ? y : y - 1;
 };
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const generateEmptyYear = () =>
   MONTH_NAMES.map(m => ({
@@ -695,6 +680,49 @@ export default function EcommerceDashboard() {
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
   const [selectedWeek,   setSelectedWeek]   = useState(Math.ceil(new Date().getDate() / 7));
 
+  /* ── Keep the view in the address bar ──────────────────────────────────────
+   * Without this, refreshing while looking at Worthy Products South dropped you
+   * back on Worthy Products North and everything had to be re-fetched. The
+   * chosen company, year, tab and week now live in the URL, so a refresh (or a
+   * shared link, or the back button) lands exactly where you were.
+   * `restored` gates the data loader so we never fetch the default company's
+   * data first and then throw it away.                                        */
+  const [restored, setRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const store = STORES.find(s => s.id === p.get("store"));
+      if (store) setActiveStore(store);
+      const yr = parseInt(p.get("fy") || "", 10);
+      if (ALL_YEARS.includes(yr)) setSelectedYear(yr);
+      if (["monthly", "weekly", "yoy"].includes(p.get("view"))) setView(p.get("view"));
+      if (["odoo", "online", "pos"].includes(p.get("tab"))) setChannelTab(p.get("tab"));
+      const mo = parseInt(p.get("m") || "", 10);
+      if (mo >= 0 && mo <= 11) setWeeklyMonth(mo);
+      const wk = parseInt(p.get("w") || "", 10);
+      if (wk >= 1 && wk <= 5) setSelectedWeek(wk);
+      if (p.get("dark") === "1") setDarkMode(true);
+    } catch { /* a malformed hash should never stop the dashboard loading */ }
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+    const p = new URLSearchParams({
+      store: activeStore.id,
+      fy:    String(selectedYear),
+      view,
+      tab:   channelTab,
+      m:     String(weeklyMonth),
+      w:     String(selectedWeek),
+      dark:  darkMode ? "1" : "0",
+    });
+    try {
+      window.history.replaceState(null, "", `${window.location.pathname}#${p.toString()}`);
+    } catch { /* replaceState can throw in embedded contexts; the view still works */ }
+  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, darkMode]);
+
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
   const _todayStr    = new Date().toISOString().split('T')[0];
@@ -715,13 +743,13 @@ export default function EcommerceDashboard() {
   const advStoreRef   = useRef(null); // tracks which store's advanced fetch is active
 
   const fetchYear = async (storeId, year) => {
-    if (storeId !== "worthy" && storeId !== "luxe") return;
+    if (storeId !== "worthy") return;
     const key = storeId + ":" + year;
     if (cacheRef.current[key] || loadingRef.current[key]) return;
     loadingRef.current[key] = true;
     forceUpdate();
     try {
-      const endpoint = storeId === "luxe" ? "/api/ostendo?year=" + year : "/api/shopify?year=" + year;
+      const endpoint = "/api/shopify?year=" + year;   // South is served by /api/ostendo/fy
       const r    = await fetch(endpoint);
       const json = await r.json();
       const convert = (arr) => (arr?.length > 0 ? arr.map(m => ({
@@ -749,65 +777,26 @@ export default function EcommerceDashboard() {
     forceUpdate();
   };
 
-  // Fetch monthly/weekly cost (margins) for Ostendo South from dedicated endpoint
-  // Runs AFTER the main fetchYear so revenue is never blocked by cost fetch
-  const fetchMargins = async (storeId, year) => {
-    if (storeId !== "luxe") return;
-    const mkey = `margins:${storeId}:${year}`;
-    if (cacheRef.current[mkey]) return; // already fetched or in-flight
-    cacheRef.current[mkey] = "loading";
+  /* ── Worthy Products South: one call, one financial year ────────────────────
+   * /api/ostendo/fy returns April→March already assembled, with cost, credits
+   * and the matching prior-year period for every month. The dashboard used to
+   * fetch two calendar years plus a separate cost endpoint and stitch them
+   * together here, which is how the revenue column and the margin column ended
+   * up describing different periods on the same row.                          */
+  const fetchFY = async (year) => {
+    const key = `fy:luxe:${year}`;
+    if (cacheRef.current[key] || loadingRef.current[key]) return;
+    loadingRef.current[key] = true;
+    forceUpdate();
     try {
-      const r    = await fetch(`/api/ostendo/margins?year=${year}`);
+      const r    = await fetch(`/api/ostendo/fy?fy=${year}`, { cache: "no-store" });
       const json = await r.json();
-      if (json.error || (!json.monthly?.length && !json.weekly?.length)) {
-        cacheRef.current[mkey] = "error"; return;
-      }
-      const cached = cacheRef.current[`${storeId}:${year}`];
-      if (!cached) { cacheRef.current[mkey] = "error"; return; }
-
-      // Build month-name → cost map
-      const mCostMap = {};
-      (json.monthly || []).forEach(m => { if (m.hasCostData) mCostMap[m.month] = m.totalCost; });
-
-      // Merge cost into monthly arrays (all / pos / online are same for Ostendo)
-      const mergeMonthly = (arr) => arr.map(m => {
-        const cost = mCostMap[m.month];
-        if (cost == null || cost === 0) return m;
-        const gp     = m.revenue - cost;                                          // full precision — rounding here before the division compounds ~2% error
-        const margin = m.revenue > 0 ? Math.round((gp / m.revenue) * 100) : 0;  // round only the final %
-        return { ...m, totalCost: Math.round(cost), grossProfit: Math.round(gp), marginPct: margin, hasCostData: true, marginableRevenue: m.revenue };
-      });
-      cached.all    = mergeMonthly(cached.all    || []);
-      cached.pos    = mergeMonthly(cached.pos    || []);
-      cached.online = mergeMonthly(cached.online || []);
-
-      // Build week key → cost map
-      const wCostMap = {};
-      (json.weekly || []).forEach(w => { if (w.hasCostData) wCostMap[`${w.month}_${w.week}`] = w.totalCost; });
-
-      // Merge cost into weekly arrays
-      const mergeWeekly = (arr) => arr.map(w => {
-        const cost = wCostMap[`${w.month}_${w.week}`];
-        if (!cost) return w;
-        const gp     = w.revenue - cost;                                          // full precision — rounding here before the division compounds ~2% error
-        const margin = w.revenue > 0 ? Math.round((gp / w.revenue) * 100) : 0;  // round only the final %
-        return { ...w, totalCost: Math.round(cost), grossProfit: Math.round(gp), marginPct: margin, hasCostData: true };
-      });
-      cached.weekly       = mergeWeekly(cached.weekly       || []);
-      cached.weeklyPos    = mergeWeekly(cached.weeklyPos    || []);
-      cached.weeklyOnline = mergeWeekly(cached.weeklyOnline || []);
-
-      // Store per-rep margins independently so SalesRepBreakdown never depends on advancedData
-      if (json.repMargins?.length) {
-        cacheRef.current[`repMargins:${storeId}:${year}`] = json.repMargins;
-      }
-
-      cacheRef.current[mkey] = "done";
-      forceUpdate();
+      cacheRef.current[key] = json?.error ? { failed: json.error } : json;
     } catch (e) {
-      console.warn("[fetchMargins] failed:", e.message);
-      cacheRef.current[mkey] = "error";
+      cacheRef.current[key] = { failed: e.message };
     }
+    loadingRef.current[key] = false;
+    forceUpdate();
   };
 
   const fetchOdoo = async (companyId, year, { fireAdvanced = true } = {}) => {
@@ -892,6 +881,7 @@ export default function EcommerceDashboard() {
 
   // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
+    if (!restored) return; // wait for the URL to be read, or we fetch the wrong company first
     if (activeStore.id !== "worthy" && activeStore.id !== "luxe" && activeStore.id !== "nova") return;
     const storeId = activeStore.id; // capture so async closure stays correct
     advStoreRef.current = storeId;  // mark this store as the active advanced fetch
@@ -919,8 +909,10 @@ export default function EcommerceDashboard() {
       }
 
       await Promise.all([
-        fetchYear(storeId, selectedYear),
-        fetchYear(storeId, selectedYear - 1),
+        ...(storeId === "luxe" ? [fetchFY(selectedYear)] : [
+          fetchYear(storeId, selectedYear),
+          fetchYear(storeId, selectedYear - 1),
+        ]),
         // Worthy North also has Odoo Sales tab. Only fire the heavy advanced
         // payload for the current year — prior year is for YoY revenue only.
         ...(storeId === "worthy" ? [
@@ -930,29 +922,65 @@ export default function EcommerceDashboard() {
       ]);
       // After main years load, fire non-blocking cost/margin + FY tail year
       // (sequential to avoid hammering Ostendo with concurrent header fetches)
-      if (storeId === "luxe") {
-        fetchMargins(storeId, selectedYear);
-        fetchMargins(storeId, selectedYear - 1);
-        fetchYear(storeId, selectedYear + 1);   // Jan-Mar tail of current FY — non-blocking
-        fetchMargins(storeId, selectedYear + 1);
-      }
+      // South is served entirely by the FY endpoint — no calendar-year stitching,
+      // no separate cost fetch, so no way for the two to disagree.
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       // Skip expensive fetch if already cached (set above)
       if (cacheRef.current[advCacheKey]) return;
       try {
         let result;
         if (storeId === "luxe") {
-          const res  = await fetch(`/api/ostendo/advanced?startDate=${advStartDate}&endDate=${advEndDate}`, { cache: "no-store" });
+          // One financial year, aggregated inside Firebird. Field names below are
+          // the ones the table column definitions expect — both spellings are
+          // supplied where two tables read the same list under different keys.
+          const res  = await fetch(`/api/ostendo/advanced?fy=${selectedYear}`, { cache: "no-store" });
           const data = await res.json();
           if (advStoreRef.current !== storeId) return; // stale — discard
-          const mappedProducts    = (data.products   || []).map(p => ({ name: p.title, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin, category: p.category }));
-          const mappedCategories  = (data.categories || []).map(c => ({ name: c.category, qty: c.unitsSold, revenue: c.revenue, margin: c.margin, productCount: c.productCount }));
-          const mappedCustomers   = (data.customers  || []).map(c => ({ name: c.customer, orderCount: c.orderCount, revenue: c.totalSpend, status: c.status, email: c.email, aov: c.aov, lastOrderDays: c.lastOrderDays }));
-          const mappedSlowMoving  = (data.slowMoving || []).map(s => ({ name: s.title, currentStock: s.stockOnHand, qtySold: s.soldInPeriod ?? 0, lockedCapital: s.capitalTied }));
-          const mappedChurned     = (data.churned    || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
-          const mappedAtRisk      = (data.atRisk     || []).map(c => ({ name: c.customer, revenue: c.totalSpend, daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status, orderCount: c.orderCount }));
-          const mappedCLV         = (data.clv        || []).map(c => ({ name: c.customer, lifetimeRevenue: c.totalSpend, totalOrders: c.orderCount, avgOrderValue: c.aov, firstOrderDate: c.firstOrder || null }));
-          result = { curr: { topProducts: mappedProducts, topCategories: mappedCategories, topCustomers: mappedCustomers, slowMoving: mappedSlowMoving, churned: mappedChurned, atRisk: mappedAtRisk, clv: mappedCLV, declining: data.declining || [], decliningMoM: data.decliningMoM || [], repMargins: data.repMargins || [], metrics: data.metrics || {} }, prev: {} };
+          if (data.error) throw new Error(data.error);
+
+          const products = (data.products || []).map(p => ({
+            name: p.title, title: p.title, category: p.category || "—",
+            qtySold: p.unitsSold, unitsSold: p.unitsSold,
+            revenue: p.revenue, cost: p.cost, grossProfit: p.grossProfit, margin: p.margin,
+          }));
+          const fastMoving = (data.fastMoving || []).map(p => ({
+            name: p.title, title: p.title, category: p.category || "—",
+            qtySold: p.unitsSold, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin,
+          }));
+          const categories = (data.categories || []).map(c => ({
+            name: c.category, category: c.category, qty: c.unitsSold, unitsSold: c.unitsSold,
+            revenue: c.revenue, margin: c.margin, productCount: c.productCount,
+          }));
+          const customers = (data.customers || []).map(c => ({
+            name: c.customer, orderCount: c.orderCount, revenue: c.revenue,
+            status: c.status, email: c.email, aov: c.aov, lastOrderDays: c.lastOrderDays,
+          }));
+          const asRisk = (c) => ({
+            name: c.customer, revenue: c.lifetimeRevenue, orderCount: c.lifetimeOrders,
+            daysSince: c.lastOrderDays, lastOrderDate: c.lastOrder || null, status: c.status,
+          });
+          result = { curr: {
+            topProducts:   products,
+            topCategories: categories,
+            topCustomers:  customers,
+            fastMoving,
+            slowMoving: (data.slowMoving || []).map(sm => ({
+              name: sm.title, category: sm.category, currentStock: sm.stockOnHand,
+              qtySold: sm.soldInPeriod, lockedCapital: sm.capitalTied, turnover: sm.turnover,
+            })),
+            churned: (data.churned || []).map(asRisk),
+            atRisk:  (data.atRisk  || []).map(asRisk),
+            clv: (data.clv || []).map(c => ({
+              name: c.customer, lifetimeRevenue: c.lifetimeRevenue, totalOrders: c.lifetimeOrders,
+              avgOrderValue: c.lifetimeOrders > 0 ? Math.round(c.lifetimeRevenue / c.lifetimeOrders) : 0,
+              firstOrderDate: c.firstOrder || null,
+            })),
+            adjustments: (data.adjustments || []).map(a => ({
+              name: a.title, count: a.count, value: a.value,
+            })),
+            declining: [], decliningMoM: [],
+            metrics: data.metrics || {},
+          }, prev: {} };
         } else {
           const channelParam = channelTab !== "odoo" ? `&channel=${channelTab}` : "";
           const res  = await fetch(`/api/shopify/advanced?startDate=${advStartDate}&endDate=${advEndDate}${channelParam}`, { cache: "no-store" });
@@ -974,13 +1002,15 @@ export default function EcommerceDashboard() {
       if (advStoreRef.current === storeId) setAdvLoading(false);
     };
     load();
-  }, [activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
+  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
 
   // FIX 2: YoY — parallel load all years
   useEffect(() => {
     if (view === "yoy") {
       if (activeStore.id === "worthy" || activeStore.id === "luxe") {
-        Promise.all(ALL_YEARS.map(yr => fetchYear(activeStore.id, yr)));
+        Promise.all(activeStore.id === "luxe"
+          ? yearsForStore.map(yr => fetchFY(yr))
+          : yearsForStore.map(yr => fetchYear(activeStore.id, yr)));
       }
       // YoY view: only revenue/order data needed for all years. Skip the
       // expensive advanced fetch — it's tied to the currently selected year.
@@ -993,6 +1023,75 @@ export default function EcommerceDashboard() {
     }
   }, [activeStore.id, view]); // eslint-disable-line
 
+  /* ── Adapters ──────────────────────────────────────────────────────────────
+   * These translate the FY payload into the row shapes the tables already know
+   * how to draw. Every South figure on screen comes from this one payload, so
+   * the KPI cards, the monthly table and the rep table cannot contradict
+   * each other.                                                               */
+  const fyPayload = (year) => {
+    const d = cacheRef.current[`fy:luxe:${year}`];
+    return d && !d.failed ? d : null;
+  };
+
+  const fyMonthRow = (m) => ({
+    month:             m.label,
+    revenue:           m.revenue,
+    totalCost:         m.cost,
+    grossProfit:       m.grossProfit,
+    marginPct:         m.marginPct,
+    orders:            m.invoices,     // credit notes are NOT orders
+    returns:           m.credits,      // ...they are reported here instead
+    returnValue:       m.creditValue,
+    totalDiscounts:    0,
+    sessions:          0,
+    convRate:          0,
+    newCustomers:      0,
+    aov:               m.aov,
+    started:           m.started,
+    complete:          m.complete,
+    daysElapsed:       m.daysElapsed,
+    daysInMonth:       m.daysInMonth,
+    hasCostData:       Boolean(m.started && m.cost !== 0),
+    marginableRevenue: m.started && m.cost !== 0 ? m.revenue : 0,
+  });
+
+  // The "previous year" array is the matching slice of last year, day for day —
+  // so a month that is only half done is never compared against a whole month.
+  const fyPriorRow = (m) => ({
+    ...fyMonthRow(m),
+    revenue:           m.prior.revenue,
+    totalCost:         m.prior.cost,
+    grossProfit:       m.prior.grossProfit,
+    marginPct:         m.prior.marginPct,
+    orders:            m.prior.invoices,
+    returns:           m.prior.credits,
+    aov:               m.prior.aov,
+    hasCostData:       Boolean(m.started && m.prior.cost !== 0),
+    marginableRevenue: m.started && m.prior.cost !== 0 ? m.prior.revenue : 0,
+  });
+
+  const MONTH_IDX = Object.fromEntries(MONTH_NAMES.map((m, i) => [m, i]));
+
+  const fyWeekRows = (d) => (d?.weeks || []).map(w => ({
+    label:          w.label,
+    month:          MONTH_IDX[w.monthLabel],
+    week:           w.week,
+    dateRange:      w.dateRange,
+    days:           w.days,
+    expectedDays:   w.expectedDays,
+    complete:       w.complete,
+    revenue:        w.revenue,
+    orders:         w.invoices,
+    returns:        w.credits,
+    aov:            w.aov,
+    totalCost:      w.cost,
+    grossProfit:    w.grossProfit,
+    marginPct:      w.marginPct,
+    hasCostData:    w.cost !== 0,
+    totalDiscounts: 0,
+    newCustomers:   0,
+  }));
+
   const getMonthly = (year) => {
     // Nova store — always Odoo
     if (activeStore.id === "nova") {
@@ -1004,18 +1103,22 @@ export default function EcommerceDashboard() {
       const cached = cacheRef.current[`odoo:4:${year}`];
       return cached?.all || generateEmptyYear();
     }
-    // Dutch Rusk — financial year April → March (FY2026 = Apr 2026 – Mar 2027)
+    // Worthy Products South — April→March financial year, served whole.
+    // year === selectedYear     -> this financial year
+    // year === selectedYear - 1 -> the SAME span last year, month for month
     if (activeStore.id === "luxe") {
-      const aprStart = cacheRef.current[`luxe:${year}`]?.all     || [];
-      const marEnd   = cacheRef.current[`luxe:${year + 1}`]?.all || [];
-      const emptyM   = (m) => ({ month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null, orders: 0, returns: 0, sessions: 0, totalDiscounts: 0, aov: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0 });
-      return FY_MONTHS.map((m, i) => {
-        const src = i <= 8 ? aprStart[i + 3] : marEnd[i - 9]; // i=0→Apr(3)…i=8→Dec(11), i=9→Jan(0)…i=11→Mar(2)
-        return src ? { ...src, month: m } : emptyM(m);
-      });
+      const emptyFY = FY_MONTHS.map(m => ({ month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null, orders: 0, returns: 0, sessions: 0, totalDiscounts: 0, aov: 0, newCustomers: 0, hasCostData: false, marginableRevenue: 0, started: false }));
+      // Year-on-year: every financial year is loaded in its own right.
+      if (view === "yoy") {
+        const own = fyPayload(year);
+        return own ? own.months.map(fyMonthRow) : emptyFY;
+      }
+      const d = fyPayload(selectedYear);
+      if (!d) return emptyFY;
+      return d.months.map(year === selectedYear ? fyMonthRow : fyPriorRow);
     }
     const cached = cacheRef.current[activeStore.id + ":" + year];
-    if (!cached) return generateMonthlyData(activeStore.id, year);
+    if (!cached) return generateEmptyYear();
     if (activeStore.id !== "worthy") return cached;
     // Return channel-specific slice for worthy store
     if (channelTab === "pos")    return cached.pos    || generateEmptyYear();
@@ -1023,6 +1126,7 @@ export default function EcommerceDashboard() {
     return cached.all || generateEmptyYear();
   };
   const getWeekly = () => {
+    if (activeStore.id === "luxe") return fyWeekRows(fyPayload(selectedYear));
     if (activeStore.id === "nova") {
       return cacheRef.current[`odoo:1:${selectedYear}`]?.weekly || [];
     }
@@ -1037,6 +1141,13 @@ export default function EcommerceDashboard() {
     return cached.weekly || [];
   };
   const getSalespeople = () => {
+    if (activeStore.id === "luxe") {
+      // Same payload as the year total, so the rep rows always add up to it.
+      return (fyPayload(selectedYear)?.reps || []).map(r => ({
+        name: r.name, revenue: r.revenue, orders: r.invoices, aov: r.aov,
+        returns: r.credits, returnValue: r.creditValue, unnamed: !r.named,
+      }));
+    }
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
     return cached?.salespeople || [];
   };
@@ -1065,73 +1176,67 @@ export default function EcommerceDashboard() {
     const cid = currentOdooCid();
     return cid ? !!loadingRef.current[`odoo:${cid}:${selectedYear}:adv`] : false;
   };
-  const getLuxeSalespeopleMonthly = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly || [];
-  const getLuxeSalespeopleWeekly  = () => cacheRef.current[`luxe:${selectedYear}`]?.salespeopleWeekly  || [];
 
-  // FY-aware monthly pivot: Apr-Dec from currYear + Jan-Mar from nextYear (FY tail)
-  const getLuxeSalespeopleMonthlyFY = () => {
-    const currData = cacheRef.current[`luxe:${selectedYear}`]?.salespeopleMonthly     || [];
-    const nextData = cacheRef.current[`luxe:${selectedYear + 1}`]?.salespeopleMonthly || [];
-    if (!currData.length) return [];
-    const nextByName = {};
-    for (const r of nextData) nextByName[r.name] = r;
-    const empty = { revenue: 0, orders: 0 };
-    return currData.map(rep => {
-      const nextRep = nextByName[rep.name];
-      // Replace months[0..2] with Jan-Mar of next calendar year (FY tail)
-      const months = [
-        nextRep?.months[0] || empty,
-        nextRep?.months[1] || empty,
-        nextRep?.months[2] || empty,
-        ...rep.months.slice(3),
-      ];
-      return { ...rep, months };
-    });
-  };
+  // Rep pivots. Both come straight from the FY payload — no stitching, so the
+  // revenue column and the margin column describe the same period by construction.
+  const getLuxeSalespeopleMonthlyFY = () =>
+    (fyPayload(selectedYear)?.reps || []).map(r => ({
+      name: r.name,
+      months: r.months.map(m => ({ month: m.label, revenue: m.revenue, orders: m.invoices, started: m.started })),
+    }));
 
-  // FY-aware rep margins: replace Jan-Mar with next calendar year's data
-  const getLuxeFYRepMargins = () => {
-    const curr = cacheRef.current[`repMargins:luxe:${selectedYear}`]     || [];
-    const next = cacheRef.current[`repMargins:luxe:${selectedYear + 1}`] || [];
-    if (!curr.length) return [];
-    // No early-return when next is empty — current FY is still in progress so
-    // Jan-Mar (FY tail) don't exist yet and should be zeroed, not taken from curr.
-    const nextByName = {};
-    for (const r of next) nextByName[r.name] = r;
-    const zeroMonth = { revenue: 0, cost: 0, grossProfit: 0, marginPct: null };
-    return curr.map(rep => {
-      const nextRep = nextByName[rep.name];
-      const months  = [...rep.months];
-      // Replace Jan/Feb/Mar with next-year data (or zero when FY tail hasn't happened yet)
-      months[0] = nextRep?.months[0] || zeroMonth;
-      months[1] = nextRep?.months[1] || zeroMonth;
-      months[2] = nextRep?.months[2] || zeroMonth;
-      // Always recalculate top-level totals from the patched FY months
-      const fyRev  = months.reduce((s, m) => s + (m.revenue || 0), 0);
-      const fyCost = months.reduce((s, m) => s + (m.cost    || 0), 0);
-      const fyGP   = fyRev - fyCost;
-      return {
-        ...rep,
-        months,
-        revenue:           Math.round(fyRev),
-        cost:              Math.round(fyCost),
-        grossProfit:       Math.round(fyGP),
-        marginableRevenue: Math.round(fyRev),
-        marginPct:         fyRev > 0 ? parseFloat(((fyGP / fyRev) * 100).toFixed(1)) : null,
-      };
-    });
-  };
+  const getLuxeSalespeopleWeekly = () =>
+    (fyPayload(selectedYear)?.reps || []).map(r => ({
+      name: r.name,
+      weekly: r.weeks.map(w => ({
+        month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
+        week: w.week, revenue: w.revenue, orders: w.invoices,
+      })),
+    }));
+
+  const getLuxeFYRepMargins = () =>
+    (fyPayload(selectedYear)?.reps || []).map(r => ({
+      name: r.name,
+      revenue: r.revenue, cost: r.cost, grossProfit: r.grossProfit,
+      marginableRevenue: r.revenue, marginPct: r.marginPct,
+      priorRevenue: r.prior.revenue, growthPct: r.growthPct,
+      months: r.months.map(m => ({
+        month: m.label, revenue: m.revenue, cost: m.cost,
+        grossProfit: m.grossProfit, marginPct: m.marginPct, started: m.started,
+      })),
+      weeks: r.weeks.map(w => ({
+        month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
+        week: w.week, revenue: w.revenue, cost: w.cost,
+        grossProfit: w.grossProfit, marginPct: w.marginPct,
+      })),
+    }));
+
   const isLoading = (year) => {
+    if (activeStore.id === "luxe") return !!loadingRef.current[`fy:luxe:${selectedYear}`];
     if (activeStore.id === "nova") return !!loadingRef.current[`odoo:1:${year}`];
     if (activeStore.id === "worthy" && channelTab === "odoo") return !!loadingRef.current[`odoo:4:${year}`];
     return !!loadingRef.current[activeStore.id + ":" + year];
   };
   const hasData = (year) => {
+    if (activeStore.id === "luxe") return !!fyPayload(selectedYear);
     if (activeStore.id === "nova") return !!cacheRef.current[`odoo:1:${year}`];
     if (activeStore.id === "worthy" && channelTab === "odoo") return !!cacheRef.current[`odoo:4:${year}`];
     return (activeStore.id !== "worthy" && activeStore.id !== "luxe") || !!cacheRef.current[activeStore.id + ":" + year];
   };
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
+
+  /* Years worth offering. For South this is derived from the data itself, so
+   * financial years that pre-date the first invoice in Ostendo are never shown
+   * as if they were years of zero trade. */
+  const luxeFirst = fyPayload(selectedYear)?.dataAvailable?.first
+                 || Object.keys(cacheRef.current)
+                      .filter(k => k.startsWith("fy:luxe:"))
+                      .map(k => cacheRef.current[k]?.dataAvailable?.first)
+                      .find(Boolean);
+  const thisFY = (() => { const n = new Date(); return n.getMonth() >= 3 ? n.getFullYear() : n.getFullYear() - 1; })();
+  const yearsForStore = activeStore.id === "luxe" && luxeFirst
+    ? Array.from({ length: thisFY - fyOf(luxeFirst) + 1 }, (_, i) => fyOf(luxeFirst) + i)
+    : ALL_YEARS;
 
   const curr       = getMonthly(selectedYear);
   const prev       = getMonthly(selectedYear - 1);
@@ -1302,7 +1407,7 @@ export default function EcommerceDashboard() {
   const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null;
   const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;
 
-  const yoyData = ALL_YEARS.map(yr => {
+  const yoyData = yearsForStore.map(yr => {
     const d   = getMonthly(yr);
     const rev = d.reduce((s, x) => s + (x.revenue   || 0), 0);
     const ord = d.reduce((s, x) => s + (x.orders    || 0), 0);
@@ -1442,7 +1547,7 @@ export default function EcommerceDashboard() {
           {STORES.map(s => <StorePill key={s.id} store={s} active={activeStore.id === s.id} onClick={() => setActiveStore(s)} />)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {ALL_YEARS.map(y => {
+          {yearsForStore.map(y => {
             const loaded   = hasData(y);
             const fetching = isLoading(y);
             return (
@@ -1494,6 +1599,40 @@ export default function EcommerceDashboard() {
           ))}
         </div>
 
+        {/* Plain-English statement of exactly what is on screen. Every number
+            below is for this period, and every comparison is against the
+            matching stretch of last year — not against a longer one. */}
+        {activeStore.id === "luxe" && fyPayload(selectedYear) && (() => {
+          const d   = fyPayload(selectedYear);
+          const pretty = (isoStr) => {
+            if (!isoStr) return "—";
+            const [y, m, dd] = isoStr.split("-").map(Number);
+            return `${dd} ${MONTH_NAMES[m - 1]} ${y}`;
+          };
+          const dayCount = Math.round(
+            (new Date(d.range.end) - new Date(d.range.start)) / 86400000
+          ) + 1;
+          const t = d.totals;
+          return (
+            <div style={{ marginBottom: 20, padding: "14px 18px", borderRadius: 12, background: `${accent}0c`, border: `1px solid ${accent}28`, fontSize: 12.5, color: T.textSub, lineHeight: 1.75 }}>
+              <div style={{ fontWeight: 700, color: T.textHead, marginBottom: 2 }}>
+                Financial year {d.fy} · {pretty(d.range.start)} to {pretty(d.range.end)}
+                {!d.range.complete && <span style={{ fontWeight: 500, color: T.textMuted }}> · still in progress ({dayCount} days so far)</span>}
+              </div>
+              <div>
+                <strong>{t.invoices.toLocaleString()}</strong> invoices
+                {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
+                {" "}· sales are counted without GST, and cost is what each item cost on the day it was invoiced.
+              </div>
+              <div>
+                Every “vs last year” figure compares {pretty(d.range.start)}–{pretty(d.range.end)} with{" "}
+                <strong>{pretty(d.prior.start)}–{pretty(d.prior.end)}</strong> — the same {dayCount} days, so a part-finished
+                year is never measured against a whole one.
+              </div>
+            </div>
+          );
+        })()}
+
         {/* KPIs */}
         {view === "weekly" ? (() => {
           const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
@@ -1520,7 +1659,7 @@ export default function EcommerceDashboard() {
           <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpRev} />
           <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
           <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
-          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiGP || 0} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpGP} />
+          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpGP} />
         </div>
 
         {view === "monthly" ? (
