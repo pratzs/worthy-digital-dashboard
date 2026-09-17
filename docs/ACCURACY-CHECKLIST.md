@@ -72,3 +72,61 @@ system. Evidence is recorded beside each one.
 - [x] New Customers and Returns populated for South.
 - [x] Revenue, cost, invoice and credit figures for South tie to Ostendo to the
       cent, cross-checked against a query sharing no code with the dashboard.
+
+## Worthy Products North and Oceania (Odoo)
+
+- [x] **11. Per-week margins on the Sales by Rep table.** Weekly cost comes from
+      `/api/odoo/weeks`, one month at a time. Verified against `/api/odoo/fy`:
+      all 48 September rep-weeks agree to the cent, and each rep's week costs sum
+      exactly to that rep's September cost.
+
+- [x] **12. Three reps showed a 100% margin because Odoo holds no cost for what
+      they sell.** Pooja Jani read 100% on NZ$37,891 of FY26 sales; FY25 had a
+      month reading 102.2%. They sell freight and service lines, which carry no
+      standard cost, so revenue minus cost came out as the whole revenue. Where
+      cost covers less than 95% of a row's own revenue the margin and gross
+      profit are now left blank, and the panel names the reps and says why.
+      Revenue and recorded cost are untouched, so every row still adds up to the
+      company total. Company-wide the gap is NZ$37,029.70 (0.5%), stated in the
+      banner.
+
+- [x] **13. Cost coverage was measured against the whole year, not the month.**
+      Each rep's costed revenue was tracked only at year level and handed to
+      every month, so one rep's June read 3,066% coverage and two months with no
+      recorded cost at all passed the new check and still reported 100%. Costed
+      revenue is now accumulated per month alongside cost.
+
+- [x] **14. Negative weeks and months rendered as an em dash while still counting
+      in the row total,** so the visible columns did not add up to the total
+      printed beside them. Rashmi Jani's September read NZ$5,025 across her weeks
+      against a NZ$4,752 month total; Chris, August, South showed NZ$85,519.56 of
+      weeks against an NZ$85,424.20 total. Negative figures now show, in red.
+      Only a true zero is blank. South's own figures are unchanged — the hidden
+      NZ$95.36 simply became visible.
+
+- [x] **15. The monthly footer summed each row's gross profit,** which would
+      shrink away from the company figure wherever a margin is withheld. It
+      derives gross profit from revenue minus cost instead — the same number for
+      every row that has both, verified across all 116 South rows. The footer now
+      reads NZ$7,811,769 / NZ$1,076,720 / 13.8%, exactly the company KPI.
+
+- [x] **16. Oceania shows no margin at all, which is honest.** Odoo holds no
+      product costs for company 1, so the margin columns are absent rather than
+      reading 100%, and the banner says so.
+
+- [x] **17. Full audit: 1,864 checks pass, 0 fail** across North FY25/FY26,
+      Oceania FY25/FY26, the weeks endpoint and South. Covers: no margin above
+      99.5% anywhere; a margin exists only where cost covers ≥95% of that row's
+      own revenue; withheld rows carry no gross profit either; reps reconcile to
+      the company total to the cent; each rep's months sum to the rep and weeks
+      to the month; gross profit equals revenue minus cost wherever both show;
+      the weeks endpoint agrees with the FY payload rep by rep; and South's
+      headline figures are unchanged (revenue 8,061,635.47, cost 6,891,411.46,
+      net sales 7,960,712.62).
+
+### Known, explained, not a defect
+
+- Albert Lee, April 2025, reads −261.2%. Six invoices worth NZ$3,499.87 and one
+  credit note of NZ$2,701.35 that carries no product lines — a price adjustment,
+  not a return — so no goods came back and no cost reversed. Net revenue
+  NZ$798.52 against NZ$2,883.90 of cost. The figure is correct.
