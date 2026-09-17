@@ -600,11 +600,33 @@ export async function GET(request) {
       }
     }
 
+    /* Stock on hand, for the products that actually get shown and no others.
+       `qty_available` is computed per product, so asking for all few-thousand
+       would cost ~13s on a route that already takes 25; the 60-odd rows on
+       screen cost about 260ms. Company context matters — without it Odoo sums
+       the quantity across every company on the database. */
+    const topProducts = productRows.slice(0, 50);
+    const topMoving = [...productRows].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 25);
+    const showIds = [...new Set([...topProducts, ...topMoving].map((r) => Number(r.code)))];
+    if (showIds.length) {
+      try {
+        const stock = await exec('product.product', 'read', [showIds],
+          { fields: ['qty_available'], context: { allowed_company_ids: [cid], company_id: cid } });
+        const onHand = new Map(stock.map((r) => [r.id, Number(r.qty_available) || 0]));
+        for (const r of [...topProducts, ...topMoving]) {
+          const q = onHand.get(Number(r.code));
+          r.onHand = q === undefined ? null : Math.round(q);
+        }
+      } catch (e) {
+        problems.push(`stock on hand unavailable (${e.message.slice(0, 80)})`);
+      }
+    }
+
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
       fy, company: cid,
-      products:   productRows.slice(0, 50),
-      fastMoving: [...productRows].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 25),
+      products:   topProducts,
+      fastMoving: topMoving,
       categories: categoryRows.slice(0, 30),
       customers:  customers.filter((c) => c.orderCount > 0).sort(byRev).slice(0, 100),
       clv:        [...customers].sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),

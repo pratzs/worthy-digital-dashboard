@@ -1302,6 +1302,8 @@ export default function EcommerceDashboard() {
   const mapProd = (p) => ({
     name: p.title, title: p.title, category: p.category,
     qtySold: p.unitsSold, unitsSold: p.unitsSold,
+    // `currentStock` is the key the On Hand column reads.
+    currentStock: p.onHand ?? null,
     revenue: p.revenue, cost: p.cost, margin: p.margin,
   });
   const getOdooTopProducts   = () => (fyPayload(selectedYear)?.products   || []).map(mapProd);
