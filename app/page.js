@@ -1249,7 +1249,23 @@ export default function EcommerceDashboard() {
   }));
   // Odoo carries no stock-on-hand valuation here, so slow movers are not offered.
   const getOdooSlowMoving = () => [];
-  const getOdooRepMargins = () => [];
+  /* Rep margin for the Odoo companies. Odoo does not store the salesperson on
+     the invoice line, so the endpoint filters lines through the move to get each
+     rep's cost. Weeks carry no margin because Odoo holds cost per month. */
+  const getOdooRepMargins = () => (fyPayload(selectedYear)?.reps || [])
+    .filter(r => r.cost != null)
+    .map(r => ({
+      name: r.name, revenue: r.revenue, cost: r.cost, grossProfit: r.grossProfit,
+      marginableRevenue: r.revenue, marginPct: r.marginPct,
+      months: r.months.map(m => ({
+        month: m.label, revenue: m.revenue, cost: m.cost,
+        grossProfit: m.grossProfit, marginPct: m.marginPct, started: m.started,
+      })),
+      weeks: (r.weeks || []).map(w => ({
+        month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
+        week: w.week, revenue: w.revenue, cost: null, grossProfit: null, marginPct: null,
+      })),
+    }));
   const isOdooAdvLoading          = () => {
     const cid = currentOdooCid();
     return cid ? !!loadingRef.current[`odoo:${cid}:${selectedYear}:adv`] : false;
