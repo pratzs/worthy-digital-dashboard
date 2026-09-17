@@ -94,6 +94,10 @@ const growth = (c, p) => (p > 0 ? Math.round(((c - p) / p) * 1000) / 10 : null);
 /** "2026-04-17 00:00:00" or "2026-04-17" -> "2026-04-17" */
 const dayOf = (v) => String(v ?? '').substring(0, 10);
 
+/* read_group labels its groups for display ("10 Sep 2026", "September 2026").
+ * The machine-readable boundary is in __range, so read the key from there. */
+const rangeStart = (row, key) => dayOf(row?.__range?.[key]?.from);
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const today = new Date();
@@ -108,8 +112,8 @@ export async function GET(request) {
     const bounds = await exec('account.move', 'read_group',
       [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']], ['state', '=', 'posted']],
        ['invoice_date:max', 'invoice_date:min'], []], { lazy: false }).catch(() => []);
-    const lastLoaded = dayOf(bounds?.[0]?.invoice_date_max);
-    const firstLoaded = dayOf(bounds?.[0]?.invoice_date_min);
+    const lastLoaded  = dayOf(bounds?.[0]?.invoice_date_max ?? bounds?.[0]?.invoice_date);
+    const firstLoaded = dayOf(bounds?.[0]?.invoice_date_min ?? bounds?.[0]?.invoice_date);
 
     const full = fyRange(fy, today);
     const range = lastLoaded && lastLoaded < full.end ? { ...full, end: lastLoaded } : full;
@@ -146,15 +150,13 @@ export async function GET(request) {
       const out = new Map();
       const touch = (k) => { if (!out.has(k)) out.set(k, { cost: 0, discount: 0 }); return out.get(k); };
       for (const r of pack.prodMonth) {
-        const k = dayOf(r.date_month || r['date:month'] || '').substring(0, 7)
-               || monthFromLabel(r['date:month']);
+        const k = rangeStart(r, 'date:month').substring(0, 7);
         if (!k) continue;
         const unit = costOf.get(r.product_id && r.product_id[0]) || 0;
         touch(k).cost += toCents((Number(r.quantity) || 0) * unit);
       }
       for (const r of pack.discRows) {
-        const k = dayOf(r.date_month || r['date:month'] || '').substring(0, 7)
-               || monthFromLabel(r['date:month']);
+        const k = rangeStart(r, 'date:month').substring(0, 7);
         const d = Number(r.discount) || 0;
         if (!k || d <= 0 || d >= 100) continue;
         const sub = Number(r.price_subtotal) || 0;
@@ -167,10 +169,10 @@ export async function GET(request) {
     const dayIndex = (pack) => {
       const days = new Map();
       for (const r of pack.moves) {
-        const d = dayOf(r.invoice_date_day || r['invoice_date:day']) || monthFromLabel(r['invoice_date:day']);
+        const d = rangeStart(r, 'invoice_date:day');
         if (!d) continue;
         const isCredit = r.move_type === 'out_refund';
-        const cents = toCents(r.amount_untaxed_sum ?? r.amount_untaxed ?? 0) * (isCredit ? -1 : 1);
+        const cents = toCents(r.amount_untaxed ?? 0) * (isCredit ? -1 : 1);
         const n = Number(r.__count) || 0;
         const rep = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
         if (!days.has(d)) days.set(d, { total: blank(), reps: new Map() });
@@ -290,12 +292,4 @@ export async function GET(request) {
     return NextResponse.json({ fy, company: cid, error: err.message, months: [], reps: [], totals: null },
       { status: 502 });
   }
-}
-
-/** Odoo returns grouped periods as labels like "April 2026" as well as raw dates. */
-function monthFromLabel(v) {
-  const m = String(v ?? '').match(/^([A-Za-z]+)\s+(\d{4})$/);
-  if (!m) return '';
-  const i = MONTH_NAMES.findIndex((x) => m[1].toLowerCase().startsWith(x.toLowerCase()));
-  return i < 0 ? '' : `${m[2]}-${String(i + 1).padStart(2, '0')}`;
 }
