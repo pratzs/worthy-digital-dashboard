@@ -1058,7 +1058,7 @@ export default function EcommerceDashboard() {
     ...basisOf(m),
     totalCost:         m.cost,
     rebates:           m.rebates,
-    grossSales:        m.grossSales,
+    netSales:          m.netSales,
     orders:            m.invoices,     // credit notes are NOT orders
     returns:           m.credits,      // ...they are reported here instead
     returnValue:       m.creditValue,
@@ -1085,7 +1085,7 @@ export default function EcommerceDashboard() {
     ...basisOf(m.prior),
     totalCost:         m.prior.cost,
     rebates:           m.prior.rebates,
-    grossSales:        m.prior.grossSales,
+    netSales:          m.prior.netSales,
     orders:            m.prior.invoices,
     returns:           m.prior.credits,
     totalDiscounts:    m.prior.discounts,
@@ -1709,10 +1709,11 @@ export default function EcommerceDashboard() {
               </div>
               {t.rebates !== 0 && (
                 <div>
-                  Sales below are <strong>Ostendo's invoice totals</strong> ({fmtExact(t.revenue, activeStore.currency)}),
-                  which already have {fmtExact(Math.abs(t.rebates), activeStore.currency)} of rebates taken off.
-                  Before rebates that is <strong>{fmtExact(t.grossSales, activeStore.currency)}</strong> — the figure
-                  finance quote. Both describe the same trading; the rebates are the difference.
+                  Sales below are <strong>before rebates</strong> ({fmtExact(t.revenue, activeStore.currency)}), which is
+                  the basis finance report on. Ostendo's own invoice total is{" "}
+                  <strong>{fmtExact(t.netSales, activeStore.currency)}</strong> — the same trading after{" "}
+                  {fmtExact(Math.abs(t.rebates), activeStore.currency)} of rebates. Both describe the same trading;
+                  the rebates are the whole difference, and almost all of them sit on Christchurch Office / Online.
                 </div>
               )}
               <div>
@@ -1854,7 +1855,7 @@ export default function EcommerceDashboard() {
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
                     {activeStore.id === "luxe"
-                      ? <>✦ Sales are Ostendo's invoice totals (INVOICENETTAMOUNT) · cost as invoiced · {activeStore.currency}</>
+                      ? <>✦ Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
                       : <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
                   </div>
                 </div>
