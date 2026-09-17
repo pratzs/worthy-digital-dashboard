@@ -1265,6 +1265,16 @@ export default function EcommerceDashboard() {
                               : monthStarted(i) && !(isCurrentYear && i === nowRef.getMonth());
 
   const momData = curr.map((d, i) => {
+    /* A month that has not arrived yet carries no figures at all. Reporting it
+       as zero drew the revenue line straight down to the axis, which reads as a
+       collapse in trade rather than a month that simply has not happened. */
+    if (!monthStarted(i)) {
+      return {
+        ...d, month: d.month, notStarted: true,
+        revenue: null, orders: null, totalCost: null, grossProfit: null, marginPct: null,
+        aov: null, prevRevenue: null, prevOrders: null, prevMarginPct: null, momGrowth: null,
+      };
+    }
     const rev       = d.revenue   || 0;
     const cst       = d.totalCost || 0;
     const dynGp     = d.hasCostData ? rev - cst : null;
@@ -1754,8 +1764,8 @@ export default function EcommerceDashboard() {
                   <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "grossProfit" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "marginPct" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
                   <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
-                  <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
-                  <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric === "marginPct" ? "prevMarginPct" : activeMetric} name={`${selectedYear - 1}`} stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                  <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} connectNulls={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
+                  <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric === "marginPct" ? "prevMarginPct" : activeMetric} name={`${selectedYear - 1}`} stroke={darkMode ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.35)"} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
