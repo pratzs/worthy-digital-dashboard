@@ -817,6 +817,26 @@ export default function EcommerceDashboard() {
     forceUpdate();
   };
 
+  /* Per-rep weekly margin for the Odoo companies. Week-level cost is too heavy
+     to carry for a whole year, so it is fetched a month at a time, only when the
+     weekly rep view needs it. */
+  const odooWeekKey = (storeId, monthKey) => `odoowk:${storeId}:${monthKey}`;
+  const fetchOdooWeeks = async (storeId, monthKey) => {
+    const key = odooWeekKey(storeId, monthKey);
+    if (cacheRef.current[key] || loadingRef.current[key]) return;
+    loadingRef.current[key] = true;
+    try {
+      const company = storeId === "nova" ? 1 : 4;
+      const r = await fetch(`/api/odoo/weeks?company=${company}&month=${monthKey}`, { cache: "no-store" });
+      const json = await r.json();
+      cacheRef.current[key] = json?.error ? { failed: json.error } : json;
+    } catch (e) {
+      cacheRef.current[key] = { failed: e.message };
+    }
+    loadingRef.current[key] = false;
+    forceUpdate();
+  };
+
   const fetchFY = async (year) => {
     const key = `fy:luxe:${year}`;
     if (cacheRef.current[key] || loadingRef.current[key]) return;
@@ -950,6 +970,10 @@ export default function EcommerceDashboard() {
       // (sequential to avoid hammering Ostendo with concurrent header fetches)
       // South is served entirely by the FY endpoint — no calendar-year stitching,
       // no separate cost fetch, so no way for the two to disagree.
+      if (storeId !== "luxe" && onFY(storeId)) {
+        const k = fyPayload(selectedYear, storeId)?.months.find(m => MONTH_IDX[m.label] === weeklyMonth)?.key;
+        if (k) fetchOdooWeeks(storeId, k);   // non-blocking
+      }
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       // Skip expensive fetch if already cached (set above)
       if (cacheRef.current[advCacheKey]) return;
@@ -1252,6 +1276,16 @@ export default function EcommerceDashboard() {
   /* Rep margin for the Odoo companies. Odoo does not store the salesperson on
      the invoice line, so the endpoint filters lines through the move to get each
      rep's cost. Weeks carry no margin because Odoo holds cost per month. */
+  const odooWeekMonthKey = () => {
+    const d = fyPayload(selectedYear);
+    return d?.months.find(m => MONTH_IDX[m.label] === weeklyMonth)?.key || null;
+  };
+  const odooWeekRows = () => {
+    const k = odooWeekMonthKey();
+    const d = k ? cacheRef.current[odooWeekKey(activeStore.id, k)] : null;
+    return d && !d.failed ? d.rows : [];
+  };
+
   const getOdooRepMargins = () => (fyPayload(selectedYear)?.reps || [])
     .filter(r => r.cost != null)
     .map(r => ({
@@ -1261,10 +1295,17 @@ export default function EcommerceDashboard() {
         month: m.label, revenue: m.revenue, cost: m.cost,
         grossProfit: m.grossProfit, marginPct: m.marginPct, started: m.started,
       })),
-      weeks: (r.weeks || []).map(w => ({
-        month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
-        week: w.week, revenue: w.revenue, cost: null, grossProfit: null, marginPct: null,
-      })),
+      // Weeks carry a margin once the selected month's week costs have loaded.
+      weeks: (r.weeks || []).map(w => {
+        const mi = MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]];
+        const hit = mi === weeklyMonth
+          ? odooWeekRows().find(x => x.name === r.name && x.week === w.week) : null;
+        return {
+          month: mi, week: w.week, revenue: w.revenue,
+          cost: hit?.cost ?? null, grossProfit: hit?.grossProfit ?? null,
+          marginPct: hit?.marginPct ?? null,
+        };
+      }),
     }));
   const isOdooAdvLoading          = () => {
     const cid = currentOdooCid();
