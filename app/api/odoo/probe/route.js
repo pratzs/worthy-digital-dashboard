@@ -1,4 +1,4 @@
-/** TEMPORARY. Will server-side grouping scale for a financial year? */
+/** TEMPORARY. Which stored line fields can carry date and salesperson? */
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +23,13 @@ export async function GET(request) {
     return j.error ? { _err: (j.error.data?.message || j.error.message || '').slice(0, 160) } : j.result;
   };
 
+  const out = {};
+  const f = await exec('account.move.line', 'fields_get', [[], ['type', 'store', 'string']]);
+  out.storedCandidates = f && !f._err
+    ? Object.entries(f).filter(([k, v]) => v.store && /date|user|salesperson|team|partner/i.test(k))
+        .map(([k, v]) => `${k}:${v.type}`).sort()
+    : f;
+
   const lineDom = [
     ['move_id.company_id', '=', cid],
     ['move_id.move_type', 'in', ['out_invoice', 'out_refund']],
@@ -30,30 +37,19 @@ export async function GET(request) {
     ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end],
     ['display_type', '=', 'product'],
   ];
-  const moveDom = [
-    ['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
-    ['state', '=', 'posted'],
-    ['invoice_date', '>=', start], ['invoice_date', '<=', end],
-  ];
+  const t = {};
+  const timed = async (k, fn) => { const s = Date.now(); const r = await fn(); t[k] = { ms: Date.now() - s, rows: Array.isArray(r) ? r.length : JSON.stringify(r).slice(0, 140) }; return r; };
 
-  const t = {}; const timed = async (k, fn) => { const s = Date.now(); const r = await fn(); t[k] = { ms: Date.now() - s, rows: Array.isArray(r) ? r.length : JSON.stringify(r).slice(0, 120) }; return r; };
+  // Cost by product and month, using the line's own stored date.
+  await timed('productByMonth', () => exec('account.move.line', 'read_group',
+    [lineDom, ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }));
 
-  // Headers by day + salesperson + type — cheap, drives revenue and counts.
-  await timed('movesByDayUser', () => exec('account.move', 'read_group',
-    [moveDom, ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }));
+  // Can the line be grouped by salesperson directly?
+  await timed('productByUser', () => exec('account.move.line', 'read_group',
+    [lineDom, ['quantity:sum'], ['product_id', 'invoice_user_id']], { lazy: false }));
 
-  // Lines by product + month — needed because cost is a per-product figure.
-  const byProdMonth = await timed('linesByProductMonth', () => exec('account.move.line', 'read_group',
-    [lineDom, ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'invoice_date:month']], { lazy: false }));
+  await timed('byUserOnly', () => exec('account.move.line', 'read_group',
+    [lineDom, ['quantity:sum', 'price_subtotal:sum'], ['invoice_user_id']], { lazy: false }));
 
-  // Lines by product + salesperson, for per-rep cost.
-  await timed('linesByProductUser', () => exec('account.move.line', 'read_group',
-    [lineDom, ['quantity:sum'], ['product_id', 'move_id']], { lazy: false, limit: 1 }));
-
-  // How many distinct products are involved?
-  const prodOnly = await timed('linesByProduct', () => exec('account.move.line', 'read_group',
-    [lineDom, ['quantity:sum', 'price_subtotal:sum'], ['product_id']], { lazy: false }));
-  t.distinctProducts = Array.isArray(prodOnly) ? prodOnly.length : null;
-
-  return NextResponse.json({ company: cid, start, end, timings: t });
+  return NextResponse.json({ company: cid, timings: t, storedCandidates: out.storedCandidates });
 }
