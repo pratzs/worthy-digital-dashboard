@@ -792,6 +792,31 @@ export default function EcommerceDashboard() {
    * fetch two calendar years plus a separate cost endpoint and stitch them
    * together here, which is how the revenue column and the margin column ended
    * up describing different periods on the same row.                          */
+  /* Which financial-year endpoint serves a company. South is Ostendo; North and
+     Oceania are Odoo, and both now report the same April-March year. */
+  const FY_SOURCE = {
+    luxe:   (y) => `/api/ostendo/fy?fy=${y}`,
+    worthy: (y) => `/api/odoo/fy?fy=${y}&company=4`,
+    nova:   (y) => `/api/odoo/fy?fy=${y}&company=1`,
+  };
+  const fyKey = (storeId, year) => `fy:${storeId}:${year}`;
+
+  const fetchFYFor = async (storeId, year) => {
+    const key = fyKey(storeId, year);
+    if (cacheRef.current[key] || loadingRef.current[key]) return;
+    loadingRef.current[key] = true;
+    forceUpdate();
+    try {
+      const r = await fetch(FY_SOURCE[storeId](year), { cache: "no-store" });
+      const json = await r.json();
+      cacheRef.current[key] = json?.error ? { failed: json.error } : json;
+    } catch (e) {
+      cacheRef.current[key] = { failed: e.message };
+    }
+    loadingRef.current[key] = false;
+    forceUpdate();
+  };
+
   const fetchFY = async (year) => {
     const key = `fy:luxe:${year}`;
     if (cacheRef.current[key] || loadingRef.current[key]) return;
@@ -906,27 +931,19 @@ export default function EcommerceDashboard() {
         setAdvLoading(true);
       }
 
-      // Nova store — Odoo only, no advanced analytics
+      // Worthy Oceania — financial year only, no advanced analytics.
       if (storeId === "nova") {
-        const companyId = activeStore.odooCompanyId || 1;
-        await Promise.all([
-          fetchOdoo(companyId, selectedYear),
-          fetchOdoo(companyId, selectedYear - 1, { fireAdvanced: false }),
-        ]);
+        await fetchFYFor("nova", selectedYear);
         if (advStoreRef.current === storeId) setAdvLoading(false);
         return;
       }
 
       await Promise.all([
-        ...(storeId === "luxe" ? [fetchFY(selectedYear)] : [
+        fetchFYFor(storeId, selectedYear),
+        // Worthy North also has Online and POS tabs served by Shopify.
+        ...(storeId === "worthy" && channelTab !== "odoo" ? [
           fetchYear(storeId, selectedYear),
           fetchYear(storeId, selectedYear - 1),
-        ]),
-        // Worthy North also has Odoo Sales tab. Only fire the heavy advanced
-        // payload for the current year — prior year is for YoY revenue only.
-        ...(storeId === "worthy" ? [
-          fetchOdoo(4, selectedYear),
-          fetchOdoo(4, selectedYear - 1, { fireAdvanced: false }),
         ] : []),
       ]);
       // After main years load, fire non-blocking cost/margin + FY tail year
@@ -1042,10 +1059,13 @@ export default function EcommerceDashboard() {
    * how to draw. Every South figure on screen comes from this one payload, so
    * the KPI cards, the monthly table and the rep table cannot contradict
    * each other.                                                               */
-  const fyPayload = (year) => {
-    const d = cacheRef.current[`fy:luxe:${year}`];
+  const fyPayload = (year, storeId = activeStore.id) => {
+    const d = cacheRef.current[fyKey(storeId, year)];
     return d && !d.failed ? d : null;
   };
+  /* Every company is on a financial year now, so one rule decides whether a
+     month has happened: the payload says so. */
+  const onFY = (storeId = activeStore.id) => Boolean(FY_SOURCE[storeId]);
 
   /* One set of figures, exactly as Ostendo holds them. Revenue is the product
      lines, which is what Worthy's finance team reports; rebates are shown as
@@ -1118,15 +1138,17 @@ export default function EcommerceDashboard() {
   }));
 
   const getMonthly = (year) => {
-    // Nova store — always Odoo
-    if (activeStore.id === "nova") {
-      const cached = cacheRef.current[`odoo:1:${year}`];
-      return cached?.all || generateEmptyYear();
-    }
-    // Worthy North — Odoo tab
-    if (activeStore.id === "worthy" && channelTab === "odoo") {
-      const cached = cacheRef.current[`odoo:4:${year}`];
-      return cached?.all || generateEmptyYear();
+    /* Worthy Oceania, and Worthy North on its Odoo tab, are on the same
+       April-March financial year as South and read the same way. */
+    if (activeStore.id === "nova" || (activeStore.id === "worthy" && channelTab === "odoo")) {
+      const emptyFY = FY_MONTHS.map(m => ({ month: m, revenue: 0, totalCost: 0, grossProfit: 0, marginPct: null, orders: 0, returns: 0, sessions: 0, totalDiscounts: 0, aov: 0, newCustomers: null, hasCostData: false, marginableRevenue: 0, started: false }));
+      if (view === "yoy") {
+        const own = fyPayload(year);
+        return own ? own.months.map(fyMonthRow) : emptyFY;
+      }
+      const d = fyPayload(selectedYear);
+      if (!d) return emptyFY;
+      return d.months.map(year === selectedYear ? fyMonthRow : fyPriorRow);
     }
     // Worthy Products South — April→March financial year, served whole.
     // year === selectedYear     -> this financial year
@@ -1151,13 +1173,8 @@ export default function EcommerceDashboard() {
     return cached.all || generateEmptyYear();
   };
   const getWeekly = () => {
-    if (activeStore.id === "luxe") return fyWeekRows(fyPayload(selectedYear));
-    if (activeStore.id === "nova") {
-      return cacheRef.current[`odoo:1:${selectedYear}`]?.weekly || [];
-    }
-    if (activeStore.id === "worthy" && channelTab === "odoo") {
-      return cacheRef.current[`odoo:4:${selectedYear}`]?.weekly || [];
-    }
+    if (onFY() && (activeStore.id !== "worthy" || channelTab === "odoo"))
+      return fyWeekRows(fyPayload(selectedYear));
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
     if (!cached) return [];
     if (activeStore.id !== "worthy") return cached.weekly || [];
@@ -1188,9 +1205,21 @@ export default function EcommerceDashboard() {
     const cid = currentOdooCid();
     return cid ? `odoo:${cid}:${year}` : null;
   };
-  const getOdooSalespeople        = () => cacheRef.current[odooCacheKey(selectedYear)]?.salespeople        || [];
-  const getOdooSalespeopleMonthly = () => cacheRef.current[odooCacheKey(selectedYear)]?.salespeopleMonthly || [];
-  const getOdooSalespeopleWeekly  = () => cacheRef.current[odooCacheKey(selectedYear)]?.salespeopleWeekly  || [];
+  const getOdooSalespeople = () => (fyPayload(selectedYear)?.reps || []).map(r => ({
+    name: r.name, revenue: r.revenue, orders: r.invoices, aov: r.aov,
+    returns: r.credits, returnValue: r.creditValue,
+  }));
+  const getOdooSalespeopleMonthly = () => (fyPayload(selectedYear)?.reps || []).map(r => ({
+    name: r.name,
+    months: r.months.map(m => ({ month: m.label, revenue: m.revenue, orders: m.invoices, started: m.started })),
+  }));
+  const getOdooSalespeopleWeekly = () => (fyPayload(selectedYear)?.reps || []).map(r => ({
+    name: r.name,
+    weekly: (r.weeks || []).map(w => ({
+      month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
+      week: w.week, revenue: w.revenue, orders: w.invoices,
+    })),
+  }));
   const getOdooCustomers          = () => cacheRef.current[odooCacheKey(selectedYear)]?.customers          || [];
   const getOdooAtRisk             = () => cacheRef.current[odooCacheKey(selectedYear)]?.atRisk             || [];
   const getOdooLapsed             = () => cacheRef.current[odooCacheKey(selectedYear)]?.lapsed             || [];
@@ -1198,7 +1227,10 @@ export default function EcommerceDashboard() {
   const getOdooTopCategories      = () => cacheRef.current[odooCacheKey(selectedYear)]?.topCategories      || [];
   const getOdooFastMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.fastMoving         || [];
   const getOdooSlowMoving         = () => cacheRef.current[odooCacheKey(selectedYear)]?.slowMoving         || [];
-  const getOdooRepMargins         = () => cacheRef.current[odooCacheKey(selectedYear)]?.repMargins         || [];
+  // Odoo does not store the salesperson on the invoice line, so cost cannot be
+  // split by rep. Margin is reported per month and per company instead of being
+  // approximated here.
+  const getOdooRepMargins = () => [];
   const isOdooAdvLoading          = () => {
     const cid = currentOdooCid();
     return cid ? !!loadingRef.current[`odoo:${cid}:${selectedYear}:adv`] : false;
@@ -1237,31 +1269,28 @@ export default function EcommerceDashboard() {
       })),
     }));
 
+  const onFYView = () => onFY() && (activeStore.id !== "worthy" || channelTab === "odoo");
   const isLoading = (year) => {
-    if (activeStore.id === "luxe") return !!loadingRef.current[`fy:luxe:${selectedYear}`];
-    if (activeStore.id === "nova") return !!loadingRef.current[`odoo:1:${year}`];
-    if (activeStore.id === "worthy" && channelTab === "odoo") return !!loadingRef.current[`odoo:4:${year}`];
+    if (onFYView()) return !!loadingRef.current[fyKey(activeStore.id, selectedYear)];
     return !!loadingRef.current[activeStore.id + ":" + year];
   };
   const hasData = (year) => {
-    if (activeStore.id === "luxe") return !!fyPayload(selectedYear);
-    if (activeStore.id === "nova") return !!cacheRef.current[`odoo:1:${year}`];
-    if (activeStore.id === "worthy" && channelTab === "odoo") return !!cacheRef.current[`odoo:4:${year}`];
-    return (activeStore.id !== "worthy" && activeStore.id !== "luxe") || !!cacheRef.current[activeStore.id + ":" + year];
+    if (onFYView()) return !!fyPayload(selectedYear);
+    return activeStore.id !== "worthy" || !!cacheRef.current[activeStore.id + ":" + year];
   };
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
 
   /* Years worth offering. For South this is derived from the data itself, so
    * financial years that pre-date the first invoice in Ostendo are never shown
    * as if they were years of zero trade. */
-  const luxeFirst = fyPayload(selectedYear)?.dataAvailable?.first
+  const fyFirst = fyPayload(selectedYear)?.dataAvailable?.first
                  || Object.keys(cacheRef.current)
-                      .filter(k => k.startsWith("fy:luxe:"))
+                      .filter(k => k.startsWith(`fy:${activeStore.id}:`))
                       .map(k => cacheRef.current[k]?.dataAvailable?.first)
                       .find(Boolean);
   const thisFY = (() => { const n = new Date(); return n.getMonth() >= 3 ? n.getFullYear() : n.getFullYear() - 1; })();
-  const yearsForStore = activeStore.id === "luxe" && luxeFirst
-    ? Array.from({ length: thisFY - fyOf(luxeFirst) + 1 }, (_, i) => fyOf(luxeFirst) + i)
+  const yearsForStore = onFYView() && fyFirst
+    ? Array.from({ length: thisFY - fyOf(fyFirst) + 1 }, (_, i) => fyOf(fyFirst) + i)
     : ALL_YEARS;
 
   const curr       = getMonthly(selectedYear);
@@ -1276,8 +1305,8 @@ export default function EcommerceDashboard() {
    * reported as a 100% collapse. */
   const nowRef        = new Date();
   const isCurrentYear = selectedYear === nowRef.getFullYear();
-  const monthStarted  = (i) => {
-    if (activeStore.id === "luxe") return curr[i]?.started !== false;
+  const monthStarted = (i) => {
+    if (onFYView()) return curr[i]?.started !== false;
     if (selectedYear < nowRef.getFullYear()) return true;
     if (selectedYear > nowRef.getFullYear()) return false;
     return i <= nowRef.getMonth();
@@ -1286,8 +1315,8 @@ export default function EcommerceDashboard() {
   // excluded from year-on-year totals for the calendar-year companies, which
   // report monthly and cannot be sliced to the day.
   const monthComparable = (i) =>
-    activeStore.id === "luxe" ? monthStarted(i)
-                              : monthStarted(i) && !(isCurrentYear && i === nowRef.getMonth());
+    onFYView() ? monthStarted(i)
+               : monthStarted(i) && !(isCurrentYear && i === nowRef.getMonth());
 
   const momData = curr.map((d, i) => {
     /* A month that has not arrived yet carries no figures at all. Reporting it
@@ -1619,7 +1648,7 @@ export default function EcommerceDashboard() {
             const fetching = isLoading(y);
             return (
               <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: selectedYear === y ? `1px solid ${accent}` : `1px solid ${T.border}`, background: selectedYear === y ? `${accent}20` : "transparent", color: selectedYear === y ? accent : loaded ? (darkMode ? "#c0a870" : "#6a5040") : T.textMuted, cursor: "pointer", transition: "all 0.2s", position: "relative" }}>
-                {activeStore.id === "luxe" ? `FY${String(y).slice(2)}` : y}
+                {onFYView() ? `FY${String(y).slice(2)}` : y}
                 {fetching && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: accent }} />}
                 {!fetching && loaded && selectedYear !== y && (activeStore.id === "worthy" || activeStore.id === "luxe") && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#4ade80", opacity: 0.7 }} />}
               </button>
@@ -1805,7 +1834,7 @@ export default function EcommerceDashboard() {
             <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {activeStore.id === "luxe" ? `FY${String(selectedYear).slice(2)}` : selectedYear}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}</div>
                   <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#5a5040" }}>
@@ -2216,6 +2245,7 @@ export default function EcommerceDashboard() {
               currency={activeStore.currency}
               weeklyMonth={weeklyMonth}
               onWeeklyMonthChange={setWeeklyMonth}
+              fyMonths={FY_MONTHS}
               T={T} accent={accent}
             />
           </>
