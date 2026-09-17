@@ -696,6 +696,10 @@ export default function EcommerceDashboard() {
    * shared link, or the back button) lands exactly where you were.
    * `restored` gates the data loader so we never fetch the default company's
    * data first and then throw it away.                                        */
+  /* Which cost basis the whole South view uses. Two margin columns side by side
+   * asked the reader to arbitrate between them; one basis at a time, applied to
+   * revenue, cost, gross profit and margin together, always adds up. */
+  const [costBasis, setCostBasis] = useState("clean"); // "clean" | "invoiced"
   const [restored, setRestored] = useState(false);
 
   useEffect(() => {
@@ -712,6 +716,7 @@ export default function EcommerceDashboard() {
       const wk = parseInt(p.get("w") || "", 10);
       if (wk >= 1 && wk <= 5) setSelectedWeek(wk);
       if (p.get("dark") === "1") setDarkMode(true);
+      if (["clean", "invoiced"].includes(p.get("cost"))) setCostBasis(p.get("cost"));
     } catch { /* a malformed hash should never stop the dashboard loading */ }
     setRestored(true);
   }, []);
@@ -726,11 +731,12 @@ export default function EcommerceDashboard() {
       m:     String(weeklyMonth),
       w:     String(selectedWeek),
       dark:  darkMode ? "1" : "0",
+      cost:  costBasis,
     });
     try {
       window.history.replaceState(null, "", `${window.location.pathname}#${p.toString()}`);
     } catch { /* replaceState can throw in embedded contexts; the view still works */ }
-  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, darkMode]);
+  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, darkMode, costBasis]);
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
@@ -1042,12 +1048,24 @@ export default function EcommerceDashboard() {
     return d && !d.failed ? d : null;
   };
 
+  /* On the clean basis the lines whose recorded cost exceeds the sale are left
+     out of BOTH sides — their sales and their cost — so the row still balances. */
+  const useClean = (m) => costBasis === "clean" && m.suspectLines > 0;
+  const basisOf  = (m) => useClean(m)
+    ? { revenue: m.revenue - m.suspectRevenue,
+        cost:    m.cost - m.suspectCost,
+        grossProfit: (m.revenue - m.suspectRevenue) - (m.cost - m.suspectCost),
+        marginPct:   m.marginPctExSuspect }
+    : { revenue: m.revenue, cost: m.cost, grossProfit: m.grossProfit, marginPct: m.marginPct };
+
   const fyMonthRow = (m) => ({
     month:             m.label,
-    revenue:           m.revenue,
-    totalCost:         m.cost,
-    grossProfit:       m.grossProfit,
-    marginPct:         m.marginPct,
+    ...basisOf(m),
+    totalCost:         basisOf(m).cost,
+    revenueAsInvoiced: m.revenue,
+    excludedSales:     useClean(m) ? m.suspectRevenue : 0,
+    excludedCost:      useClean(m) ? m.suspectCost : 0,
+    excludedLines:     useClean(m) ? m.suspectLines : 0,
     orders:            m.invoices,     // credit notes are NOT orders
     returns:           m.credits,      // ...they are reported here instead
     returnValue:       m.creditValue,
@@ -1059,12 +1077,10 @@ export default function EcommerceDashboard() {
     started:           m.started,
     complete:          m.complete,
     priorComparable:   m.priorComparable !== false,
-    marginPctClean:    m.marginPctExSuspect,
-    suspectCost:       m.suspectCost,
     daysElapsed:       m.daysElapsed,
     daysInMonth:       m.daysInMonth,
     hasCostData:       Boolean(m.started && m.cost !== 0),
-    marginableRevenue: m.started && m.cost !== 0 ? m.revenue : 0,
+    marginableRevenue: m.started && m.cost !== 0 ? basisOf(m).revenue : 0,
   });
 
   // The "previous year" array is the matching slice of last year, day for day —
@@ -1075,6 +1091,7 @@ export default function EcommerceDashboard() {
     totalCost:         m.prior.cost,
     grossProfit:       m.prior.grossProfit,
     marginPct:         m.prior.marginPct,
+    excludedSales:     0, excludedCost: 0, excludedLines: 0,
     orders:            m.prior.invoices,
     returns:           m.prior.credits,
     totalDiscounts:    m.prior.discounts,
@@ -1706,14 +1723,15 @@ export default function EcommerceDashboard() {
                   {t.suspectLines.toLocaleString()} lines carry {fmtExact(t.suspectCost, activeStore.currency)} of cost
                   against only {fmtExact(t.suspectRevenue, activeStore.currency)} of sales — a single block of chocolate
                   invoiced at NZ$63.75 has NZ$6,362.40 of cost against it, and the same item is costed anywhere between
-                  NZ$3.52 and NZ$183.78 across the year. That is a costing fault in Ostendo, not trading.
-                  The <strong>Margin</strong> column is what the records say. <strong>Margin (clean)</strong> leaves out
-                  every line whose cost exceeds the sale, and lands between 17% and 19% in all six months —
-                  including June, which reads {d.months.find(m => m.label === "Jun")?.marginPct}% as recorded and{" "}
-                  {d.months.find(m => m.label === "Jun")?.marginPctExSuspect}% once those lines are set aside.
-                  Most of the damage falls on 22–30 June and 8–9 April, which is what a bad stock receipt corrupting
-                  the running average cost looks like.
-                </div>
+                  NZ$3.52 and NZ$183.78 across the year. That is a costing fault in Ostendo, not trading, and it
+                  clusters on 22–30 June and 8–9 April — what a bad stock receipt does to a running average cost.{" "}
+                  {costBasis === "clean"
+                    ? <>Those lines are currently <strong>left out of both sales and cost</strong>, which is why every
+                       month reads between 17% and 19%. Switch the table to “As invoiced” to see the raw figures.</>
+                    : <>The table is showing the raw figures, so June reads{" "}
+                       {d.months.find(m => m.label === "Jun")?.marginPct}%. Switch to “Excluding faulty cost” for the
+                       trading picture.</>}
+                  </div>
               )}
               {t.priorComparable === false ? (
                 <div style={{ color: "#b45309" }}>
@@ -1829,18 +1847,29 @@ export default function EcommerceDashboard() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
-                    {activeStore.id === "luxe"
-                      ? "✦ Cost as invoiced, from Ostendo"
-                      : hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}
+                    {activeStore.id === "luxe" ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                        <span>Cost basis</span>
+                        {[["clean", "Excluding faulty cost"], ["invoiced", "As invoiced"]].map(([id, label]) => (
+                          <button key={id} onClick={() => setCostBasis(id)} style={{
+                            padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                            border: costBasis === id ? `1px solid ${accent}` : `1px solid ${T.border}`,
+                            background: costBasis === id ? `${accent}18` : "transparent",
+                            color: costBasis === id ? accent : T.textMuted, letterSpacing: "0.03em",
+                          }}>{label}</button>
+                        ))}
+                        <span>· {activeStore.currency}</span>
+                      </span>
+                    ) : (
+                      <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>
+                    )}
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr>
-                        {(activeStore.id === "luxe"
-                          ? ["Month","Revenue","Cost","Gross Profit","Margin","Margin (clean)","Orders","AOV","New Cust.","Returns","YoY"]
-                          : ["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"]).map(h => (
+                        {["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
                           <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -1856,13 +1885,6 @@ export default function EcommerceDashboard() {
                             <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (isOstendo ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (isOstendo ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            {activeStore.id === "luxe" && (
-                              <td style={{ padding: "8px" }} title="Margin once lines whose recorded cost exceeds the sale are left out">
-                                {has && row.marginPctClean != null
-                                  ? <span style={{ color: "#16a34a", fontWeight: 700 }}>{row.marginPctClean}%</span>
-                                  : <span style={{ color: T.textLabel }}>—</span>}
-                              </td>
-                            )}
                             <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (isOstendo ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
@@ -1879,13 +1901,6 @@ export default function EcommerceDashboard() {
                         <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (isOstendo ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "—"}</td>
                         <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (isOstendo ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "—"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
-                        {activeStore.id === "luxe" && (
-                          <td style={{ padding: "10px 8px" }}>
-                            {fyPayload(selectedYear)?.totals?.marginPctExSuspect != null
-                              ? <span style={{ color: "#16a34a", fontWeight: 700 }}>{fyPayload(selectedYear).totals.marginPctExSuspect}%</span>
-                              : "—"}
-                          </td>
-                        )}
                         <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
                         <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{isOstendo ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "—"}</td>
@@ -1895,6 +1910,14 @@ export default function EcommerceDashboard() {
                     </tfoot>
                   </table>
                 </div>
+                {activeStore.id === "luxe" && costBasis === "clean" && curr.some(m => m.excludedLines > 0) && (
+                  <div style={{ marginTop: 10, fontSize: 11, color: T.textMuted }}>
+                    Excludes {curr.reduce((a, m) => a + (m.excludedLines || 0), 0).toLocaleString()} lines whose recorded
+                    cost exceeds the sale — {fmtExact(curr.reduce((a, m) => a + (m.excludedSales || 0), 0), activeStore.currency)} of
+                    sales and {fmtExact(curr.reduce((a, m) => a + (m.excludedCost || 0), 0), activeStore.currency)} of cost.
+                    Revenue as invoiced is {fmtExact(curr.reduce((a, m) => a + (m.revenueAsInvoiced || 0), 0), activeStore.currency)}.
+                  </div>
+                )}
               </div>
             </div>
           </>
