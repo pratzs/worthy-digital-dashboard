@@ -80,6 +80,40 @@ const present = (a) => {
   };
 };
 
+
+/**
+ * Make a set of rounded parts add up to the rounded whole, exactly.
+ *
+ * Cost of goods carries more precision than a cent (quantity x unit cost), so
+ * rounding each rep and each month on its own leaves the column one cent short
+ * of the total underneath it. That is correct arithmetic and still wrong on a
+ * report: the rows have to add up to the total printed below them.
+ *
+ * Each part keeps its own correctly rounded value; the leftover cent is given to
+ * the largest part, where it distorts least. Nothing is invented — the total is
+ * still the exact figure Ostendo holds.
+ */
+function reconcile(parts, totalDollars, get, set) {
+  if (!parts.length) return;
+  const totalC = Math.round(totalDollars * 100);
+  const sumC   = parts.reduce((acc, p) => acc + Math.round(get(p) * 100), 0);
+  let residual = totalC - sumC;
+  if (residual === 0) return;
+  const order = [...parts].sort((a, b) => Math.abs(get(b)) - Math.abs(get(a)));
+  for (let i = 0; residual !== 0 && i < order.length; i++) {
+    const step = residual > 0 ? 1 : -1;
+    set(order[i], (Math.round(get(order[i]) * 100) + step) / 100);
+    residual -= step;
+  }
+}
+
+/** Re-derive gross profit and margin after a cost has been nudged. */
+function restate(row) {
+  row.grossProfit = Math.round((row.revenue - row.cost) * 100) / 100;
+  row.marginPct   = row.revenue > 0
+    ? Math.round((row.grossProfit / row.revenue) * 1000) / 10 : null;
+}
+
 const growth = (curr, prior) =>
   prior > 0 ? Math.round(((curr - prior) / prior) * 1000) / 10 : null;
 
@@ -293,6 +327,26 @@ export async function GET(request) {
     /* ── Year totals ─────────────────────────────────────────────────────── */
     const currTotal  = sumRange(days,      range.start, range.end);
     const priorTotal = sumRange(daysPrior, prior.start, prior.end);
+
+    /* Make every column add up to the total printed beneath it. */
+    const started = monthRows.filter((m) => m.started);
+    reconcile(started, currTotal ? toDollars(currTotal.cost) : 0, (r) => r.cost, (r, v) => { r.cost = v; restate(r); });
+    started.forEach(restate);
+
+    reconcile(repRows, toDollars(currTotal.cost), (r) => r.cost, (r, v) => { r.cost = v; restate(r); });
+    repRows.forEach(restate);
+
+    // Weeks inside each month, and each rep's months inside that rep.
+    for (const m of started) {
+      const wk = weekRows.filter((w) => w.monthKey === m.key);
+      reconcile(wk, m.cost, (w) => w.cost, (w, v) => { w.cost = v; restate(w); });
+      wk.forEach(restate);
+    }
+    for (const r of repRows) {
+      const ms = r.months.filter((m) => m.started);
+      reconcile(ms, r.cost, (m) => m.cost, (m, v) => { m.cost = v; restate(m); });
+      ms.forEach(restate);
+    }
 
     const firstSeen = bounds?.[0]?.FIRSTD ? dayKey(bounds[0].FIRSTD) : null;
     const lastSeen  = bounds?.[0]?.LASTD  ? dayKey(bounds[0].LASTD)  : null;
