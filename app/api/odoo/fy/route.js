@@ -27,7 +27,7 @@
  */
 import { NextResponse } from 'next/server';
 import {
-  toCents, toDollars, pct1, fyRange, priorRange, fyMonthKeys, parseIso, iso, MONTH_NAMES,
+  toCents, toDollars, pct1, costCovered, fyRange, priorRange, fyMonthKeys, parseIso, iso, MONTH_NAMES,
 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
@@ -91,11 +91,23 @@ const add = (t, s) => {
 };
 const present = (a, hasCost) => {
   const gp = a.revenue - a.cost;
+  /* Only quote a margin when Odoo actually holds a cost for what was sold.
+     Some reps sell almost nothing but freight and service lines, which carry no
+     standard cost: summing those as cost zero produced a 100% margin — a number
+     that is not just wrong but unbelievable, and one wrong row costs the reader
+     their trust in every other row. Where the cost is missing the margin is left
+     blank and said to be missing. Revenue and recorded cost are untouched, so
+     the rows still add up to the company total. */
+  const covered = hasCost && costCovered(a.revenue, a.costedRevenue);
   return {
     revenue: toDollars(a.revenue),
     cost: hasCost ? toDollars(a.cost) : null,
-    grossProfit: hasCost ? toDollars(gp) : null,
-    marginPct: hasCost ? pct1(gp, a.revenue) : null,
+    grossProfit: covered ? toDollars(gp) : null,
+    marginPct: covered ? pct1(gp, a.revenue) : null,
+    /* What share of the revenue has a cost behind it, and whether the margin was
+       withheld because too little of it did. */
+    costCoverage: hasCost ? pct1(a.costedRevenue, a.revenue) : null,
+    marginWithheld: hasCost && !covered,
     invoices: a.invoices, credits: a.credits,
     creditValue: toDollars(a.creditValue),
     discounts: toDollars(a.discount),
@@ -131,6 +143,9 @@ function reconcile(rows, totalDollars, get, set) {
 }
 const restate = (r) => {
   if (r.cost == null) return;
+  /* A margin withheld for want of cost data stays withheld. Reconciliation
+     moves cents between rows; it does not conjure the cost that is missing. */
+  if (r.marginWithheld) { r.grossProfit = null; r.marginPct = null; return; }
   r.grossProfit = Math.round((r.revenue - r.cost) * 100) / 100;
   r.marginPct = r.revenue > 0 ? Math.round((r.grossProfit / r.revenue) * 1000) / 10 : null;
 };

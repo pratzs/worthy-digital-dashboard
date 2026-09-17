@@ -391,7 +391,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   const money = exact ? fmtExact : fmtK;
   const keep  = (n) => exact ? n : Math.round(n);
 
-  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev > 0 ? 600 : 400 });
+  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : rev < 0 ? "#dc2626" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev !== 0 ? 600 : 400 });
   const repCellStyle = { padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" };
   const headStyle    = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
   const numStyle     = (v) => ({ padding: "10px 12px", textAlign: "right", color: T.textSub, fontSize: 12, whiteSpace: "nowrap" });
@@ -410,6 +410,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
     };
   });
   const hasMargin = annualRows.some(r => r.marginPct !== null && r.marginPct !== undefined);
+  // Reps whose margin was withheld because the source holds no cost for what they sold.
+  const withheld  = (repMargins || []).filter(m => m.marginWithheld);
+  const darkish   = T.bgTableHead;
 
   const monthlyPivot = salespeopleMonthly || [];
 
@@ -422,7 +425,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
       return w || { revenue: 0, orders: 0 };
     }),
     monthTotal: rep.weekly.filter(x => x.month === weeklyMonth).reduce((s, x) => s + x.revenue, 0),
-  })).filter(rep => rep.monthTotal > 0 || (salespeopleWeekly || []).length <= 3);
+  })).filter(rep => rep.monthTotal !== 0 || (salespeopleWeekly || []).length <= 3);
 
   const pillBtn = (active) => ({
     padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
@@ -523,7 +526,11 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                       const mColor = mm?.marginPct != null ? (mm.marginPct >= 20 ? "#4ade80" : mm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
                       return (
                         <td key={mn} style={{ ...cellStyle(m.revenue), verticalAlign: "top" }}>
-                          {m.revenue > 0 ? (
+                          {/* A month of net returns is a real, negative figure. Printing
+                              it as an em dash hid it while the row total still counted
+                              it, so the columns stopped adding up to the total beside
+                              them. Only a true zero is blank. */}
+                          {m.revenue !== 0 ? (
                             <>
                               <div>{money(m.revenue, currency)}</div>
                               {mm?.marginPct != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{mm.marginPct}%</div>}
@@ -553,13 +560,18 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
                   {displayMonths.map((mn, fi) => {
                     const colTotal  = monthlyPivot.reduce((s, rep) => s + (monthAt(rep.months, fi)?.revenue || 0), 0);
-                    const colGP     = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.grossProfit || 0), 0) : null;
+                    /* Built from revenue and cost, never from the rows' gross profit.
+                       A row whose margin was withheld has no gross profit to add, so
+                       summing that column would quietly shrink the total away from the
+                       company figure printed at the top of the page. */
+                    const colCost   = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.cost || 0), 0) : 0;
                     const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.revenue || 0), 0) : 0;
+                    const colGP     = hasMargin ? colMargRv - colCost : null;
                     const colMargin = colMargRv > 0 && colGP != null ? parseFloat(((colGP / colMargRv) * 100).toFixed(1)) : null;
                     const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
                     return (
                       <td key={mn} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
-                        {colTotal > 0 ? (
+                        {colTotal !== 0 ? (
                           <>
                             <div>{money(keep(colTotal), currency)}</div>
                             {colMargin != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{colMargin}%</div>}
@@ -570,9 +582,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   })}
                   {(() => {
                     const grandTotal = monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0);
-                    const totalGP    = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.grossProfit || 0), 0) : null;
                     const totalMargRv = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.marginableRevenue || m.revenue || 0), 0) : 0;
                     const totalCostF  = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.cost || 0), 0) : 0;
+                    const totalGP    = hasMargin ? totalMargRv - totalCostF : null;
                     const totalMarginPct = totalMargRv > 0 ? parseFloat((((totalMargRv - totalCostF) / totalMargRv) * 100).toFixed(1)) : null;
                     return (
                       <>
@@ -632,7 +644,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                         const wColor = wm?.marginPct != null ? (wm.marginPct >= 20 ? "#4ade80" : wm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
                         return (
                           <td key={wi} style={{ ...cellStyle(w.revenue), verticalAlign: "top" }}>
-                            {w.revenue > 0 ? (
+                            {/* Negative weeks are shown, not hidden — see the monthly
+                                cells above. A blank cell means no trade at all. */}
+                            {w.revenue !== 0 ? (
                               <>
                                 <div>{money(w.revenue, currency)}</div>
                                 {wm?.marginPct != null && <div style={{ fontSize: 9, color: wColor, fontWeight: 700, marginTop: 2 }}>{wm.marginPct}%</div>}
@@ -642,7 +656,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                         );
                       })}
                       <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700, verticalAlign: "top" }}>
-                        {rep.monthTotal > 0 ? (
+                        {rep.monthTotal !== 0 ? (
                           <>
                             <div>{money(rep.monthTotal, currency)}</div>
                             {mo?.marginPct != null && <div style={{ fontSize: 9, color: mo.marginPct >= 20 ? "#4ade80" : mo.marginPct >= 0 ? accent : "#f87171", fontWeight: 700, marginTop: 2 }}>{mo.marginPct}%</div>}
@@ -666,6 +680,22 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
             </table>
           </div>
         </>
+      )}
+
+      {/* Say plainly why a margin is blank, and for whom. A blank cell with no
+          explanation reads as a broken page; named, it reads as a known gap. */}
+      {withheld.length > 0 && (
+        <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 10,
+                      background: darkish, border: `1px solid ${T.borderFaint}`,
+                      fontSize: 11, color: T.textMuted, lineHeight: 1.6 }}>
+          <strong style={{ color: T.textSub }}>Why some margins are blank.</strong>{" "}
+          {withheld.map(w => w.name).join(", ")}{" "}
+          {withheld.length === 1 ? "sells" : "sell"} mostly things the system holds no cost
+          for — freight and service lines. Their sales are counted in full
+          ({money(keep(withheld.reduce((s, w) => s + (w.revenue || 0), 0)), currency)} in total),
+          but a margin would have read close to 100% simply because the cost is missing,
+          so it is left blank instead.
+        </div>
       )}
     </div>
   );
@@ -1292,9 +1322,11 @@ export default function EcommerceDashboard() {
     .map(r => ({
       name: r.name, revenue: r.revenue, cost: r.cost, grossProfit: r.grossProfit,
       marginableRevenue: r.revenue, marginPct: r.marginPct,
+      marginWithheld: r.marginWithheld, costCoverage: r.costCoverage,
       months: r.months.map(m => ({
         month: m.label, revenue: m.revenue, cost: m.cost,
         grossProfit: m.grossProfit, marginPct: m.marginPct, started: m.started,
+        marginWithheld: m.marginWithheld, costCoverage: m.costCoverage,
       })),
       // Weeks carry a margin once the selected month's week costs have loaded.
       weeks: (r.weeks || []).map(w => {
@@ -1848,6 +1880,19 @@ export default function EcommerceDashboard() {
                   : d.hasCost ? ", and cost is each product's standard cost as it stands today."
                               : ". Odoo holds no product costs for this company, so no margin is shown."}
               </div>
+              {/* Be up front about the sales that carry no cost. It is a small share
+                  company-wide, but it is the whole reason a handful of reps show no
+                  margin at all, and a reader who spots the blanks deserves the size
+                  of it rather than a guess. */}
+              {activeStore.id !== "luxe" && d.hasCost && t.uncoveredRevenue > 0 && (
+                <div>
+                  <strong>{fmtExact(t.uncoveredRevenue, activeStore.currency)}</strong> of these sales
+                  ({(100 - (t.costCoverage ?? 100)).toFixed(1)}%) are freight and service lines that Odoo holds
+                  no cost for. They count as sales in full and as nothing on cost, so the margin above is
+                  flattering by that much. Where a single rep sells almost nothing else, the margin is left
+                  blank rather than shown as 100%.
+                </div>
+              )}
               {(() => {
                 // Only call out months where the mis-costing is material — above
                 // 1% of that month's sales. Below that it is ordinary trading.

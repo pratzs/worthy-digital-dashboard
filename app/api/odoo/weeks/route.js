@@ -8,7 +8,7 @@
  * and nothing more.
  */
 import { NextResponse } from 'next/server';
-import { toCents, toDollars, pct1 } from '@/lib/ostendo';
+import { toCents, toDollars, pct1, costCovered } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -70,11 +70,12 @@ export async function GET(request) {
 
     // Cost per rep per day, from that rep's lines grouped by product and day.
     const cost = new Map();
+    const costedRev = new Map();   // "rep|week" -> cents of revenue that HAS a cost behind it
     const entries = [...repIds];
     const runOne = async ([name, id]) => {
       const fetchSide = (type, sign) => exec('account.move.line', 'read_group',
         [[...lineDom(type), ['move_id.invoice_user_id', '=', id]],
-         ['quantity:sum'], ['product_id', 'date:day']], { lazy: false })
+         ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:day']], { lazy: false })
         .then((rows) => rows.map((r) => ({ ...r, _sign: sign })));
       const [inv, ref] = await Promise.all([fetchSide('out_invoice', 1), fetchSide('out_refund', -1)]);
       const pids = [...new Set([...inv, ...ref].map((r) => r.product_id && r.product_id[0]).filter(Boolean))];
@@ -85,6 +86,10 @@ export async function GET(request) {
         const unit = std.get(r.product_id && r.product_id[0]) || 0;
         const k = `${name}|${weekOf(d)}`;
         cost.set(k, (cost.get(k) || 0) + toCents((Number(r.quantity) || 0) * unit) * r._sign);
+        /* Only a product that carries a standard cost can back its own revenue.
+           Freight and service lines sell for real money at cost zero, and
+           counting them as costed is what turns a week into a 100% margin. */
+        if (unit > 0) costedRev.set(k, (costedRev.get(k) || 0) + toCents(r.price_subtotal ?? 0) * r._sign);
       }
     };
     for (let i = 0; i < entries.length; i += 5) {
@@ -95,12 +100,18 @@ export async function GET(request) {
     const rows = [...new Set([...revenue.keys(), ...cost.keys()])].map((k) => {
       const [name, week] = k.split('|');
       const rev = revenue.get(k) || 0, cst = cost.get(k);
+      const cr = costedRev.get(k) || 0;
+      /* Same rule as the financial-year figures: quote a margin only where Odoo
+         holds a cost for nearly everything sold in that week. */
+      const covered = hasCost && cst != null && costCovered(rev, cr);
       return {
         name, week: Number(week),
         revenue: toDollars(rev),
         cost: hasCost && cst != null ? toDollars(cst) : null,
-        grossProfit: hasCost && cst != null ? toDollars(rev - cst) : null,
-        marginPct: hasCost && cst != null ? pct1(rev - cst, rev) : null,
+        grossProfit: covered ? toDollars(rev - cst) : null,
+        marginPct: covered ? pct1(rev - cst, rev) : null,
+        costCoverage: hasCost && cst != null ? pct1(cr, rev) : null,
+        marginWithheld: hasCost && cst != null && !covered,
       };
     });
 
