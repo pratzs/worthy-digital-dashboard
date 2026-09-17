@@ -443,16 +443,25 @@ export async function GET(request) {
             [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id]],
              ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
           const rows = [...inv, ...(refundByRep.get(name) || [])];
-          const byMonth = new Map(); let total = 0, costedRev = 0;
+          /* Costed revenue is kept per month as well as for the year. Carrying
+             only the year figure made a single month's cost coverage read against
+             twelve months of costed sales — 3,066% for one rep — which is how a
+             month with no cost at all still passed for a real 100% margin. */
+          const byMonth = new Map(), crByMonth = new Map();
+          let total = 0, costedRev = 0;
           for (const r of rows) {
             const k = rangeStart(r, 'date:month').substring(0, 7);
             const unit = costOf.get(r.product_id && r.product_id[0]) || 0;
             const cents = toCents((Number(r.quantity) || 0) * unit);
             byMonth.set(k, (byMonth.get(k) || 0) + cents);
             total += cents;
-            if (unit > 0) costedRev += toCents(r.price_subtotal ?? 0);
+            if (unit > 0) {
+              const sub = toCents(r.price_subtotal ?? 0);
+              costedRev += sub;
+              crByMonth.set(k, (crByMonth.get(k) || 0) + sub);
+            }
           }
-          repCost.set(name, { byMonth, total, costedRev });
+          repCost.set(name, { byMonth, crByMonth, total, costedRev });
         } catch (e) {
           problems.push(`cost for ${name} could not be read (${e.message.slice(0, 80)})`);
         }
@@ -472,17 +481,17 @@ export async function GET(request) {
       const c = sumRange(days, range.start, range.end, name);
       const p = sumRange(daysPrior, prior.start, prior.end, name);
       const rc = repCost.get(name);
-      const withCost = (acc, cents) => (rc ? { ...acc, cost: cents || 0, costedRevenue: rc.costedRev || 0 } : acc);
+      const withCost = (acc, cents, costedRev) => (rc ? { ...acc, cost: cents || 0, costedRevenue: costedRev || 0 } : acc);
       return {
         name,
-        ...present(withCost(c, rc?.total), Boolean(rc)),
+        ...present(withCost(c, rc?.total, rc?.costedRev), Boolean(rc)),
         prior: present(p, false),
         growthPct: priorComparable ? growth(c.revenue, p.revenue) : null,
         months: monthRows.map((m) => {
           const acc = m.started ? sumRange(days, `${m.key}-01`, m.through, name) : blank();
           return {
             key: m.key, label: m.label, started: m.started,
-            ...present(withCost(acc, rc?.byMonth.get(m.key)), Boolean(rc) && m.started),
+            ...present(withCost(acc, rc?.byMonth.get(m.key), rc?.crByMonth.get(m.key)), Boolean(rc) && m.started),
           };
         }),
         // Cost is held per month, so a week shows revenue and orders without a margin.
