@@ -2506,7 +2506,11 @@ export default function EcommerceDashboard() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
               <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs" subtitle="Highest velocity by units sold — keep stocked & push wider"
                 loading={advLoading} currency={activeStore.currency}
-                data={(advancedData.curr?.topProducts || []).slice().sort((a, b) => (b.unitsSold || 0) - (a.unitsSold || 0)).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                /* Read the fast-moving list the endpoint builds from EVERY product.
+                   Re-sorting the top-by-revenue list by units cannot find a fast
+                   mover that earns little: nine of these twenty rows were wrong,
+                   and the real leader — 4,676 units — was not on the page at all. */
+                data={(advancedData.curr?.fastMoving || []).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
                 columns={[
                   { key: "name",      label: "Product",    color: T.text },
                   { key: "category",  label: "Category",   color: T.textMuted },
