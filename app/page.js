@@ -1714,7 +1714,22 @@ export default function EcommerceDashboard() {
           ))}
         </div>
 
+        {/* Anything the source system could not give us, said plainly, so an
+            empty table is never mistaken for a quiet month. */}
+        {onFYView() && (fyPayload(selectedYear)?.problems || []).length > 0 && (
+          <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12.5, color: "#b45309", lineHeight: 1.7 }}>
+            <strong>Some tables below are empty because Odoo could not return the data.</strong>{" "}
+            {fyPayload(selectedYear).problems.some(p => /product/i.test(p))
+              ? <>Odoo cannot build a display name for at least one product in this company — a variant with an
+                 incomplete attribute — and the error stops the whole product query. Top Products and Top Categories
+                 stay empty until that product record is corrected. Sales, customers and every figure above are
+                 unaffected.</>
+              : fyPayload(selectedYear).problems.join(' ')}
+          </div>
+        )}
+
         {activeStore.id !== "luxe" && prevLoaded && (() => {
+          if (onFYView()) return null;   // financial-year companies explain themselves below
           const lastCmp = [...Array(12).keys()].filter(monthComparable).pop();
           if (lastCmp === undefined || lastCmp === 11) return null;
           return (
@@ -1730,7 +1745,7 @@ export default function EcommerceDashboard() {
         {/* Plain-English statement of exactly what is on screen. Every number
             below is for this period, and every comparison is against the
             matching stretch of last year — not against a longer one. */}
-        {activeStore.id === "luxe" && fyPayload(selectedYear) && (() => {
+        {onFYView() && fyPayload(selectedYear) && (() => {
           const d   = fyPayload(selectedYear);
           const pretty = (isoStr) => {
             if (!isoStr) return "—";
@@ -1752,8 +1767,11 @@ export default function EcommerceDashboard() {
                   ran. Stating it plainly stops a hand-run query on the live
                   database looking like a disagreement. */}
               <div>
-                Figures are complete to the <strong>close of business on {pretty(d.range.end)}</strong>, which is the most
-                recent day in Ostendo’s nightly backup. Trading entered since then appears after tonight’s run.
+                {activeStore.id === "luxe"
+                  ? <>Figures are complete to the <strong>close of business on {pretty(d.range.end)}</strong>, which is
+                     the most recent day in Ostendo’s nightly backup. Trading entered since then appears after
+                     tonight’s run.</>
+                  : <>Figures are live from Odoo, complete to <strong>{pretty(d.range.end)}</strong>.</>}
               </div>
               {t.rebates !== 0 && (
                 <div>
@@ -1767,7 +1785,10 @@ export default function EcommerceDashboard() {
               <div>
                 <strong>{t.invoices.toLocaleString()}</strong> invoices
                 {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
-                {" "}· sales are counted without GST, and cost is what each item cost on the day it was invoiced.
+                {" "}· sales are counted without GST{activeStore.id === "luxe"
+                  ? ", and cost is what each item cost on the day it was invoiced."
+                  : d.hasCost ? ", and cost is each product's standard cost as it stands today."
+                              : ". Odoo holds no product costs for this company, so no margin is shown."}
               </div>
               {(() => {
                 // Only call out months where the mis-costing is material — above
