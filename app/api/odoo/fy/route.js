@@ -110,6 +110,31 @@ const present = (a, hasCost) => {
 };
 const growth = (c, p) => (p > 0 ? Math.round(((c - p) / p) * 1000) / 10 : null);
 
+/**
+ * Make rounded rows add up to the rounded total. Each rep's cost comes back from
+ * its own query, so the rows can land a cent away from the company figure. Each
+ * keeps its own correctly rounded value; the odd cent goes to the largest row,
+ * where it distorts least.
+ */
+function reconcile(rows, totalDollars, get, set) {
+  if (!rows.length) return;
+  const totalC = Math.round(totalDollars * 100);
+  const sumC = rows.reduce((a, r) => a + Math.round(get(r) * 100), 0);
+  let residual = totalC - sumC;
+  if (!residual) return;
+  const order = [...rows].sort((a, b) => Math.abs(get(b)) - Math.abs(get(a)));
+  for (let i = 0; residual !== 0 && i < order.length; i++) {
+    const step = residual > 0 ? 1 : -1;
+    set(order[i], (Math.round(get(order[i]) * 100) + step) / 100);
+    residual -= step;
+  }
+}
+const restate = (r) => {
+  if (r.cost == null) return;
+  r.grossProfit = Math.round((r.revenue - r.cost) * 100) / 100;
+  r.marginPct = r.revenue > 0 ? Math.round((r.grossProfit / r.revenue) * 1000) / 10 : null;
+};
+
 /** "2026-04-17 00:00:00" or "2026-04-17" -> "2026-04-17" */
 const dayOf = (v) => String(v ?? '').substring(0, 10);
 
@@ -515,6 +540,18 @@ export async function GET(request) {
       cost: hasCost ? Math.round(v.cost * 100) / 100 : null,
       margin: hasCost ? pct1(toCents(v.revenue - v.cost), toCents(v.revenue)) : null,
     })).sort((a, b) => b.revenue - a.revenue);
+
+    /* Rows must add up to the totals printed beneath them. */
+    if (hasCost) {
+      const costed = repRows.filter((r) => r.cost != null);
+      reconcile(costed, present(total, true).cost, (r) => r.cost, (r, v) => { r.cost = v; });
+      costed.forEach(restate);
+      for (const r of costed) {
+        const ms = r.months.filter((m) => m.started && m.cost != null);
+        reconcile(ms, r.cost, (m) => m.cost, (m, v) => { m.cost = v; });
+        ms.forEach(restate);
+      }
+    }
 
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
