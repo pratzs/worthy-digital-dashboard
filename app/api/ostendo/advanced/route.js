@@ -27,7 +27,7 @@
  */
 import { NextResponse } from 'next/server';
 import {
-  ostendoSql, toCents, toDollars, pct1, fyRange, parseIso, iso, q, normaliseDate,
+  ostendoSql, toCents, toDollars, pct1, fyRange, parseIso, iso, q, normaliseDate, nzToday, nzFinancialYear,
 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
@@ -45,9 +45,9 @@ const SALES = (start, end) =>
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const today = new Date();
+  const today = nzToday();                       // the NZ date, not the server's UTC date
   const fyParam = parseInt(searchParams.get('fy') || '', 10);
-  const fy = fyParam || (today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1);
+  const fy = fyParam || nzFinancialYear();
 
   let start = searchParams.get('startDate');
   let end   = searchParams.get('endDate');

@@ -25,7 +25,7 @@
 import { NextResponse } from 'next/server';
 import {
   ostendoSql, resolveRep, toCents, toDollars, pct1,
-  fyRange, priorRange, fyMonthKeys, parseIso, iso, q, normaliseDate,
+  fyRange, priorRange, fyMonthKeys, parseIso, iso, q, normaliseDate, nzToday, nzFinancialYear,
 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
@@ -254,9 +254,8 @@ function sumRange(days, from, to, codes = null) {
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const today = new Date();
-  const fy    = parseInt(searchParams.get('fy') || '', 10) ||
-                (today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1);
+  const today = nzToday();                       // the NZ date, not the server's UTC date
+  const fy    = parseInt(searchParams.get('fy') || '', 10) || nzFinancialYear();
 
   try {
     // Find the real extent of the data first. Comparing "1 Apr to today" against

@@ -28,6 +28,7 @@
 import { NextResponse } from 'next/server';
 import {
   toCents, toDollars, pct1, costCovered, fyRange, priorRange, fyMonthKeys, parseIso, iso, MONTH_NAMES,
+  nzToday, nzFinancialYear,
 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
@@ -159,10 +160,9 @@ const rangeStart = (row, key) => dayOf(row?.__range?.[key]?.from);
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const today = new Date();
+  const today = nzToday();                       // the NZ date, not the server's UTC date
   const cid = parseInt(searchParams.get('company') || '4', 10);
-  const fy = parseInt(searchParams.get('fy') || '', 10) ||
-             (today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1);
+  const fy = parseInt(searchParams.get('fy') || '', 10) || nzFinancialYear();
 
   try {
     const exec = await connect();
