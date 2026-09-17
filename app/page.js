@@ -1049,6 +1049,7 @@ export default function EcommerceDashboard() {
     aov:               m.aov,
     started:           m.started,
     complete:          m.complete,
+    priorComparable:   m.priorComparable !== false,
     daysElapsed:       m.daysElapsed,
     daysInMonth:       m.daysInMonth,
     hasCostData:       Boolean(m.started && m.cost !== 0),
@@ -1255,7 +1256,8 @@ export default function EcommerceDashboard() {
       prevRevenue:  prev[i]?.revenue || 0,
       prevOrders:   prev[i]?.orders  || 0,
       prevMarginPct: (() => { const pr = prev[i]?.revenue || 0, pc = prev[i]?.totalCost || 0; return (prev[i]?.hasCostData && pr > 0) ? Math.round(((pr - pc) / pr) * 100) : null; })(),
-      momGrowth:    prevLoaded ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
+      momGrowth:    (prevLoaded && d.priorComparable !== false)
+                      ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
     };
   });
 
@@ -1327,9 +1329,11 @@ export default function EcommerceDashboard() {
   };
   // Inject accent into T so sub-components can access it
   T.accent = accent;
-  const revG   = prevLoaded ? calcGrowth(totalRev, prevRev) : null;
-  const ordG   = prevLoaded ? calcGrowth(totalOrd, prevOrd) : null;
-  const aovG   = prevLoaded ? calcGrowth(avgAOV,   prevAOV) : null;
+  const comparablePrior = activeStore.id !== "luxe"
+    || fyPayload(selectedYear)?.totals?.priorComparable !== false;
+  const revG   = (prevLoaded && comparablePrior) ? calcGrowth(totalRev, prevRev) : null;
+  const ordG   = (prevLoaded && comparablePrior) ? calcGrowth(totalOrd, prevOrd) : null;
+  const aovG   = (prevLoaded && comparablePrior) ? calcGrowth(avgAOV,   prevAOV) : null;
 
   // ── Contextual KPIs — update based on active view ─────────────────────────
   // Weekly tab → show selected month totals; Monthly/YoY → show period totals
@@ -1624,11 +1628,25 @@ export default function EcommerceDashboard() {
                 {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
                 {" "}· sales are counted without GST, and cost is what each item cost on the day it was invoiced.
               </div>
-              <div>
-                Every “vs last year” figure compares {pretty(d.range.start)}–{pretty(d.range.end)} with{" "}
-                <strong>{pretty(d.prior.start)}–{pretty(d.prior.end)}</strong> — the same {dayCount} days, so a part-finished
-                year is never measured against a whole one.
-              </div>
+              {t.priorComparable === false ? (
+                <div style={{ color: "#b45309" }}>
+                  <strong>No “vs last year” figures are shown for this year.</strong> Ostendo’s records only start{" "}
+                  {pretty(d.dataAvailable?.first)}, so {pretty(d.prior.start)}–{pretty(d.prior.end)} is not fully on
+                  file and any growth number would be measuring missing history, not trade.
+                </div>
+              ) : (
+                <div>
+                  Every “vs last year” figure compares {pretty(d.range.start)}–{pretty(d.range.end)} with{" "}
+                  <strong>{pretty(d.prior.start)}–{pretty(d.prior.end)}</strong> — the same {dayCount} days, so a
+                  part-finished year is never measured against a whole one.
+                </div>
+              )}
+              {d.dataAvailable?.coversWholeYear === false && (
+                <div style={{ color: "#b45309" }}>
+                  Note: Ostendo’s records begin {pretty(d.dataAvailable?.first)}, part-way through this financial
+                  year, so the totals below cover only the part of the year that is on file.
+                </div>
+              )}
             </div>
           );
         })()}

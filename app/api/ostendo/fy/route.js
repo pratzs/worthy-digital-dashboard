@@ -155,7 +155,8 @@ export async function GET(request) {
     const bounds = await ostendoSql(
       `SELECT MIN(INVOICEDATE) AS FIRSTD, MAX(INVOICEDATE) AS LASTD FROM SALESINVOICEHEADER`
     ).catch(() => []);
-    const lastLoaded = normaliseDate(bounds?.[0]?.LASTD);
+    const lastLoaded  = normaliseDate(bounds?.[0]?.LASTD);
+    const firstLoaded = normaliseDate(bounds?.[0]?.FIRSTD);
 
     const fullRange = fyRange(fy, today);
     const range = lastLoaded && lastLoaded < fullRange.end
@@ -175,6 +176,14 @@ export async function GET(request) {
 
     const todayIso = range.end;   // the last day we actually hold data for
     const months   = fyMonthKeys(fy);
+
+    /* Ostendo's records begin part-way through a financial year. Comparing a
+     * full year against a window that is mostly missing produces a number that
+     * looks like explosive growth and means nothing, so any comparison whose
+     * earlier window starts before the first invoice on file is withheld
+     * rather than shown. */
+    const covered = (windowStart) => !firstLoaded || windowStart >= firstLoaded;
+    const priorComparable = covered(prior.start);
 
     /* ── Months ──────────────────────────────────────────────────────────────
      * A month in progress is compared against the same days last year, never
@@ -206,7 +215,9 @@ export async function GET(request) {
         ...present(curr),
         prior:      present(priorSum),
         priorFull:  present(priorFull),
-        growthPct:  started ? growth(curr.revenue, priorSum.revenue) : null,
+        priorComparable: started && covered(shiftYear(first)),
+        growthPct: started && covered(shiftYear(first))
+          ? growth(curr.revenue, priorSum.revenue) : null,
       };
     });
 
@@ -271,7 +282,7 @@ export async function GET(request) {
         named: name !== [...codes][0],
         ...present(curr),
         prior:     present(prev),
-        growthPct: growth(curr.revenue, prev.revenue),
+        growthPct: priorComparable ? growth(curr.revenue, prev.revenue) : null,
         months: perMonth,
         weeks:  perWeek,
       };
@@ -291,17 +302,24 @@ export async function GET(request) {
       generatedAt: new Date().toISOString(),
       range: { ...range, throughLabel: range.complete ? 'full year' : `to ${range.end}` },
       prior,
-      dataAvailable: { first: firstSeen, last: lastSeen },
+      dataAvailable: {
+        first: firstSeen, last: lastSeen,
+        // Is the whole of THIS financial year on file?
+        coversWholeYear: Boolean(firstLoaded && firstLoaded <= range.start),
+      },
       months: monthRows,
       weeks:  weekRows,
       reps:   repRows,
       totals: {
         ...present(currTotal),
-        prior:     present(priorTotal),
-        growthPct: growth(currTotal.revenue, priorTotal.revenue),
-        comparable: !range.complete
-          ? `1 Apr – ${range.end} vs 1 Apr – ${prior.end}`
-          : 'full financial year vs full financial year',
+        prior:      present(priorTotal),
+        growthPct:  priorComparable ? growth(currTotal.revenue, priorTotal.revenue) : null,
+        priorComparable,
+        comparable: !priorComparable
+          ? `no comparison shown — Ostendo's records start ${firstLoaded || 'later'}, so ${prior.start} to ${prior.end} is not fully on file`
+          : !range.complete
+            ? `1 Apr – ${range.end} vs 1 Apr – ${prior.end}`
+            : 'full financial year vs full financial year',
       },
     });
   } catch (err) {
