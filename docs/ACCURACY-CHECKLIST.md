@@ -130,3 +130,48 @@ system. Evidence is recorded beside each one.
   credit note of NZ$2,701.35 that carries no product lines — a price adjustment,
   not a return — so no goods came back and no cost reversed. Net revenue
   NZ$798.52 against NZ$2,883.90 of cost. The figure is correct.
+
+### Checked against Odoo itself, not just against ourselves
+
+Every figure above was first proven self-consistent (1,864 checks). That only
+shows the dashboard agrees with itself. A temporary route then recomputed the
+same numbers from whole Odoo records in plain JavaScript — no `read_group`, no
+shared helper, no micro-dollar arithmetic, no reconciliation — and compared.
+
+- [x] **18. 302 figures agree to the cent** across North FY26, the prior
+      comparison period, all six started months, all 16 reps (revenue, cost and
+      costed revenue each), the top 20 products, top 20 categories and top 30
+      customers (revenue, order count and last-order date). Record counts were
+      complete both times: 7,691 moves and 132,400 lines for FY26, matching
+      Odoo's own `search_count`, with no orphaned lines and none missing a date.
+
+- [x] **19. Category units were summed after rounding.** Each product's units
+      were rounded to a whole item before being added into its category, so half
+      a unit per product accumulated — Soft Drinks read 19,299 against a true
+      19,296.71. Raw quantities are summed and rounded once.
+
+- [x] **20. On Hand was blank on all 20 Fast-Moving rows.** Odoo had the figure;
+      the route never asked. Fetched for the ~60 products actually shown, with
+      company context — without it Odoo sums stock across every company.
+
+- [x] **21. Margins were quoted two ways on one screen.** The Monthly Breakdown
+      footer rounded to whole numbers and read 14% while the rep table read 13.8%
+      for the same trading; a KPI card read 12% where September is 12.1%. Seven
+      call sites now share one helper and every margin carries one decimal.
+
+- [x] **22. Three Orders columns were empty on every row.** Top Customers read
+      `orders` where the getter emits `orderCount`; At Risk and Lapsed built a
+      correct `orderCount` then overwrote it with an undefined `c.orders`. A
+      sweep of every table on the page now finds no all-blank column.
+
+### Known, not a defect
+
+- The service account cannot read `product.product` records belonging to other
+  companies ("security restrictions … Product Variant"). It does not affect any
+  figure — every product North sells is readable — but a query that sweeps
+  products without a company filter will fail.
+- Oceania (company 1) still returns `sequence item 1: expected str instance,
+  bool found` on any product read. The independent route, using plain
+  `search_read` with no grouping, fails identically — so the fault is a broken
+  product-variant record in Odoo, not the dashboard's query. Oceania therefore
+  shows revenue but no margin, products or categories, and says so on screen.
