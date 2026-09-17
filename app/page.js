@@ -958,6 +958,11 @@ export default function EcommerceDashboard() {
         return;
       }
 
+      // Apr-Dec belong to the selected financial year, Jan-Mar to the next.
+      if (storeId !== "luxe" && FY_SOURCE[storeId]) {
+        const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
+        fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
+      }
       await Promise.all([
         fetchFYFor(storeId, selectedYear),
         // Worthy North also has Online and POS tabs served by Shopify.
@@ -970,10 +975,6 @@ export default function EcommerceDashboard() {
       // (sequential to avoid hammering Ostendo with concurrent header fetches)
       // South is served entirely by the FY endpoint — no calendar-year stitching,
       // no separate cost fetch, so no way for the two to disagree.
-      if (storeId !== "luxe" && onFY(storeId)) {
-        const k = fyPayload(selectedYear, storeId)?.months.find(m => MONTH_IDX[m.label] === weeklyMonth)?.key;
-        if (k) fetchOdooWeeks(storeId, k);   // non-blocking
-      }
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       // Skip expensive fetch if already cached (set above)
       if (cacheRef.current[advCacheKey]) return;

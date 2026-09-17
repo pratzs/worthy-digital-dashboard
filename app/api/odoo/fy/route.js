@@ -398,18 +398,36 @@ export async function GET(request) {
     const repCost = new Map();
     if (hasCost && repIds.size) {
       const entries = [...repIds];
+      /* Every credit-note line at once, with the salesperson of its move, so the
+         per-rep loop below needs only ONE query each instead of two. */
+      const refundByRep = new Map();
+      try {
+        const [refMoves, refLines] = await Promise.all([
+          exec('account.move', 'search_read',
+            [[...moveDomain(cid, range.start, range.end), ['move_type', '=', 'out_refund']]],
+            { fields: ['invoice_user_id'], limit: 0 }, 25000),
+          exec('account.move.line', 'search_read',
+            [costLineDomain(cid, range.start, range.end, 'out_refund')],
+            { fields: ['move_id', 'product_id', 'quantity', 'price_subtotal', 'date'], limit: 0 }, 25000),
+        ]);
+        const repOfMove = new Map(refMoves.map((m) => [m.id, m.invoice_user_id ? m.invoice_user_id[1] : 'Unassigned']));
+        for (const l of refLines) {
+          const name = repOfMove.get(l.move_id && l.move_id[0]); if (!name || !l.date) continue;
+          if (!refundByRep.has(name)) refundByRep.set(name, []);
+          refundByRep.get(name).push({
+            product_id: l.product_id, quantity: -(Number(l.quantity) || 0),
+            price_subtotal: -(Number(l.price_subtotal) || 0),
+            __range: { 'date:month': { from: `${String(l.date).substring(0, 7)}-01` } },
+          });
+        }
+      } catch (e) { problems.push(`credit-note lines could not be split by rep (${e.message.slice(0, 80)})`); }
+
       const runOne = async ([name, id]) => {
         try {
-          const [inv, ref] = await Promise.all([
-            exec('account.move.line', 'read_group',
-              [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id]],
-               ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000),
-            exec('account.move.line', 'read_group',
-              [[...costLineDomain(cid, range.start, range.end, 'out_refund'), ['move_id.invoice_user_id', '=', id]],
-               ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000),
-          ]);
-          const rows = [...inv, ...ref.map((r) => ({ ...r,
-            quantity: -(Number(r.quantity) || 0), price_subtotal: -(Number(r.price_subtotal) || 0) }))];
+          const inv = await exec('account.move.line', 'read_group',
+            [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id]],
+             ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
+          const rows = [...inv, ...(refundByRep.get(name) || [])];
           const byMonth = new Map(); let total = 0, costedRev = 0;
           for (const r of rows) {
             const k = rangeStart(r, 'date:month').substring(0, 7);
