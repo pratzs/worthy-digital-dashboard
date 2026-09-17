@@ -70,9 +70,15 @@ const lineDomain = (cid, start, end) => [
   ['move_id.invoice_date', '<=', end], ['display_type', '=', 'product'],
 ];
 /* Grouping by product breaks on lines with no product or no accounting date.
- * Neither can carry a cost, so they are excluded from the cost query only. */
-const costLineDomain = (cid, start, end) => [
+ * Neither can carry a cost, so they are excluded from the cost query only.
+ *
+ * `type` splits invoices from credit notes. Odoo stores a credit note's line
+ * quantity and subtotal as POSITIVE — the sign lives on the move, not the line —
+ * so summing them raw ADDS the cost of returned goods to cost of sales instead
+ * of taking it off. Each side is fetched separately and the credit side negated. */
+const costLineDomain = (cid, start, end, type) => [
   ...lineDomain(cid, start, end), ['product_id', '!=', false], ['date', '!=', false],
+  ...(type ? [['move_id.move_type', '=', type]] : []),
 ];
 
 const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0, discount: 0,
@@ -149,8 +155,17 @@ export async function GET(request) {
          * whole call fails with "expected str instance, bool found". Reading the
          * lines directly avoids the grouping; if that fails too the reason is
          * reported rather than leaving an empty table with no explanation. */
-        exec('account.move.line', 'read_group', [costLineDomain(cid, start, end),
-          ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false })
+        Promise.all([
+          exec('account.move.line', 'read_group', [costLineDomain(cid, start, end, 'out_invoice'),
+            ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }),
+          exec('account.move.line', 'read_group', [costLineDomain(cid, start, end, 'out_refund'),
+            ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }),
+        ]).then(([inv, ref]) => [
+          ...inv,
+          // Returned goods reduce both quantity sold and cost of sales.
+          ...ref.map((r) => ({ ...r, quantity: -(Number(r.quantity) || 0),
+                               price_subtotal: -(Number(r.price_subtotal) || 0) })),
+        ])
           .catch(async (e) => {
             problems.push(`grouping lines by product failed (${e.message.slice(0, 90)}); read line by line instead`);
             const rows = [];
@@ -177,9 +192,15 @@ export async function GET(request) {
             return [...agg.values()];
           }),
         // Discount value recovered from the rate each line was sold at.
-        exec('account.move.line', 'read_group', [
-          [...lineDomain(cid, start, end), ['date', '!=', false]],
-          ['price_subtotal:sum'], ['date:month', 'discount']], { lazy: false }).catch(() => []),
+        Promise.all([
+          exec('account.move.line', 'read_group', [[...lineDomain(cid, start, end), ['date', '!=', false],
+            ['move_id.move_type', '=', 'out_invoice']], ['price_subtotal:sum'], ['date:month', 'discount']],
+            { lazy: false }),
+          exec('account.move.line', 'read_group', [[...lineDomain(cid, start, end), ['date', '!=', false],
+            ['move_id.move_type', '=', 'out_refund']], ['price_subtotal:sum'], ['date:month', 'discount']],
+            { lazy: false }),
+        ]).then(([inv, ref]) => [...inv,
+          ...ref.map((r) => ({ ...r, price_subtotal: -(Number(r.price_subtotal) || 0) }))]).catch(() => []),
       ]);
       return { moves, prodMonth, discRows };
     };
@@ -354,9 +375,16 @@ export async function GET(request) {
       const entries = [...repIds];
       const runOne = async ([name, id]) => {
         try {
-          const rows = await exec('account.move.line', 'read_group',
-            [[...costLineDomain(cid, range.start, range.end), ['move_id.invoice_user_id', '=', id]],
-             ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
+          const [inv, ref] = await Promise.all([
+            exec('account.move.line', 'read_group',
+              [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id]],
+               ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000),
+            exec('account.move.line', 'read_group',
+              [[...costLineDomain(cid, range.start, range.end, 'out_refund'), ['move_id.invoice_user_id', '=', id]],
+               ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000),
+          ]);
+          const rows = [...inv, ...ref.map((r) => ({ ...r,
+            quantity: -(Number(r.quantity) || 0), price_subtotal: -(Number(r.price_subtotal) || 0) }))];
           const byMonth = new Map(); let total = 0, costedRev = 0;
           for (const r of rows) {
             const k = rangeStart(r, 'date:month').substring(0, 7);
