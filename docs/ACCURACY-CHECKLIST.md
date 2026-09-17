@@ -59,6 +59,11 @@ system. Evidence is recorded beside each one.
 - [x] **9. Slow-Moving "Sold" read 0 on every row** — it looked quantities up in
   the top 200 products by revenue, which a slow mover is never in. FIXED.
 
+- [x] **10. Cause of the cost fault confirmed by Worthy's head of finance: a
+  unit-of-measure problem, now resolved.** Data agrees exactly — ran Mar–Jul 2026,
+  peaked in June, stopped by August. The dashboard shows Ostendo's own figures by
+  default and flags only the months materially affected.
+
 ## Done
 
 - [x] Sales-by-Rep month columns landed three months out — fixed, verified.
