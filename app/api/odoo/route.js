@@ -62,12 +62,35 @@ export async function GET(request) {
       ['invoice_date',  '>=', `${year}-01-01`],
       ['invoice_date',  '<=', `${year}-12-31`],
     ];
-    const invoices = await exec('account.move', 'search_read', [invDomain], {
-      fields: ['id', 'invoice_date', 'amount_untaxed', 'amount_total', 'move_type',
-               'invoice_user_id', 'partner_id'],
-      limit:  10000,
-    });
-    console.log(`[Odoo] company=${companyId} year=${year} invoices=${invoices.length}`);
+    /* Read every matching invoice, in pages.
+     *
+     * This used to be a single call with `limit: 10000`. account.move returns
+     * newest first, so once a company passed ten thousand invoices in a year the
+     * OLDEST ones were silently dropped — Worthy North has 10,870 for 2026, and
+     * the whole of January (835 invoices, NZ$936,451.83) simply vanished from
+     * the dashboard. Paging until a short page comes back cannot truncate, and
+     * the count is checked against the database afterwards. */
+    const PAGE = 2000;
+    const invoiceFields = ['id', 'invoice_date', 'amount_untaxed', 'amount_total',
+                           'move_type', 'invoice_user_id', 'partner_id'];
+    const invoices = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const page = await exec('account.move', 'search_read', [invDomain], {
+        fields: invoiceFields, limit: PAGE, offset, order: 'id asc',
+      });
+      invoices.push(...page);
+      if (page.length < PAGE) break;
+      if (offset > 200000) break; // absolute backstop; never reached in practice
+    }
+
+    // Ask the database how many there should be. If these disagree the numbers
+    // below are incomplete, and that must be visible rather than assumed away.
+    const expectedCount = await exec('account.move', 'search_count', [invDomain]).catch(() => null);
+    const truncated = typeof expectedCount === 'number' && invoices.length < expectedCount;
+    if (truncated) {
+      console.error(`[Odoo] company=${companyId} year=${year} INCOMPLETE: got ${invoices.length} of ${expectedCount}`);
+    }
+    console.log(`[Odoo] company=${companyId} year=${year} invoices=${invoices.length}/${expectedCount}`);
 
     const chunkArray = (arr, size) => {
       const out = [];
@@ -293,6 +316,9 @@ export async function GET(request) {
 
     return NextResponse.json({
       year, company: companyId,
+      // Completeness travels with the numbers so a short read can never pass as a
+      // quiet month.
+      dataQuality: { invoicesRead: invoices.length, invoicesExpected: expectedCount, complete: !truncated },
       monthly, weekly,
       salespeople, salespeopleMonthly, salespeopleWeekly,
       customers, atRisk, lapsed,
