@@ -109,10 +109,17 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
   const cardBorder = darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,30,100,0.12)";
   useEffect(() => {
     const t = value || 0;
-    if (!animated || t === 0) { setDisplay(t); return; }
+    /* Never animate into a tab nobody is looking at. Browsers throttle
+       setInterval to about once a second in a background tab, so a 0.8s count-up
+       became a 40s one and the headline figure sat visibly wrong long after the
+       page had finished loading. Hidden: show the real number at once. If the
+       reader leaves mid-count, snap to it and stop. */
+    if (!animated || t === 0 || (typeof document !== 'undefined' && document.hidden)) { setDisplay(t); return; }
     let cur = 0; const step = t / 40;
     const timer = setInterval(() => { cur += step; if (cur >= t) { setDisplay(t); clearInterval(timer); } else setDisplay(Math.round(cur)); }, 20);
-    return () => clearInterval(timer);
+    const settle = () => { if (document.hidden) { clearInterval(timer); setDisplay(t); } };
+    document.addEventListener('visibilitychange', settle);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', settle); };
   }, [value, animated]);
   return (
     <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 16, padding: "22px 24px", position: "relative", overflow: "hidden", transition: "transform 0.2s,box-shadow 0.2s", cursor: "default" }}>
