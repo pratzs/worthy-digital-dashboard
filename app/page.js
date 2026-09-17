@@ -699,7 +699,7 @@ export default function EcommerceDashboard() {
   /* Which cost basis the whole South view uses. Two margin columns side by side
    * asked the reader to arbitrate between them; one basis at a time, applied to
    * revenue, cost, gross profit and margin together, always adds up. */
-  const [costBasis, setCostBasis] = useState("clean"); // "clean" | "invoiced"
+  const [costBasis, setCostBasis] = useState("invoiced"); // "invoiced" = exactly as Ostendo
   const [restored, setRestored] = useState(false);
 
   useEffect(() => {
@@ -1733,19 +1733,21 @@ export default function EcommerceDashboard() {
               </div>
               {t.suspectLines > 0 && (
                 <div style={{ color: "#b45309" }}>
-                  <strong>Margin is being held down by cost data that needs fixing.</strong>{" "}
-                  {t.suspectLines.toLocaleString()} lines carry {fmtExact(t.suspectCost, activeStore.currency)} of cost
-                  against only {fmtExact(t.suspectRevenue, activeStore.currency)} of sales — a single block of chocolate
-                  invoiced at NZ$63.75 has NZ$6,362.40 of cost against it, and the same item is costed anywhere between
-                  NZ$3.52 and NZ$183.78 across the year. That is a costing fault in Ostendo, not trading, and it
-                  clusters on 22–30 June and 8–9 April — what a bad stock receipt does to a running average cost.{" "}
-                  {costBasis === "clean"
-                    ? <>Those lines are currently <strong>left out of both sales and cost</strong>, which is why every
-                       month reads between 17% and 19%. Switch the table to “As invoiced” to see the raw figures.</>
-                    : <>The table is showing the raw figures, so June reads{" "}
-                       {d.months.find(m => m.label === "Jun")?.marginPct}%. Switch to “Excluding faulty cost” for the
-                       trading picture.</>}
-                  </div>
+                  <strong>Ostendo's cost is wrong on {t.suspectLines.toLocaleString()} lines.</strong> They carry{" "}
+                  {fmtExact(t.suspectCost, activeStore.currency)} of cost against{" "}
+                  {fmtExact(t.suspectRevenue, activeStore.currency)} of sales — one NZ$63.75 block of chocolate has
+                  NZ$6,362.40 of cost on it, and the same item is costed anywhere between NZ$3.52 and NZ$183.78 across
+                  the year. It clusters on 22–30 June and 8–9 April, which is what a bad stock receipt does to a
+                  running average cost.{" "}
+                  {costBasis === "invoiced"
+                    ? <>The figures below are <strong>exactly as Ostendo holds them</strong>, so June shows{" "}
+                       {d.months.find(m => m.label === "Jun")?.marginPct}%. Correcting the cost in Ostendo is what
+                       fixes it. “Ignoring faulty cost lines” shows what the margin looks like without those lines
+                       ({t.marginPctExSuspect}% for the year) — a check, not the books.</>
+                    : <>Those lines are currently <strong>left out of both sales and cost</strong>. This is a check on
+                       what trade looks like without them, not what Ostendo holds — switch back to “Exactly as
+                       Ostendo” for the real figures.</>}
+                </div>
               )}
               {t.priorComparable === false ? (
                 <div style={{ color: "#b45309" }}>
@@ -1864,7 +1866,7 @@ export default function EcommerceDashboard() {
                     {activeStore.id === "luxe" ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                         <span>Cost basis</span>
-                        {[["clean", "Excluding faulty cost"], ["invoiced", "As invoiced"]].map(([id, label]) => (
+                        {[["invoiced", "Exactly as Ostendo"], ["clean", "Ignoring faulty cost lines"]].map(([id, label]) => (
                           <button key={id} onClick={() => setCostBasis(id)} style={{
                             padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer",
                             border: costBasis === id ? `1px solid ${accent}` : `1px solid ${T.border}`,
