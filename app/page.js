@@ -1484,13 +1484,19 @@ export default function EcommerceDashboard() {
   const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
   const totalRet  = curr.reduce((s, d) => s + (d.returns        || 0), 0);
   const isOstendo = activeStore.id === "luxe";
-  const avgAOV    = totalOrd ? (isOstendo ? round2(totalRev / totalOrd) : Math.round(totalRev / totalOrd)) : 0;
+  /* Show amounts to the cent wherever the figures ARE cent-accurate — which is
+     every financial-year view, not just Ostendo's. Rounding each month to whole
+     dollars for display meant the column on screen came to a dollar less than
+     the total printed under it, even though the underlying cents reconciled
+     exactly. A reader adding up what they can see has to get the printed answer. */
+  const exactAmounts = onFYView();
+  const avgAOV    = totalOrd ? (exactAmounts ? round2(totalRev / totalOrd) : Math.round(totalRev / totalOrd)) : 0;
   const prevAOV   = prevOrd  ? Math.round(prevRev  / prevOrd)  : 0;
 
   const totalMargRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const trueMargin   = totalMargRev > 0 ? (totalMargRev - totalCost) / totalMargRev : null;
   // FIX 3: Fall back to simple rev-cost GP when marginableRevenue is 0
-  const gp       = trueMargin !== null ? (isOstendo ? round2(totalRev * trueMargin) : Math.round(totalRev * trueMargin))
+  const gp       = trueMargin !== null ? (exactAmounts ? round2(totalRev * trueMargin) : Math.round(totalRev * trueMargin))
                  : hasCost    ? totalRev - totalCost
                  : null;
   const gpMargin = trueMargin !== null ? Math.round(trueMargin * 1000) / 10 : null;
@@ -1579,9 +1585,9 @@ export default function EcommerceDashboard() {
   const kpiHasCost = view === "weekly"  ? weeklyDataCtx.some(w => w.hasCostData)
                    : view === "monthly" ? (latestMonth?.hasCostData || false)
                    : hasCost;
-  const kpiAOV     = kpiOrd ? (isOstendo ? round2(kpiRev / kpiOrd) : Math.round(kpiRev / kpiOrd)) : 0;
+  const kpiAOV     = kpiOrd ? (exactAmounts ? round2(kpiRev / kpiOrd) : Math.round(kpiRev / kpiOrd)) : 0;
   const kpiGP      = kpiHasCost
-    ? (isOstendo ? round2(kpiRev - kpiCost) : Math.round(kpiRev - kpiCost))
+    ? (exactAmounts ? round2(kpiRev - kpiCost) : Math.round(kpiRev - kpiCost))
     : (view === "yoy" ? gp : null);
   const kpiGPMargin = kpiHasCost && kpiRev > 0
     ? marginPct1(kpiRev - kpiCost, kpiRev)
@@ -1984,10 +1990,10 @@ export default function EcommerceDashboard() {
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpRev} />
+          <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
           <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
           <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
-          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGPGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpGP} />
+          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGPGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />
         </div>
 
         {view === "monthly" ? (
@@ -2075,12 +2081,12 @@ export default function EcommerceDashboard() {
                           <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
                             <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
-                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (isOstendo ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (isOstendo ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (isOstendo ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (exactAmounts ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (isOstendo ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (exactAmounts ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
@@ -2091,12 +2097,12 @@ export default function EcommerceDashboard() {
                     <tfoot>
                       <tr style={{ borderTop: `1px solid ${T.border}` }}>
                         <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
-                        <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{isOstendo ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
-                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (isOstendo ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "—"}</td>
-                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (isOstendo ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "—"}</td>
+                        <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{exactAmounts ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
+                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "—"}</td>
+                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "—"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
                         <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
-                        <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{isOstendo ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
+                        <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{exactAmounts ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "—"}</td>
                         <td style={{ padding: "10px 8px", color: "#aa8a8a", fontWeight: 700 }}>{totalRet || "—"}</td>
                         <td style={{ padding: "10px 8px" }}><GrowthBadge value={revG} /></td>
@@ -2420,6 +2426,7 @@ export default function EcommerceDashboard() {
               onWeeklyMonthChange={setWeeklyMonth}
               fyMonths={FY_MONTHS}
               T={T} accent={accent}
+              exact={exactAmounts}
             />
           </>
         )}
@@ -2545,7 +2552,7 @@ export default function EcommerceDashboard() {
               })(), "#aa8a6a"]] : []),
               ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "—", "#8aaa8a"],
               ["Total Discounts", kpiDisc != null && kpiDisc !== 0
-                                    ? (isOstendo ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
+                                    ? (exactAmounts ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
                                     : "—", accent],
               ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "—", "#C97C9E"],
             ].map(([lbl, val, clr]) => (
