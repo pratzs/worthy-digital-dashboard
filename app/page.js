@@ -1059,6 +1059,8 @@ export default function EcommerceDashboard() {
     started:           m.started,
     complete:          m.complete,
     priorComparable:   m.priorComparable !== false,
+    marginPctClean:    m.marginPctExSuspect,
+    suspectCost:       m.suspectCost,
     daysElapsed:       m.daysElapsed,
     daysInMonth:       m.daysInMonth,
     hasCostData:       Boolean(m.started && m.cost !== 0),
@@ -1703,10 +1705,14 @@ export default function EcommerceDashboard() {
                   <strong>Margin is being held down by cost data that needs fixing.</strong>{" "}
                   {t.suspectLines.toLocaleString()} lines carry {fmtExact(t.suspectCost, activeStore.currency)} of cost
                   against only {fmtExact(t.suspectRevenue, activeStore.currency)} of sales — a single block of chocolate
-                  invoiced at NZ$63.75 has NZ$6,362.40 of cost on it, and the same item is costed anywhere from
-                  NZ$3.52 to NZ$183.78 across the year. The {t.marginPct}% margin below is what the records actually
-                  say; on the {(100 - (t.suspectRevenue / t.revenue * 100)).toFixed(1)}% of sales whose cost looks sound
-                  it is <strong>{t.marginPctExSuspect}%</strong>.
+                  invoiced at NZ$63.75 has NZ$6,362.40 of cost against it, and the same item is costed anywhere between
+                  NZ$3.52 and NZ$183.78 across the year. That is a costing fault in Ostendo, not trading.
+                  The <strong>Margin</strong> column is what the records say. <strong>Margin (clean)</strong> leaves out
+                  every line whose cost exceeds the sale, and lands between 17% and 19% in all six months —
+                  including June, which reads {d.months.find(m => m.label === "Jun")?.marginPct}% as recorded and{" "}
+                  {d.months.find(m => m.label === "Jun")?.marginPctExSuspect}% once those lines are set aside.
+                  Most of the damage falls on 22–30 June and 8–9 April, which is what a bad stock receipt corrupting
+                  the running average cost looks like.
                 </div>
               )}
               {t.priorComparable === false ? (
@@ -1832,7 +1838,9 @@ export default function EcommerceDashboard() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr>
-                        {["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
+                        {(activeStore.id === "luxe"
+                          ? ["Month","Revenue","Cost","Gross Profit","Margin","Margin (clean)","Orders","AOV","New Cust.","Returns","YoY"]
+                          : ["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"]).map(h => (
                           <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -1848,6 +1856,13 @@ export default function EcommerceDashboard() {
                             <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (isOstendo ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (isOstendo ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            {activeStore.id === "luxe" && (
+                              <td style={{ padding: "8px" }} title="Margin once lines whose recorded cost exceeds the sale are left out">
+                                {has && row.marginPctClean != null
+                                  ? <span style={{ color: "#16a34a", fontWeight: 700 }}>{row.marginPctClean}%</span>
+                                  : <span style={{ color: T.textLabel }}>—</span>}
+                              </td>
+                            )}
                             <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (isOstendo ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
                             <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
@@ -1864,6 +1879,13 @@ export default function EcommerceDashboard() {
                         <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (isOstendo ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "—"}</td>
                         <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (isOstendo ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "—"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
+                        {activeStore.id === "luxe" && (
+                          <td style={{ padding: "10px 8px" }}>
+                            {fyPayload(selectedYear)?.totals?.marginPctExSuspect != null
+                              ? <span style={{ color: "#16a34a", fontWeight: 700 }}>{fyPayload(selectedYear).totals.marginPctExSuspect}%</span>
+                              : "—"}
+                          </td>
+                        )}
                         <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
                         <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{isOstendo ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
                         <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "—"}</td>
