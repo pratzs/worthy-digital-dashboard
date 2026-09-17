@@ -1792,7 +1792,9 @@ export default function EcommerceDashboard() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
-                    {hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}
+                    {activeStore.id === "luxe"
+                      ? "✦ Cost as invoiced, from Ostendo"
+                      : hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -2178,15 +2180,23 @@ export default function EcommerceDashboard() {
                       ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
                       : view === "yoy"
                       ? `All Years — Year on Year`
+                      : activeStore.id === "luxe"
+                      ? `Financial year ${selectedYear}`
                       : latestMonth
-                      ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}${activeStore.id === "luxe" ? ` · FY${String(selectedYear).slice(2)}` : ""}`
-                      : `${activeStore.id === "luxe" ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}
+                      ? `${latestMonth.month} ${selectedYear}`
+                      : `${selectedYear}`}
                   </div>
-                  <div style={{ fontSize: 11, color: T.textMuted }}>Analytics for the selected period</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>
+                    {activeStore.id === "luxe" && view !== "weekly"
+                      ? "Everything below covers the whole financial year so far — not just the latest month"
+                      : "Analytics for the selected period"}
+                  </div>
                 </div>
               </div>
               <span style={{ fontSize: 10, color: T.textMuted, fontFamily: "monospace", background: T.bgTableHead, padding: "4px 10px", borderRadius: 8, border: `1px solid ${T.border}` }}>
-                {advStartDate} → {advEndDate}
+                {activeStore.id === "luxe" && view !== "weekly" && fyPayload(selectedYear)
+                  ? `${fyPayload(selectedYear).range.start} → ${fyPayload(selectedYear).range.end}`
+                  : `${advStartDate} → ${advEndDate}`}
               </span>
             </div>
 

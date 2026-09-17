@@ -47,6 +47,16 @@ export async function GET(request) {
   if (!start || !end) { const r = fyRange(fy, today); start = r.start; end = r.end; }
 
   try {
+    // Stop at the last invoice actually on file, so the period shown here matches
+    // the one the financial-year endpoint reports rather than running to today.
+    if (!searchParams.get('endDate')) {
+      const bounds = await ostendoSql(
+        `SELECT MAX(INVOICEDATE) AS LASTD FROM SALESINVOICEHEADER`
+      ).catch(() => []);
+      const lastLoaded = normaliseDate(bounds?.[0]?.LASTD);
+      if (lastLoaded && lastLoaded < end) end = lastLoaded;
+    }
+
     const inPeriod = SALES(start, end);
 
     const [products, categories, custPeriod, custLifetime, stock, adjustments] = await Promise.all([
