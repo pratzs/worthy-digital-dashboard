@@ -1,47 +1,60 @@
-/** TEMPORARY. Define "discount" correctly, and identify the implausible-cost lines. */
+/**
+ * TEMPORARY independent checker for Worthy Products South.
+ * Shares no code with the endpoints it checks: single-pass GROUP BYs in plain
+ * floating point, no day buckets, no cent arithmetic. Delete once proven.
+ */
 import { NextResponse } from 'next/server';
-import { ostendoSql } from '@/lib/ostendo';
+import { ostendoSql, q } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const FY = `h.INVOICEDATE BETWEEN '2026-04-01' AND '2026-09-16'`;
-const L  = `SALESINVOICELINES l JOIN SALESINVOICEHEADER h ON h.INVOICENUMBER = l.INVOICENUMBER`;
+export async function GET(request) {
+  const p = new URL(request.url).searchParams;
+  const start = p.get('start'), end = p.get('end');
+  if (!start || !end) return NextResponse.json({ error: 'start and end required' }, { status: 400 });
 
-export async function GET() {
+  const W  = `h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}`;
+  const L  = `SALESINVOICELINES l JOIN SALESINVOICEHEADER h ON h.INVOICENUMBER = l.INVOICENUMBER`;
+  const IN = `l.INVOICENUMBER IN (SELECT INVOICENUMBER FROM SALESINVOICEHEADER WHERE INVOICEDATE BETWEEN ${q(start)} AND ${q(end)})`;
   const out = {};
   const run = async (k, sql) => { out[k] = await ostendoSql(sql).catch(e => ({ error: e.message })); };
 
-  // Two independent ways of valuing the discount. If they agree, the definition holds.
-  await run('discountTwoWays', `SELECT
-      SUM(l.INVOICEQTY * l.CUSTOMERUNITPRICE) AS AT_CUSTOMER_PRICE,
-      SUM(l.EXTENDEDNETTPRICE) AS ACHIEVED,
-      SUM(l.INVOICEQTY * l.CUSTOMERUNITPRICE * l.DISCOUNTPERCENT / 100) AS BY_PERCENT,
-      COUNT(*) AS LINES
-    FROM ${L} WHERE ${FY} AND l.CODETYPE = 'Item Code'`);
+  await run('headerTotals', `SELECT SUM(h.INVOICENETTAMOUNT) AS NETT,
+      SUM(CASE WHEN h.INVOICEORCREDIT <> 'Credit' THEN 1 ELSE 0 END) AS INVOICES,
+      SUM(CASE WHEN h.INVOICEORCREDIT  = 'Credit' THEN 1 ELSE 0 END) AS CREDITS
+    FROM SALESINVOICEHEADER h WHERE ${W}`);
 
-  await run('discountByMonth', `SELECT EXTRACT(MONTH FROM h.INVOICEDATE) AS MO,
-      SUM(l.INVOICEQTY * l.CUSTOMERUNITPRICE) - SUM(l.EXTENDEDNETTPRICE) AS DISC
-    FROM ${L} WHERE ${FY} AND l.CODETYPE = 'Item Code' GROUP BY 1 ORDER BY 1`);
+  await run('lineTotals', `SELECT SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST,
+      SUM(CASE WHEN l.CODETYPE = 'Item Code'
+               THEN l.INVOICEQTY * l.CUSTOMERUNITPRICE - l.EXTENDEDNETTPRICE ELSE 0 END) AS DISC
+    FROM ${L} WHERE ${W}`);
 
-  // What ARE the lines whose cost dwarfs the revenue? Real clearance or bad data?
-  await run('badCostExamples', `SELECT FIRST 12 l.INVOICENUMBER AS INV, h.CUSTOMER AS CUST,
-      h.INVOICEORCREDIT AS OC, l.LINECODE AS CODE, l.LINEDESCRIPTION AS NAME,
-      l.INVOICEQTY AS QTY, l.INVOICEUNITPRICE AS SELLU, l.INVOICEUNITCOST AS COSTU,
-      l.EXTENDEDNETTPRICE AS NETT
-    FROM ${L} WHERE ${FY} AND l.CODETYPE = 'Item Code' AND l.INVOICEQTY > 0
-      AND l.EXTENDEDNETTPRICE > 0
-      AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE * 2
-    ORDER BY l.INVOICEQTY * l.INVOICEUNITCOST DESC`);
+  await run('byRep', `SELECT h.SALESPERSON AS SP, SUM(h.INVOICENETTAMOUNT) AS NETT,
+      SUM(CASE WHEN h.INVOICEORCREDIT <> 'Credit' THEN 1 ELSE 0 END) AS INVOICES
+    FROM SALESINVOICEHEADER h WHERE ${W} GROUP BY 1`);
 
-  // Does the same item sometimes cost a sane amount and sometimes not?
-  await run('costSpread', `SELECT FIRST 10 l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME,
-      MIN(l.INVOICEUNITCOST) AS MINC, MAX(l.INVOICEUNITCOST) AS MAXC,
-      AVG(l.INVOICEUNITPRICE) AS AVGSELL, COUNT(*) AS LINES
-    FROM ${L} WHERE ${FY} AND l.CODETYPE = 'Item Code' AND l.INVOICEUNITCOST > 0
-    GROUP BY l.LINECODE
-    HAVING MAX(l.INVOICEUNITCOST) > MIN(l.INVOICEUNITCOST) * 3
-    ORDER BY SUM(l.EXTENDEDNETTPRICE) DESC`);
+  await run('costByRep', `SELECT h.SALESPERSON AS SP,
+      SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST,
+      SUM(CASE WHEN l.CODETYPE = 'Item Code'
+               THEN l.INVOICEQTY * l.CUSTOMERUNITPRICE - l.EXTENDEDNETTPRICE ELSE 0 END) AS DISC
+    FROM ${L} WHERE ${W} GROUP BY 1`);
+
+  await run('byMonth', `SELECT EXTRACT(YEAR FROM h.INVOICEDATE) AS YR,
+      EXTRACT(MONTH FROM h.INVOICEDATE) AS MO, SUM(h.INVOICENETTAMOUNT) AS NETT
+    FROM SALESINVOICEHEADER h WHERE ${W} GROUP BY 1,2`);
+
+  // Independent check of the slow-moving "sold" column for named codes.
+  const codes = (p.get('codes') || '').split(',').filter(Boolean).map(q).join(',');
+  if (codes) await run('soldForCodes', `SELECT l.LINECODE AS CODE, SUM(l.INVOICEQTY) AS QTY
+    FROM SALESINVOICELINES l WHERE ${IN} AND l.CODETYPE = 'Item Code'
+      AND l.LINECODE IN (${codes}) GROUP BY 1`);
+
+  // Independent count of lines whose cost exceeds the sale.
+  await run('suspect', `SELECT COUNT(*) AS LINES,
+      SUM(l.INVOICEQTY * l.INVOICEUNITCOST) AS COST, SUM(l.EXTENDEDNETTPRICE) AS NETT
+    FROM ${L} WHERE ${W} AND l.CODETYPE = 'Item Code' AND l.INVOICEQTY > 0
+      AND l.EXTENDEDNETTPRICE > 0 AND l.INVOICEQTY * l.INVOICEUNITCOST > l.EXTENDEDNETTPRICE`);
 
   return NextResponse.json(out);
 }
