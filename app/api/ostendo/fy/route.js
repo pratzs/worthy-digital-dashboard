@@ -415,6 +415,34 @@ export async function GET(request) {
     reconcile(started,  toDollars(currTotal.discount), (r) => r.discounts, (r, v) => { r.discounts = v; });
     reconcile(repRows,  toDollars(currTotal.discount), (r) => r.discounts, (r, v) => { r.discounts = v; });
 
+    /* The suspect figures are subtracted from cost and revenue when the view is
+     * on the clean basis, so they have to add up too — otherwise the rounding
+     * that was just reconciled away reappears the moment the basis is switched. */
+    reconcile(started, toDollars(currTotal.suspectCost),    (r) => r.suspectCost,    (r, v) => { r.suspectCost = v; });
+    reconcile(started, toDollars(currTotal.suspectRevenue), (r) => r.suspectRevenue, (r, v) => { r.suspectRevenue = v; });
+    reconcile(repRows, toDollars(currTotal.suspectCost),    (r) => r.suspectCost,    (r, v) => { r.suspectCost = v; });
+    reconcile(repRows, toDollars(currTotal.suspectRevenue), (r) => r.suspectRevenue, (r, v) => { r.suspectRevenue = v; });
+    for (const m of started) {
+      const wk = weekRows.filter((w) => w.monthKey === m.key);
+      reconcile(wk, m.suspectCost,    (w) => w.suspectCost,    (w, v) => { w.suspectCost = v; });
+      reconcile(wk, m.suspectRevenue, (w) => w.suspectRevenue, (w, v) => { w.suspectRevenue = v; });
+    }
+    for (const r of repRows) {
+      const ms = r.months.filter((m) => m.started);
+      reconcile(ms, r.suspectCost,    (m) => m.suspectCost,    (m, v) => { m.suspectCost = v; });
+      reconcile(ms, r.suspectRevenue, (m) => m.suspectRevenue, (m, v) => { m.suspectRevenue = v; });
+    }
+    // Restate the clean margin from the reconciled figures.
+    const restateClean = (r) => {
+      const rev = Math.round((r.revenue - r.suspectRevenue) * 100) / 100;
+      const cst = Math.round((r.cost - r.suspectCost) * 100) / 100;
+      r.marginPctExSuspect = rev > 0 ? Math.round(((rev - cst) / rev) * 1000) / 10 : null;
+    };
+    started.forEach(restateClean);
+    repRows.forEach(restateClean);
+    weekRows.forEach(restateClean);
+    repRows.forEach((r) => r.months.forEach(restateClean));
+
     // Weeks inside each month, and each rep's months inside that rep.
     for (const m of started) {
       const wk = weekRows.filter((w) => w.monthKey === m.key);
