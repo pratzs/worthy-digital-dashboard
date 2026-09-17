@@ -202,3 +202,60 @@ that read does carry context.)
   `search_read` with no grouping, fails identically — so the fault is a broken
   product-variant record in Odoo, not the dashboard's query. Oceania therefore
   shows revenue but no margin, products or categories, and says so on screen.
+
+
+## Visual double-verification, North and South — 18 Sep 2026
+
+Every rendered cell read back out of the browser and compared against the API
+response that produced it. **2,190 cells: 1,165 on North, 1,025 on South.** No
+mismatches beyond three customer/product names where Odoo holds a double space
+and HTML collapses it. Chart lines and bars were decoded from their SVG path
+coordinates and match the payload month by month.
+
+Six defects found and fixed in this pass:
+
+- [x] **24. "Today" was the server's UTC date, not New Zealand's.** Vercel runs
+      on UTC, 12-13 hours behind Auckland. At 7:47am on 18 September the period
+      read "1 Apr to 17 Sep" and the banner said figures were complete to the
+      17th, while the office had been invoicing for eight hours. Every NZ morning
+      was reported as the previous day, and the financial-year rollover would
+      have happened half a day late on 1 April. All four routes now use
+      `nzToday()` / `nzFinancialYear()`, and each payload carries `asOfNZ`.
+
+- [x] **25. South's Fast-Moving SKUs listed the wrong products.** The panel took
+      the top fifty products *by revenue* and re-sorted those by units, which
+      cannot surface a fast mover that earns little. Nine of twenty rows were
+      wrong: TNCC Party Mix (4,676 units), Pascall Party Pack (4,568) and seven
+      others were absent, displaced by items ranking high only on revenue. The
+      endpoint already built the correct list and the client already mapped it
+      in — the panel never read it.
+
+- [x] **26. April was dropped from the charts' month axis.** South's YoY chart
+      drew six bars but eleven labels; Recharts discards ticks it thinks will not
+      fit and a negative left margin pushed April off. The axis read "May Jun
+      Jul…", so every bar was labelled with the wrong month. North escaped only
+      because its wider y-axis labels happened to leave room. Every month axis
+      now prints every tick.
+
+- [x] **27. A raw float reached the screen as "▲ 0.5999999999999996%".** Self-
+      inflicted: moving margins to one decimal meant the margin card subtracted
+      two one-decimal numbers. The difference is rounded now, the prior-year
+      margin it subtracts is on the same precision, and both percentage badges
+      round again at the point of display.
+
+- [x] **28. KPI counters animated into background tabs.** Browsers throttle
+      `setInterval` to about once a second when a tab is hidden, turning a 0.8s
+      count-up into a 40s one — load the dashboard, switch away, come back, and
+      Total Revenue was still climbing through numbers that were not the answer.
+      Hidden tabs now show the real figure at once.
+
+- [x] **29. Category units were summed after rounding** (see item 19) — retested
+      and holding: largest category now within 0.5 of a whole unit.
+
+### North and South are not like-for-like on cost
+
+Worth stating plainly to anyone comparing the two margins: **North's cost is
+each product's standard cost as it stands today; South's is what the item
+actually cost on the day it was invoiced.** North's figures round to the dollar,
+South's are exact to the cent. The two margins are both correct and are not
+measuring quite the same thing.
