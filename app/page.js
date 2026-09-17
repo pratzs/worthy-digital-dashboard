@@ -1244,6 +1244,26 @@ export default function EcommerceDashboard() {
   const prevLoaded = hasData(selectedYear - 1);
   const hasCost    = curr.some(d => d.hasCostData);
 
+  /* Has this month actually happened?
+   * South carries the answer in the payload. Worthy North and Oceania report a
+   * calendar year, so it is worked out from the date. Without this, a month
+   * that has not arrived yet is compared against last year's real trade and
+   * reported as a 100% collapse. */
+  const nowRef        = new Date();
+  const isCurrentYear = selectedYear === nowRef.getFullYear();
+  const monthStarted  = (i) => {
+    if (activeStore.id === "luxe") return curr[i]?.started !== false;
+    if (selectedYear < nowRef.getFullYear()) return true;
+    if (selectedYear > nowRef.getFullYear()) return false;
+    return i <= nowRef.getMonth();
+  };
+  // The month in progress is real revenue but only a part-month of it, so it is
+  // excluded from year-on-year totals for the calendar-year companies, which
+  // report monthly and cannot be sliced to the day.
+  const monthComparable = (i) =>
+    activeStore.id === "luxe" ? monthStarted(i)
+                              : monthStarted(i) && !(isCurrentYear && i === nowRef.getMonth());
+
   const momData = curr.map((d, i) => {
     const rev       = d.revenue   || 0;
     const cst       = d.totalCost || 0;
@@ -1256,15 +1276,15 @@ export default function EcommerceDashboard() {
       prevRevenue:  prev[i]?.revenue || 0,
       prevOrders:   prev[i]?.orders  || 0,
       prevMarginPct: (() => { const pr = prev[i]?.revenue || 0, pc = prev[i]?.totalCost || 0; return (prev[i]?.hasCostData && pr > 0) ? Math.round(((pr - pc) / pr) * 100) : null; })(),
-      momGrowth:    (prevLoaded && d.priorComparable !== false)
+      momGrowth:    (prevLoaded && d.priorComparable !== false && monthStarted(i))
                       ? calcGrowth(rev, prev[i]?.revenue || 0) : null,
     };
   });
 
   const totalRev  = curr.reduce((s, d) => s + (d.revenue        || 0), 0);
-  const prevRev   = prev.reduce((s, d) => s + (d.revenue        || 0), 0);
+  const prevRev   = prev.reduce((s, d, i) => s + (monthComparable(i) ? (d.revenue || 0) : 0), 0);
   const totalOrd  = curr.reduce((s, d) => s + (d.orders         || 0), 0);
-  const prevOrd   = prev.reduce((s, d) => s + (d.orders         || 0), 0);
+  const prevOrd   = prev.reduce((s, d, i) => s + (monthComparable(i) ? (d.orders  || 0) : 0), 0);
   const totalCost = curr.reduce((s, d) => s + (d.totalCost      || 0), 0);
   const totalNewC = curr.reduce((s, d) => s + (d.newCustomers   || 0), 0);
   const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
@@ -1331,8 +1351,10 @@ export default function EcommerceDashboard() {
   T.accent = accent;
   const comparablePrior = activeStore.id !== "luxe"
     || fyPayload(selectedYear)?.totals?.priorComparable !== false;
-  const revG   = (prevLoaded && comparablePrior) ? calcGrowth(totalRev, prevRev) : null;
-  const ordG   = (prevLoaded && comparablePrior) ? calcGrowth(totalOrd, prevOrd) : null;
+  const currComparableRev = curr.reduce((s, d, i) => s + (monthComparable(i) ? (d.revenue || 0) : 0), 0);
+  const currComparableOrd = curr.reduce((s, d, i) => s + (monthComparable(i) ? (d.orders  || 0) : 0), 0);
+  const revG   = (prevLoaded && comparablePrior) ? calcGrowth(currComparableRev, prevRev) : null;
+  const ordG   = (prevLoaded && comparablePrior) ? calcGrowth(currComparableOrd, prevOrd) : null;
   const aovG   = (prevLoaded && comparablePrior) ? calcGrowth(avgAOV,   prevAOV) : null;
 
   // ── Contextual KPIs — update based on active view ─────────────────────────
@@ -1410,6 +1432,11 @@ export default function EcommerceDashboard() {
   const cmpOrd      = yoyCompare ? `${cmpYear}: ${prevOrd.toLocaleString()} orders` : null;
   const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null;
   const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;
+
+  // Gross profit has its own growth. It was previously showing revenue growth,
+  // which moves differently whenever margin changes.
+  const kpiGPGrowth = (view === "yoy" && prevLoaded && comparablePrior && kpiHasCost && prevGP !== null && prevGP !== 0)
+    ? calcGrowth(kpiGP, prevGP) : null;
 
   const yoyData = yearsForStore.map(yr => {
     const d   = getMonthly(yr);
@@ -1603,6 +1630,19 @@ export default function EcommerceDashboard() {
           ))}
         </div>
 
+        {activeStore.id !== "luxe" && prevLoaded && (() => {
+          const lastCmp = [...Array(12).keys()].filter(monthComparable).pop();
+          if (lastCmp === undefined || lastCmp === 11) return null;
+          return (
+            <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, background: `${accent}0c`, border: `1px solid ${accent}28`, fontSize: 12.5, color: T.textSub, lineHeight: 1.7 }}>
+              <strong style={{ color: T.textHead }}>{activeStore.name} · {selectedYear}</strong>{" "}
+              reports a calendar year (January to December).{" "}
+              “Vs last year” covers <strong>{MONTH_NAMES[0]}–{MONTH_NAMES[lastCmp]}</strong> on both sides — complete
+              months only. {isCurrentYear && `${MONTH_NAMES[nowRef.getMonth()]} is still in progress, so it is shown in the tables but left out of the year-on-year figure.`}
+            </div>
+          );
+        })()}
+
         {/* Plain-English statement of exactly what is on screen. Every number
             below is for this period, and every comparison is against the
             matching stretch of last year — not against a longer one. */}
@@ -1677,7 +1717,7 @@ export default function EcommerceDashboard() {
           <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpRev} />
           <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
           <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
-          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpGP} />
+          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGPGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={isOstendo} compareText={cmpGP} />
         </div>
 
         {view === "monthly" ? (
