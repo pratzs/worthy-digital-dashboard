@@ -126,13 +126,18 @@ function indexDays(headerRows, costRows) {
   return days;
 }
 
-/** Sum every day whose date falls in [from, to]. */
-function sumRange(days, from, to, repCode = null) {
+/**
+ * Sum every day whose date falls in [from, to].
+ * `codes` (a Set) narrows to one salesperson. It is a Set rather than a single
+ * code because Ostendo issues legacy clearance accounts a "-1" suffix — 460 and
+ * 460-1 are both Chris, and must appear as one row, not two.
+ */
+function sumRange(days, from, to, codes = null) {
   const out = blank();
   for (const [d, entry] of days) {
     if (d < from || d > to) continue;
-    const src = repCode === null ? entry.total : entry.reps.get(repCode);
-    if (src) add(out, src);
+    if (codes === null) { add(out, entry.total); continue; }
+    for (const c of codes) { const src = entry.reps.get(c); if (src) add(out, src); }
   }
   return out;
 }
@@ -144,22 +149,31 @@ export async function GET(request) {
                 (today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1);
 
   try {
-    const range = fyRange(fy, today);
+    // Find the real extent of the data first. Comparing "1 Apr to today" against
+    // "1 Apr to today last year" is only fair if today actually has data; if the
+    // most recent invoice is two days old, both sides must stop there.
+    const bounds = await ostendoSql(
+      `SELECT MIN(INVOICEDATE) AS FIRSTD, MAX(INVOICEDATE) AS LASTD FROM SALESINVOICEHEADER`
+    ).catch(() => []);
+    const lastLoaded = normaliseDate(bounds?.[0]?.LASTD);
+
+    const fullRange = fyRange(fy, today);
+    const range = lastLoaded && lastLoaded < fullRange.end
+      ? { ...fullRange, end: lastLoaded }
+      : fullRange;
     const prior = priorRange(range);
 
-    const [hdr, cost, hdrPrior, costPrior, bounds] = await Promise.all([
+    const [hdr, cost, hdrPrior, costPrior] = await Promise.all([
       ostendoSql(headerSql(range.start, range.end)),
       ostendoSql(costSql(range.start, range.end)),
       ostendoSql(headerSql(prior.start, prior.end)),
       ostendoSql(costSql(prior.start, prior.end)),
-      ostendoSql(`SELECT MIN(INVOICEDATE) AS FIRSTD, MAX(INVOICEDATE) AS LASTD FROM SALESINVOICEHEADER`)
-        .catch(() => []),
     ]);
 
     const days      = indexDays(hdr, cost);
     const daysPrior = indexDays(hdrPrior, costPrior);
 
-    const todayIso = iso(today);
+    const todayIso = range.end;   // the last day we actually hold data for
     const months   = fyMonthKeys(fy);
 
     /* ── Months ──────────────────────────────────────────────────────────────
@@ -231,21 +245,30 @@ export async function GET(request) {
     for (const [, e] of days)      for (const c of e.reps.keys()) repCodes.add(c);
     for (const [, e] of daysPrior) for (const c of e.reps.keys()) repCodes.add(c);
 
-    const repRows = [...repCodes].map((code) => {
-      const curr  = sumRange(days,      range.start, range.end, code);
-      const prev  = sumRange(daysPrior, prior.start, prior.end, code);
+    // One row per person, not per code: 460 and 460-1 are both Chris.
+    const byName = new Map();
+    for (const code of repCodes) {
+      const name = resolveRep(code);
+      if (!byName.has(name)) byName.set(name, new Set());
+      byName.get(name).add(code);
+    }
+
+    const repRows = [...byName].map(([name, codes]) => {
+      const curr  = sumRange(days,      range.start, range.end, codes);
+      const prev  = sumRange(daysPrior, prior.start, prior.end, codes);
       const perMonth = monthRows.map((m) => ({
         key: m.key, label: m.label, started: m.started,
-        ...present(m.started ? sumRange(days, `${m.key}-01`, m.through, code) : blank()),
+        ...present(m.started ? sumRange(days, `${m.key}-01`, m.through, codes) : blank()),
       }));
       const perWeek = weekRows.map((w) => ({
         monthKey: w.monthKey, week: w.week,
-        ...present(sumRange(days, w.start, w.end, code)),
+        ...present(sumRange(days, w.start, w.end, codes)),
       }));
       return {
-        code: code || '(none)',
-        name: resolveRep(code),
-        named: code === '' || Boolean(resolveRep(code) !== code),
+        code: [...codes].sort().join(', ') || '(none)',
+        name,
+        // false = this code has no name yet and is showing as a bare number
+        named: name !== [...codes][0],
         ...present(curr),
         prior:     present(prev),
         growthPct: growth(curr.revenue, prev.revenue),
