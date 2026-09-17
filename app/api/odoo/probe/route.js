@@ -68,5 +68,20 @@ export async function GET(request) {
     [[['company_id', '=', cid], ['move_type', '=', 'out_invoice'], ['state', '=', 'posted'],
       ['partner_id', '!=', false]], ['invoice_date:min'], ['partner_id']], { lazy: false }));
 
+  // Product standard costs, so cost can be recomputed from source rather than
+  // inferred by dividing the dashboard's own numbers.
+  if (Array.isArray(out.qtyByProduct)) {
+    const ids = out.qtyByProduct.map((r) => r.product_id && r.product_id[0]).filter(Boolean);
+    await safe('productCosts', () => exec('product.product', 'read', [ids], { fields: ['standard_price'] }));
+  }
+
+  // Prior-year revenue over the identical span, for the growth figure.
+  const shift = (d) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCFullYear(x.getUTCFullYear() - 1);
+    return x.toISOString().slice(0, 10); };
+  const priorDom = [['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
+    ['state', '=', 'posted'], ['invoice_date', '>=', shift(start)], ['invoice_date', '<=', shift(end)]];
+  await safe('priorTotal', () => exec('account.move', 'read_group',
+    [priorDom, ['amount_untaxed:sum'], ['move_type']], { lazy: false }));
+
   return NextResponse.json(out);
 }
