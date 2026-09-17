@@ -76,11 +76,11 @@ const costLineDomain = (cid, start, end) => [
 ];
 
 const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0, discount: 0,
-                       uncostedRevenue: 0 });
+                       costedRevenue: 0 });
 const add = (t, s) => {
   t.revenue += s.revenue; t.cost += s.cost; t.invoices += s.invoices;
   t.credits += s.credits; t.creditValue += s.creditValue; t.discount += s.discount;
-  t.uncostedRevenue += s.uncostedRevenue;
+  t.costedRevenue += s.costedRevenue;
   return t;
 };
 const present = (a, hasCost) => {
@@ -93,9 +93,12 @@ const present = (a, hasCost) => {
     invoices: a.invoices, credits: a.credits,
     creditValue: toDollars(a.creditValue),
     discounts: toDollars(a.discount),
-    // Sales of products that carry no standard cost in Odoo. Their margin reads
-    // 100% because the cost is missing, not because the sale was that profitable.
-    uncostedRevenue: hasCost ? toDollars(a.uncostedRevenue) : null,
+    /* Revenue with a real cost behind it, and revenue without. A line carrying
+       no product, or a product with no standard cost, contributes sales but no
+       cost — so its margin reads 100% because the cost is missing, not because
+       the sale was that good. */
+    costedRevenue:   hasCost ? toDollars(a.costedRevenue) : null,
+    uncoveredRevenue: hasCost ? toDollars(a.revenue - a.costedRevenue) : null,
     aov: a.invoices > 0 ? toDollars(a.revenue / a.invoices) : 0,
   };
 };
@@ -219,7 +222,7 @@ export async function GET(request) {
         if (!k) continue;
         const unit = costOf.get(r.product_id && r.product_id[0]) || 0;
         touch(k).cost += toCents((Number(r.quantity) || 0) * unit);
-        if (unit === 0) touch(k).uncosted = (touch(k).uncosted || 0) + toCents(r.price_subtotal ?? 0);
+        if (unit > 0) touch(k).costedRev = (touch(k).costedRev || 0) + toCents(r.price_subtotal ?? 0);
       }
       for (const r of pack.discRows) {
         const k = rangeStart(r, 'date:month').substring(0, 7);
@@ -290,10 +293,10 @@ export async function GET(request) {
 
       const acc = started ? sumRange(days, first, through) : blank();
       if (started) { const x = extras.get(key);
-        if (x) { acc.cost = x.cost; acc.discount = x.discount; acc.uncostedRevenue = x.uncosted || 0; } }
+        if (x) { acc.cost = x.cost; acc.discount = x.discount; acc.costedRevenue = x.costedRev || 0; } }
       const pAcc = started ? sumRange(daysPrior, shift(first), shift(through)) : blank();
       if (started) { const x = extrasPrior.get(shift(key));
-        if (x) { pAcc.cost = x.cost; pAcc.discount = x.discount; pAcc.uncostedRevenue = x.uncosted || 0; } }
+        if (x) { pAcc.cost = x.cost; pAcc.discount = x.discount; pAcc.costedRevenue = x.costedRev || 0; } }
 
       return {
         key, label, year, started, complete, through,
@@ -354,16 +357,16 @@ export async function GET(request) {
           const rows = await exec('account.move.line', 'read_group',
             [[...costLineDomain(cid, range.start, range.end), ['move_id.invoice_user_id', '=', id]],
              ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
-          const byMonth = new Map(); let total = 0, uncosted = 0;
+          const byMonth = new Map(); let total = 0, costedRev = 0;
           for (const r of rows) {
             const k = rangeStart(r, 'date:month').substring(0, 7);
             const unit = costOf.get(r.product_id && r.product_id[0]) || 0;
             const cents = toCents((Number(r.quantity) || 0) * unit);
             byMonth.set(k, (byMonth.get(k) || 0) + cents);
             total += cents;
-            if (unit === 0) uncosted += toCents(r.price_subtotal ?? 0);
+            if (unit > 0) costedRev += toCents(r.price_subtotal ?? 0);
           }
-          repCost.set(name, { byMonth, total, uncosted });
+          repCost.set(name, { byMonth, total, costedRev });
         } catch (e) {
           problems.push(`cost for ${name} could not be read (${e.message.slice(0, 80)})`);
         }
@@ -383,7 +386,7 @@ export async function GET(request) {
       const c = sumRange(days, range.start, range.end, name);
       const p = sumRange(daysPrior, prior.start, prior.end, name);
       const rc = repCost.get(name);
-      const withCost = (acc, cents) => (rc ? { ...acc, cost: cents || 0, uncostedRevenue: rc.uncosted || 0 } : acc);
+      const withCost = (acc, cents) => (rc ? { ...acc, cost: cents || 0, costedRevenue: rc.costedRev || 0 } : acc);
       return {
         name,
         ...present(withCost(c, rc?.total), Boolean(rc)),
@@ -409,13 +412,15 @@ export async function GET(request) {
     const total = blank();
     for (const m of started) {
       add(total, { revenue: toCents(m.revenue), cost: toCents(m.cost || 0), invoices: m.invoices,
-                   credits: m.credits, creditValue: toCents(m.creditValue), discount: toCents(m.discounts) });
+                   credits: m.credits, creditValue: toCents(m.creditValue), discount: toCents(m.discounts),
+                   costedRevenue: toCents(m.costedRevenue || 0) });
     }
     const priorTotal = blank();
     for (const m of started) {
       add(priorTotal, { revenue: toCents(m.prior.revenue), cost: toCents(m.prior.cost || 0),
                         invoices: m.prior.invoices, credits: m.prior.credits,
-                        creditValue: toCents(m.prior.creditValue), discount: toCents(m.prior.discounts) });
+                        creditValue: toCents(m.prior.creditValue), discount: toCents(m.prior.discounts),
+                        costedRevenue: toCents(m.prior.costedRevenue || 0) });
     }
 
     /* ── Analytics tables, on the same financial year as everything else ───── */
