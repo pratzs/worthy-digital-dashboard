@@ -698,11 +698,12 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                       fontSize: 11, color: T.textMuted, lineHeight: 1.6 }}>
           <strong style={{ color: T.textSub }}>Why some margins are blank.</strong>{" "}
           {withheld.map(w => w.name).join(", ")}{" "}
-          {withheld.length === 1 ? "sells" : "sell"} mostly things the system holds no cost
-          for — freight and service lines. Their sales are counted in full
+          {withheld.length === 1 ? "invoices" : "invoice"} mostly things that were never bought —
+          pallet rent, freight recharges, expense reimbursements and supplier rebate claims, raised
+          without a product on the line. Their invoicing is counted in full
           ({money(keep(withheld.reduce((s, w) => s + (w.revenue || 0), 0)), currency)} in total),
-          but a margin would have read close to 100% simply because the cost is missing,
-          so it is left blank instead.
+          but there is no cost of sales to set against it, so a margin would have read close to
+          100%. It is left blank rather than shown as something it is not.
         </div>
       )}
     </div>

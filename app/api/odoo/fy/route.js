@@ -605,6 +605,24 @@ export async function GET(request) {
        would cost ~13s on a route that already takes 25; the 60-odd rows on
        screen cost about 260ms. Company context matters — without it Odoo sums
        the quantity across every company on the database. */
+    /* Why some revenue carries no cost. Odoo does hold a cost price for virtually
+       every product Worthy sells — the gap is almost entirely invoice lines with
+       NO product on them at all: freight recharges, pallet rent, expense
+       reimbursements and supplier rebate claims, typed in by hand. Real income,
+       but nothing was bought to earn it, so there is no cost of sales to show.
+       Split it here so the page can say which is which instead of guessing. */
+    let nonStockRevenue = null;
+    try {
+      const side = (type) => exec('account.move.line', 'read_group',
+        [[...lineDomain(cid, range.start, range.end), ['product_id', '=', false],
+          ['move_id.move_type', '=', type]], ['price_subtotal:sum'], []], { lazy: false });
+      const [inv, ref] = await Promise.all([side('out_invoice'), side('out_refund')]);
+      const total = (rows) => rows.reduce((a, r) => a + (Number(r.price_subtotal) || 0), 0);
+      nonStockRevenue = toDollars(toCents(total(inv) - total(ref)));
+    } catch (e) {
+      problems.push(`non-stock revenue could not be split out (${e.message.slice(0, 80)})`);
+    }
+
     const topProducts = productRows.slice(0, 50);
     const topMoving = [...productRows].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 25);
     const showIds = [...new Set([...topProducts, ...topMoving].map((r) => Number(r.code)))];
@@ -624,7 +642,7 @@ export async function GET(request) {
 
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
-      fy, company: cid,
+      fy, company: cid, nonStockRevenue,
       products:   topProducts,
       fastMoving: topMoving,
       categories: categoryRows.slice(0, 30),
