@@ -1058,7 +1058,7 @@ export default function EcommerceDashboard() {
     ...basisOf(m),
     totalCost:         m.cost,
     rebates:           m.rebates,
-    netSales:          m.netSales,
+    grossSales:        m.grossSales,
     orders:            m.invoices,     // credit notes are NOT orders
     returns:           m.credits,      // ...they are reported here instead
     returnValue:       m.creditValue,
@@ -1085,7 +1085,7 @@ export default function EcommerceDashboard() {
     ...basisOf(m.prior),
     totalCost:         m.prior.cost,
     rebates:           m.prior.rebates,
-    netSales:          m.prior.netSales,
+    grossSales:        m.prior.grossSales,
     orders:            m.prior.invoices,
     returns:           m.prior.credits,
     totalDiscounts:    m.prior.discounts,
@@ -1707,6 +1707,14 @@ export default function EcommerceDashboard() {
                 Figures are complete to the <strong>close of business on {pretty(d.range.end)}</strong>, which is the most
                 recent day in Ostendo’s nightly backup. Trading entered since then appears after tonight’s run.
               </div>
+              {t.rebates !== 0 && (
+                <div>
+                  Sales below are <strong>Ostendo's invoice totals</strong> ({fmtExact(t.revenue, activeStore.currency)}),
+                  which already have {fmtExact(Math.abs(t.rebates), activeStore.currency)} of rebates taken off.
+                  Before rebates that is <strong>{fmtExact(t.grossSales, activeStore.currency)}</strong> — the figure
+                  finance quote. Both describe the same trading; the rebates are the difference.
+                </div>
+              )}
               <div>
                 <strong>{t.invoices.toLocaleString()}</strong> invoices
                 {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
@@ -1846,7 +1854,7 @@ export default function EcommerceDashboard() {
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
                     {activeStore.id === "luxe"
-                      ? <>✦ Sales are product lines, as finance reports them · cost as invoiced · {activeStore.currency}</>
+                      ? <>✦ Sales are Ostendo's invoice totals (INVOICENETTAMOUNT) · cost as invoiced · {activeStore.currency}</>
                       : <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
                   </div>
                 </div>
@@ -2322,7 +2330,7 @@ export default function EcommerceDashboard() {
         <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             {[
-              ...(activeStore.id === "luxe" ? [["Rebates", (() => {
+              ...(activeStore.id === "luxe" ? [["Rebates (already deducted)", (() => {
                 const r = view === "monthly" ? (latestMonth?.rebates ?? null)
                         : curr.reduce((a, m) => a + (m.rebates || 0), 0);
                 return r ? fmtExact(r, activeStore.currency) : "—";

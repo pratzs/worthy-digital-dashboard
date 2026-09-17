@@ -53,15 +53,16 @@ const firstOrderSql = () => `
   GROUP BY 1, 2`;
 
 /*
- * REVENUE, cost, the discount given, and a count of lines whose cost cannot be
- * right.
+ * Cost, the discount given, the rebates, and a count of lines whose cost cannot
+ * be right.
  *
- * REVENUE is the sum of the PRODUCT lines. Worthy's finance team reports sales
- * that way — their June figure of NZ$1,524,873 is exactly this — whereas the
- * invoice header total is that figure after rebates have been taken off
- * (NZ$1,500,723.78 for June, a gap of NZ$24,148.97). Both are correct; they
- * answer different questions. The dashboard now reports what finance reports
- * and shows the rebates as their own figure rather than burying them in sales.
+ * REVENUE IS NOT TAKEN FROM HERE. It is the invoice header's INVOICENETTAMOUNT,
+ * which is the figure Ostendo itself reports — NZ$1,500,723.78 for June 2026,
+ * confirmed by Worthy's Ostendo team. Finance quote NZ$1,524,872.75 for the same
+ * month; that is the same trading with rebates added back (NZ$24,148.97), and it
+ * is reported below as `grossSales` so both figures can be found here and
+ * reconciled. The header figure stays the headline because it is what Ostendo
+ * says the invoices came to.
  * Credit-note lines carry negative quantities, so they reduce all three
  * exactly as they reduce revenue above.
  *
@@ -92,7 +93,6 @@ const costSql = (start, end) => `
          SUM(CASE WHEN ${SUSPECT} THEN l.INVOICEQTY * l.INVOICEUNITCOST ELSE 0 END) AS SUSCOST,
          SUM(CASE WHEN ${SUSPECT} THEN l.EXTENDEDNETTPRICE ELSE 0 END) AS SUSREV,
          SUM(CASE WHEN ${SUSPECT} THEN 1 ELSE 0 END) AS SUSLINES,
-         SUM(CASE WHEN ${STOCK_LINE} THEN l.EXTENDEDNETTPRICE ELSE 0 END) AS STOCKREV,
          SUM(CASE WHEN NOT (${STOCK_LINE}) THEN l.EXTENDEDNETTPRICE ELSE 0 END) AS REBATES
   FROM SALESINVOICELINES l
   JOIN SALESINVOICEHEADER h ON h.INVOICENUMBER = l.INVOICENUMBER
@@ -131,11 +131,11 @@ const present = (a) => {
     invoices:    a.invoices,
     credits:     a.credits,
     creditValue: toDollars(a.creditValue),
-    // Rebates and other non-product adjustments, reported rather than buried.
+    // Rebates and other non-product adjustments, already inside the revenue above.
     rebates:     toDollars(a.rebates),
-    // Revenue after rebates — this is the invoice header total, kept so the
-    // figures can always be tied back to Ostendo's own invoice values.
-    netSales:    toDollars(a.revenue + a.rebates),
+    // Revenue with rebates added back — product sales only. This is the figure
+    // Worthy's finance team quotes.
+    grossSales:  toDollars(a.revenue - a.rebates),
     discounts:   toDollars(a.discount),
     // What the margin would be if the lines with impossible cost were excluded.
     // Shown beside the real figure, never instead of it.
@@ -208,9 +208,10 @@ function indexDays(headerRows, costRows) {
     const entry = touch(d);
     const rep   = touchRep(entry, code);
 
-    // A credit note is not a sale, so it never adds to the order count. Its value
-    // is reported separately; its lines reduce revenue in the line query below.
+    // Revenue is the invoice total, credits included — they are how returns land.
+    // A credit note is never counted as an order; its value is reported separately.
     for (const bucket of [entry.total, rep]) {
+      bucket.revenue += cents;
       if (isCredit) { bucket.credits += n; bucket.creditValue += cents; }
       else          { bucket.invoices += n; }
     }
@@ -222,7 +223,6 @@ function indexDays(headerRows, costRows) {
     const entry = touch(d);
     const rep   = touchRep(entry, code);
     for (const bucket of [entry.total, rep]) {
-      bucket.revenue        += toCents(r.STOCKREV);
       bucket.rebates        += toCents(r.REBATES);
       bucket.cost           += toCents(r.COST);
       bucket.discount       += toCents(r.DISC);
