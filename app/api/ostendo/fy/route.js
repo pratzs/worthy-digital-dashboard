@@ -25,7 +25,7 @@
 import { NextResponse } from 'next/server';
 import {
   ostendoSql, resolveRep, toCents, toDollars, pct1,
-  fyRange, priorRange, fyMonthKeys, parseIso, iso, q,
+  fyRange, priorRange, fyMonthKeys, parseIso, iso, q, normaliseDate,
 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +50,8 @@ const costSql = (start, end) => `
   WHERE h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)}
   GROUP BY 1, 2`;
 
-const dayKey = (v) => String(v ?? '').substring(0, 10);
+/* Ostendo hands dates back as D/M/YYYY, not ISO. Normalise before comparing. */
+const dayKey = (v) => normaliseDate(v);
 
 /** Empty accumulator, all money in integer cents. */
 const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0 });
