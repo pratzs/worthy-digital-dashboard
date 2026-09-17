@@ -1085,12 +1085,12 @@ export default function EcommerceDashboard() {
 
   // The "previous year" array is the matching slice of last year, day for day —
   // so a month that is only half done is never compared against a whole month.
+  // Last year has to be measured on the SAME basis as this year, or the growth
+  // column compares a cleaned figure against an uncleaned one and understates it.
   const fyPriorRow = (m) => ({
     ...fyMonthRow(m),
-    revenue:           m.prior.revenue,
-    totalCost:         m.prior.cost,
-    grossProfit:       m.prior.grossProfit,
-    marginPct:         m.prior.marginPct,
+    ...basisOf(m.prior),
+    totalCost:         basisOf(m.prior).cost,
     excludedSales:     0, excludedCost: 0, excludedLines: 0,
     orders:            m.prior.invoices,
     returns:           m.prior.credits,
