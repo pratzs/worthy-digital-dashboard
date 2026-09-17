@@ -54,8 +54,8 @@ export async function GET(request) {
 
     // TEMP probe: how expensive is stock-on-hand for this company?
     if (p.get('probe') === 'stock') {
-      const ids = await exec('product.product', 'search',
-        [[['type', '=', 'consu']]], { limit: parseInt(p.get('n') || '200', 10) });
+      const ids = (p.get('ids') || '').split(',').filter(Boolean).map(Number);
+      if (!ids.length) return NextResponse.json({ error: 'ids= required' }, { status: 400 });
       const t0 = Date.now();
       const rows = await exec('product.product', 'read', [ids],
         { fields: ['qty_available', 'standard_price'], context: { allowed_company_ids: [cid], company_id: cid } });
