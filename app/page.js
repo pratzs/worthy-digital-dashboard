@@ -1092,8 +1092,8 @@ export default function EcommerceDashboard() {
     priorComparable:   m.priorComparable !== false,
     daysElapsed:       m.daysElapsed,
     daysInMonth:       m.daysInMonth,
-    hasCostData:       Boolean(m.started && m.cost !== 0),
-    marginableRevenue: m.started && m.cost !== 0 ? basisOf(m).revenue : 0,
+    hasCostData:       Boolean(m.started && m.cost != null && m.cost !== 0),
+    marginableRevenue: (m.started && m.cost != null && m.cost !== 0) ? basisOf(m).revenue : 0,
   });
 
   // The "previous year" array is the matching slice of last year, day for day —
@@ -1111,8 +1111,8 @@ export default function EcommerceDashboard() {
     totalDiscounts:    m.prior.discounts,
     newCustomers:      null,
     aov:               m.prior.aov,
-    hasCostData:       Boolean(m.started && m.prior.cost !== 0),
-    marginableRevenue: m.started && m.prior.cost !== 0 ? m.prior.revenue : 0,
+    hasCostData:       Boolean(m.started && m.prior.cost != null && m.prior.cost !== 0),
+    marginableRevenue: (m.started && m.prior.cost != null && m.prior.cost !== 0) ? m.prior.revenue : 0,
   });
 
   const MONTH_IDX = Object.fromEntries(MONTH_NAMES.map((m, i) => [m, i]));
