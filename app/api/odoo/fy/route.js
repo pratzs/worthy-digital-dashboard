@@ -737,6 +737,24 @@ export async function GET(request) {
       }
     } catch (e) { problems.push(`could not measure the excluded variants (${e.message.slice(0, 80)})`); }
 
+    /* Which currencies the invoices were actually raised in. Everything above is
+       stated in the company's own currency; saying so, with the split, stops a
+       reader wondering whether a USD invoice was counted at face value. */
+    let currencies = null;
+    try {
+      const rows = await exec('account.move', 'read_group',
+        [moveDomain(cid, range.start, range.end), ['amount_untaxed_signed:sum'], ['currency_id']],
+        { lazy: false });
+      const home = (await exec('res.company', 'read', [[cid]], { fields: ['currency_id'] }))[0]?.currency_id?.[1];
+      currencies = {
+        company: home,
+        raisedIn: rows.map((r) => ({ code: r.currency_id ? r.currency_id[1] : '(none)',
+          documents: Number(r.__count) || 0,
+          revenueInCompanyCurrency: toDollars(toCents(r.amount_untaxed_signed ?? 0)) }))
+          .sort((a, b) => b.revenueInCompanyCurrency - a.revenueInCompanyCurrency),
+      };
+    } catch (e) { problems.push(`currencies could not be read (${e.message.slice(0, 80)})`); }
+
     let nonStockRevenue = null;
     try {
       const rows = await exec('account.move.line', 'read_group',
@@ -767,7 +785,7 @@ export async function GET(request) {
 
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
-      fy, company: cid, nonStockRevenue, teams, excludedProducts,
+      fy, company: cid, nonStockRevenue, teams, excludedProducts, currencies,
       products:   topProducts,
       fastMoving: topMoving,
       categories: categoryRows.slice(0, 30),
