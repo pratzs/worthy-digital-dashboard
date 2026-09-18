@@ -334,12 +334,23 @@ facts were being ignored.
       North was affected too, though barely — one AUD invoice, NZ$174.80. It
       would have grown silently.
 
-- [x] **35. The two departments are Odoo sales teams.** Fabric trades as
-      **Textiles** (NZ$3,394,212, 76.6%, +12.6%), the Worthy range as **WOL
-      Products** (NZ$899,081, 20.3%, −5.9%), and a small **Fashion** team sits
-      alongside (NZ$135,938, 3.1%). A By Department panel gives each its revenue,
-      share, counts, prior year and growth, reconciled to the company total.
-      North uses teams too (Route, Online, Direct) and gets the same panel.
+- [x] **35. The two departments are Odoo sales teams.** Odoo carries three —
+      Textiles, WOL Products and Fashion — but Worthy runs Fashion as part of the
+      fabric business, so it is reported inside Textiles:
+
+      | Department | Revenue | Share | vs last year |
+      |---|---|---|---|
+      | Textiles (incl. Fashion) | NZ$3,530,149.48 | 79.7% | +17.1% |
+      | WOL Products | NZ$899,081.05 | 20.3% | −5.9% |
+
+      Folding Fashion in lifts the fabric side's growth from +12.6% to +17.1%,
+      because Fashion grew from almost nothing (NZ$660 last year). The panel
+      names the teams behind any department covering more than one, so nobody
+      thinks Fashion was dropped. North uses teams too (Route, Online, Direct),
+      none of which map, so it is unchanged.
+
+      Departments, months, reps, currencies, invoice counts and credit counts
+      each add up to the company total.
 
 - [x] **36. Products, categories and margin were entirely absent.** Four fabric
       variants have an attribute value Odoo cannot render, and any query that has
