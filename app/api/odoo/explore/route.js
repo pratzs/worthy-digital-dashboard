@@ -92,8 +92,52 @@ export async function GET(request) {
       } catch (e2) { brokenVariants.push({ scanFailed: e2.message.slice(0, 160) }); }
     }
 
+    /* What does amount_untaxed_signed actually mean here? Compare it against
+       amount_untaxed with the sign applied by hand, on SAME-CURRENCY documents
+       only, so currency conversion cannot be confused with sign convention. */
+    const home = company[0].currency_id[1];
+    const sameCcy = moves.filter((r) => r.currency_id && r.currency_id[1] === home);
+    let byHand = 0, byField = 0, mismatches = [];
+    for (const r of sameCcy) {
+      const sign = r.move_type === 'out_refund' ? -1 : 1;
+      const a = (Number(r.amount_untaxed) || 0) * sign;
+      const b = Number(r.amount_untaxed_signed) || 0;
+      byHand += a; byField += b;
+      if (Math.abs(a - b) > 0.005 && mismatches.length < 5)
+        mismatches.push({ doc: r.name, type: r.move_type, untaxed: r.amount_untaxed, byHand: a, signed: b });
+    }
+    const signConvention = {
+      homeCurrency: home, documentsInHomeCurrency: sameCcy.length,
+      byHand: Math.round(byHand * 100) / 100,
+      byField: Math.round(byField * 100) / 100,
+      identical: Math.abs(byHand - byField) <= 0.01,
+      mismatches,
+    };
+
+    // Which product variant breaks name computation? search() returns bare ids,
+    // so it works even when reading their names does not; then bisect.
+    let brokenProducts = [];
+    if (productError) {
+      const all = await exec('product.product', 'search', [[]], { limit: 0 });
+      const bad = async (ids) => {
+        try { await exec('product.product', 'read', [ids], { fields: ['display_name'] }); return []; }
+        catch (e) { if (ids.length === 1) return ids;
+          const mid = Math.floor(ids.length / 2);
+          return [...await bad(ids.slice(0, mid)), ...await bad(ids.slice(mid))]; }
+      };
+      const ids = await bad(all);
+      for (const id of ids.slice(0, 20)) {
+        let info = { id };
+        try { info.template = (await exec('product.product', 'read', [[id]],
+          { fields: ['default_code', 'active', 'product_tmpl_id', 'product_template_attribute_value_ids'] }))[0]; }
+        catch (e) { info.readError = e.message.slice(0, 120); }
+        brokenProducts.push(info);
+      }
+    }
+
     return NextResponse.json({
       company: company[0], period: `${start} .. ${end}`,
+      signConvention, brokenProducts,
       documents: moves.length,
       totals: {
         sumOfAmountUntaxed_mixedCurrency: Math.round(moves.reduce((a, r) => a + (Number(r.amount_untaxed) || 0), 0) * 100) / 100,
