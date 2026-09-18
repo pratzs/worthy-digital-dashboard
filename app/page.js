@@ -1913,6 +1913,31 @@ export default function EcommerceDashboard() {
                   : d.hasCost ? ", and cost is each product's standard cost as it stands today."
                               : ". Odoo holds no product costs for this company, so no margin is shown."}
               </div>
+              {/* Worthy Oceania bills in three currencies. Say so, and say what
+                  each is worth once converted, so nobody assumes a USD invoice
+                  was counted at face value. */}
+              {d.currencies && d.currencies.raisedIn.length > 1 && (
+                <div>
+                  Invoices are raised in{" "}
+                  {d.currencies.raisedIn.map((c, i) => (
+                    <span key={c.code}>
+                      {i > 0 ? (i === d.currencies.raisedIn.length - 1 ? " and " : ", ") : ""}
+                      <strong>{c.code}</strong> ({c.documents.toLocaleString()})
+                    </span>
+                  ))}. Every figure here is stated in <strong>{d.currencies.company}</strong>, converted at the
+                  rate Odoo holds for each invoice — they are not added up at face value.
+                </div>
+              )}
+              {d.excludedProducts && (
+                <div style={{ color: "#b45309" }}>
+                  <strong>{d.excludedProducts.products.length} product{d.excludedProducts.products.length === 1 ? "" : "s"} are
+                  missing from the product and category tables below.</strong>{" "}
+                  Odoo cannot build a name for {d.excludedProducts.products.map(p => p.code).join(", ")}, and that stops it
+                  grouping any product for this company at all. Their{" "}
+                  {fmtExact(d.excludedProducts.revenue, activeStore.currency)} of sales is still counted in every total
+                  above. Fixing those records in Odoo puts them back on the page.
+                </div>
+              )}
               {/* Be up front about the sales that carry no cost. It is a small share
                   company-wide, but it is the whole reason a handful of reps show no
                   margin at all, and a reader who spots the blanks deserves the size
@@ -2324,6 +2349,58 @@ export default function EcommerceDashboard() {
               </div>
             </div>
           </>
+        )}
+
+        {/* Two businesses inside one Odoo company. Worthy Oceania sells fabric
+            under "Textiles" and the Worthy range under "WOL Products"; North is
+            split by trading route. The invoice's sales team is what separates
+            them, so the same panel serves both. */}
+        {onFYView() && (fyPayload(selectedYear)?.teams || []).length > 1 && (
+          <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginTop: 28 }}>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: T.textHead, fontWeight: 700 }}>
+              By Department
+            </div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3, marginBottom: 16 }}>
+              Each part of the business, from the sales team on the invoice — {activeStore.currency}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {["Department", "Revenue", "Share", "Invoices", "Credits", "Last year", "Change"].map((h, i) => (
+                      <th key={h} style={{ padding: "10px 12px", textAlign: i === 0 ? "left" : "right",
+                        color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                        letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`,
+                        background: T.bgTableHead }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {fyPayload(selectedYear).teams.map((t) => (
+                    <tr key={t.name} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                      <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>{t.name}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: accent, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {fmtExact(t.revenue, activeStore.currency)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.share}%</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.invoices.toLocaleString()}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.credits ? t.credits.toLocaleString() : "—"}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textMuted, whiteSpace: "nowrap" }}>
+                        {t.prior ? fmtExact(t.prior, activeStore.currency) : "—"}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}><GrowthBadge value={t.growthPct} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "10px 12px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: accent, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {fmtExact(fyPayload(selectedYear).teams.reduce((a, t) => a + t.revenue, 0), activeStore.currency)}</td>
+                    <td colSpan={5} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
         )}
 
         {/* ODOO ADVANCED SECTION — Worthy North (Odoo tab) and Worthy Oceania (nova) */}
