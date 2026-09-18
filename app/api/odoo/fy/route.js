@@ -86,6 +86,12 @@ const lineDomain = (cid, start, end) => [
    the page says so. */
 const UNRENDERABLE_VARIANTS = [28085, 28084, 6691, 7503];
 
+/* Odoo's sales teams are not quite the departments Worthy runs. Fashion is part
+   of the fabric business, not a department of its own — confirmed by Worthy —
+   so it is reported inside Textiles. Anything not listed here stands alone. */
+const TEAM_DEPARTMENT = { Fashion: 'Textiles' };
+const departmentOf = (team) => TEAM_DEPARTMENT[team] || team;
+
 const costLineDomain = (cid, start, end, type) => [
   ...lineDomain(cid, start, end), ['product_id', '!=', false], ['date', '!=', false],
   ...(type ? [['move_id.move_type', '=', type]] : []),
@@ -677,12 +683,14 @@ export async function GET(request) {
       const fold = (rows) => {
         const m = new Map();
         for (const r of rows) {
-          const name = r.team_id ? r.team_id[1] : 'Unassigned';
+          const team = r.team_id ? r.team_id[1] : 'Unassigned';
+          const name = departmentOf(team);
           const key = rangeStart(r, 'invoice_date:month').substring(0, 7);
           const cents = toCents(r.amount_untaxed_signed ?? 0);
           const n = Number(r.__count) || 0;
-          if (!m.has(name)) m.set(name, { revenue: 0, invoices: 0, credits: 0, months: new Map() });
+          if (!m.has(name)) m.set(name, { revenue: 0, invoices: 0, credits: 0, months: new Map(), teams: new Set() });
           const t = m.get(name);
+          t.teams.add(team);
           t.revenue += cents;
           if (r.move_type === 'out_refund') t.credits += n; else t.invoices += n;
           if (key) t.months.set(key, (t.months.get(key) || 0) + cents);
@@ -692,6 +700,8 @@ export async function GET(request) {
       const cur = fold(now), prev = fold(before);
       teams = [...cur].map(([name, t]) => ({
         name,
+        // The Odoo teams behind this department, when it is more than one.
+        madeUpOf: t.teams.size > 1 ? [...t.teams].sort() : null,
         revenue: toDollars(t.revenue), invoices: t.invoices, credits: t.credits,
         share: pct1(t.revenue, [...cur.values()].reduce((a, x) => a + x.revenue, 0)),
         prior: toDollars(prev.get(name)?.revenue || 0),

@@ -2378,7 +2378,17 @@ export default function EcommerceDashboard() {
                 <tbody>
                   {fyPayload(selectedYear).teams.map((t) => (
                     <tr key={t.name} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                      <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>{t.name}</td>
+                      <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>
+                        {t.name}
+                        {/* Where a department covers more than one Odoo sales team, name
+                            them — otherwise a reader who knows the teams wonders which
+                            one went missing. */}
+                        {t.madeUpOf && (
+                          <div style={{ fontSize: 10, fontWeight: 500, color: T.textMuted, marginTop: 2 }}>
+                            includes {t.madeUpOf.join(" + ")}
+                          </div>
+                        )}
+                      </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", color: accent, fontWeight: 700, whiteSpace: "nowrap" }}>
                         {fmtExact(t.revenue, activeStore.currency)}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.share}%</td>
