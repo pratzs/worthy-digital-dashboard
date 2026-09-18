@@ -156,6 +156,19 @@ export async function GET(request) {
       sumNegatedBalance: Math.round(bal * 100) / 100,
       identical: Math.abs(sub - bal) <= 0.02,
     };
+    // Split by move type: on invoices the two should agree exactly; on refunds
+    // they should be exact opposites. That is what "signed" has to mean.
+    const side = async (type, ccy) => {
+      const rows = await exec('account.move.line', 'search_read',
+        [[...lineDom, ['move_id.move_type', '=', type], ...(ccy ? [['currency_id.name', '=', ccy]] : [])]],
+        { fields: ['price_subtotal', 'balance'], limit: 3000 });
+      const a = rows.reduce((x, l) => x + (Number(l.price_subtotal) || 0), 0);
+      const b = rows.reduce((x, l) => x - (Number(l.balance) || 0), 0);
+      return { lines: rows.length, priceSubtotal: Math.round(a * 100) / 100, negatedBalance: Math.round(b * 100) / 100 };
+    };
+    lineFields.homeCurrencyInvoices = await side('out_invoice', home);
+    lineFields.homeCurrencyRefunds = await side('out_refund', home);
+    lineFields.foreignCurrencyInvoices = await side('out_invoice', 'USD');
 
     let signedGroupWorks = null, groupingWithoutBroken = null;
     try {
