@@ -188,9 +188,28 @@ export async function GET(request) {
         revenue: Math.round(g.reduce((a, r) => a - (Number(r.balance) || 0), 0) * 100) / 100 };
     } catch (e) { groupingWithoutBroken = { error: e.message.slice(0, 160) }; }
 
+    /* Why do those variants break? Almost certainly an attribute value whose
+       name is blank, so Odoo joins a False into the display name. If that can be
+       detected in one query, the fix stays general instead of hardcoding ids. */
+    let rootCause = {};
+    try {
+      const pav = await exec('product.attribute.value', 'search_read',
+        [['|', ['name', '=', false], ['name', '=', '']]], { fields: ['name', 'attribute_id'] });
+      rootCause.attributeValuesWithNoName = pav;
+      if (pav.length) {
+        const ptav = await exec('product.template.attribute.value', 'search_read',
+          [[['product_attribute_value_id', 'in', pav.map((x) => x.id)]]],
+          { fields: ['product_tmpl_id'] });
+        rootCause.templateAttributeValues = ptav.length;
+        const variants = await exec('product.product', 'search',
+          [[['product_template_attribute_value_ids', 'in', ptav.map((x) => x.id)]]], { limit: 0 });
+        rootCause.affectedVariants = variants;
+      }
+    } catch (e) { rootCause.error = e.message.slice(0, 200); }
+
     return NextResponse.json({
       company: company[0], period: `${start} .. ${end}`,
-      signConvention, brokenProducts, lineFields, signedGroupWorks, groupingWithoutBroken,
+      signConvention, brokenProducts, rootCause, lineFields, signedGroupWorks, groupingWithoutBroken,
       documents: moves.length,
       totals: {
         sumOfAmountUntaxed_mixedCurrency: Math.round(moves.reduce((a, r) => a + (Number(r.amount_untaxed) || 0), 0) * 100) / 100,
