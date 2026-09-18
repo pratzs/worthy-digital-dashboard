@@ -82,6 +82,13 @@ const costLineDomain = (cid, start, end, type) => [
   ...(type ? [['move_id.move_type', '=', type]] : []),
 ];
 
+/* A line's `price_subtotal` is in the INVOICE's currency, so it cannot be added
+   across an Oceania that bills in USD, AUD and NZD. `balance` is the same money
+   in the COMPANY's currency, and it is already signed — revenue sits on the
+   credit side, so negating it gives a positive sale and a negative return. Every
+   line figure goes through here, and nothing negates refunds by hand any more. */
+const subOf = (r) => -(Number(r.balance) || 0);
+
 const blank = () => ({ revenue: 0, cost: 0, invoices: 0, credits: 0, creditValue: 0, discount: 0,
                        costedRevenue: 0 });
 const add = (t, s) => {
@@ -187,8 +194,14 @@ export async function GET(request) {
     const pull = async (start, end) => {
       const [moves, prodMonth, discRows] = await Promise.all([
         // Revenue and counts, per day, per rep, per type.
+        /* `amount_untaxed` is in each invoice's OWN currency, so summing it adds
+           US dollars to New Zealand ones. Worthy Oceania invoices in USD, AUD and
+           NZD, and its revenue was understated by about a quarter as a result.
+           `amount_untaxed_signed` is the same figure converted to the company's
+           currency AND already signed for credit notes — verified on this
+           database against hand-signed arithmetic, to the cent. */
         exec('account.move', 'read_group', [moveDomain(cid, start, end),
-          ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }),
+          ['amount_untaxed_signed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }),
         // Quantity per product per month — cost is a per-product figure.
         /* Grouping by product asks Odoo to build each product's display name, and
          * Worthy Oceania has variants whose attributes are incomplete, so the
@@ -197,21 +210,22 @@ export async function GET(request) {
          * reported rather than leaving an empty table with no explanation. */
         Promise.all([
           exec('account.move.line', 'read_group', [costLineDomain(cid, start, end, 'out_invoice'),
-            ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }),
+            ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }),
           exec('account.move.line', 'read_group', [costLineDomain(cid, start, end, 'out_refund'),
-            ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }),
+            ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }),
         ]).then(([inv, ref]) => [
           ...inv,
-          // Returned goods reduce both quantity sold and cost of sales.
-          ...ref.map((r) => ({ ...r, quantity: -(Number(r.quantity) || 0),
-                               price_subtotal: -(Number(r.price_subtotal) || 0) })),
+          /* Returned goods reduce quantity sold and cost of sales. Quantity is
+             stored positive on a credit note and still needs negating; the money
+             does not, because `balance` already carries the sign. */
+          ...ref.map((r) => ({ ...r, quantity: -(Number(r.quantity) || 0) })),
         ])
           .catch(async (e) => {
             problems.push(`grouping lines by product failed (${e.message.slice(0, 90)}); read line by line instead`);
             const rows = [];
             for (let offset = 0; ; offset += 2000) {
               const page = await exec('account.move.line', 'search_read', [costLineDomain(cid, start, end)],
-                { fields: ['product_id', 'quantity', 'price_subtotal', 'date'], limit: 2000, offset, order: 'id asc' })
+                { fields: ['product_id', 'quantity', 'balance', 'date'], limit: 2000, offset, order: 'id asc' })
                 .catch((e2) => { problems.push(`reading lines failed: ${e2.message.slice(0, 90)}`); return null; });
               if (!page) return [];
               rows.push(...page);
@@ -223,24 +237,23 @@ export async function GET(request) {
               const pid = l.product_id && l.product_id[0]; if (!pid || !l.date) continue;
               const month = String(l.date).substring(0, 7);
               const k = `${pid}|${month}`;
-              if (!agg.has(k)) agg.set(k, { product_id: l.product_id, quantity: 0, price_subtotal: 0,
+              if (!agg.has(k)) agg.set(k, { product_id: l.product_id, quantity: 0, balance: 0,
                                             __range: { 'date:month': { from: `${month}-01` } } });
               const a = agg.get(k);
               a.quantity += Number(l.quantity) || 0;
-              a.price_subtotal += Number(l.price_subtotal) || 0;
+              a.balance += Number(l.balance) || 0;
             }
             return [...agg.values()];
           }),
         // Discount value recovered from the rate each line was sold at.
         Promise.all([
           exec('account.move.line', 'read_group', [[...lineDomain(cid, start, end), ['date', '!=', false],
-            ['move_id.move_type', '=', 'out_invoice']], ['price_subtotal:sum'], ['date:month', 'discount']],
+            ['move_id.move_type', '=', 'out_invoice']], ['balance:sum'], ['date:month', 'discount']],
             { lazy: false }),
           exec('account.move.line', 'read_group', [[...lineDomain(cid, start, end), ['date', '!=', false],
-            ['move_id.move_type', '=', 'out_refund']], ['price_subtotal:sum'], ['date:month', 'discount']],
+            ['move_id.move_type', '=', 'out_refund']], ['balance:sum'], ['date:month', 'discount']],
             { lazy: false }),
-        ]).then(([inv, ref]) => [...inv,
-          ...ref.map((r) => ({ ...r, price_subtotal: -(Number(r.price_subtotal) || 0) }))]).catch(() => []),
+        ]).then(([inv, ref]) => [...inv, ...ref]).catch(() => []),
       ]);
       return { moves, prodMonth, discRows };
     };
@@ -252,10 +265,10 @@ export async function GET(request) {
     const custDomain = (start, end) => [...moveDomain(cid, start, end), ['partner_id', '!=', false]];
     const [custPeriod, custLifetime] = await Promise.all([
       exec('account.move', 'read_group', [custDomain(range.start, range.end),
-        ['amount_untaxed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
+        ['amount_untaxed_signed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
       exec('account.move', 'read_group',
         [[...allPosted, ['partner_id', '!=', false]],
-         ['amount_untaxed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
+         ['amount_untaxed_signed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
     ]);
     // First and last invoice per customer, for new-customer counts and lapse.
     const [firstSeen, lastSeen] = await Promise.all([
@@ -283,13 +296,13 @@ export async function GET(request) {
         if (!k) continue;
         const unit = costOf.get(r.product_id && r.product_id[0]) || 0;
         touch(k).cost += toCents((Number(r.quantity) || 0) * unit);
-        if (unit > 0) touch(k).costedRev = (touch(k).costedRev || 0) + toCents(r.price_subtotal ?? 0);
+        if (unit > 0) touch(k).costedRev = (touch(k).costedRev || 0) + toCents(subOf(r));
       }
       for (const r of pack.discRows) {
         const k = rangeStart(r, 'date:month').substring(0, 7);
         const d = Number(r.discount) || 0;
         if (!k || d <= 0 || d >= 100) continue;
-        const sub = Number(r.price_subtotal) || 0;
+        const sub = subOf(r);
         touch(k).discount += toCents(sub / (1 - d / 100) - sub);
       }
       return out;
@@ -302,7 +315,8 @@ export async function GET(request) {
         const d = rangeStart(r, 'invoice_date:day');
         if (!d) continue;
         const isCredit = r.move_type === 'out_refund';
-        const cents = toCents(r.amount_untaxed ?? 0) * (isCredit ? -1 : 1);
+        // Already signed and already in company currency — do not sign it again.
+        const cents = toCents(r.amount_untaxed_signed ?? 0);
         const n = Number(r.__count) || 0;
         const rep = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
         if (!days.has(d)) days.set(d, { total: blank(), reps: new Map() });
@@ -427,15 +441,17 @@ export async function GET(request) {
             { fields: ['invoice_user_id'], limit: 0 }, 25000),
           exec('account.move.line', 'search_read',
             [costLineDomain(cid, range.start, range.end, 'out_refund')],
-            { fields: ['move_id', 'product_id', 'quantity', 'price_subtotal', 'date'], limit: 0 }, 25000),
+            { fields: ['move_id', 'product_id', 'quantity', 'balance', 'date'], limit: 0 }, 25000),
         ]);
         const repOfMove = new Map(refMoves.map((m) => [m.id, m.invoice_user_id ? m.invoice_user_id[1] : 'Unassigned']));
         for (const l of refLines) {
           const name = repOfMove.get(l.move_id && l.move_id[0]); if (!name || !l.date) continue;
           if (!refundByRep.has(name)) refundByRep.set(name, []);
           refundByRep.get(name).push({
+            // Quantity is positive on a credit note and needs negating; `balance`
+            // already carries the sign, so it is passed straight through.
             product_id: l.product_id, quantity: -(Number(l.quantity) || 0),
-            price_subtotal: -(Number(l.price_subtotal) || 0),
+            balance: Number(l.balance) || 0,
             __range: { 'date:month': { from: `${String(l.date).substring(0, 7)}-01` } },
           });
         }
@@ -445,7 +461,7 @@ export async function GET(request) {
         try {
           const inv = await exec('account.move.line', 'read_group',
             [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id]],
-             ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
+             ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
           const rows = [...inv, ...(refundByRep.get(name) || [])];
           /* Costed revenue is kept per month as well as for the year. Carrying
              only the year figure made a single month's cost coverage read against
@@ -460,7 +476,7 @@ export async function GET(request) {
             byMonth.set(k, (byMonth.get(k) || 0) + cents);
             total += cents;
             if (unit > 0) {
-              const sub = toCents(r.price_subtotal ?? 0);
+              const sub = toCents(subOf(r));
               costedRev += sub;
               crByMonth.set(k, (crByMonth.get(k) || 0) + sub);
             }
@@ -525,7 +541,8 @@ export async function GET(request) {
         const id = r.partner_id && r.partner_id[0]; if (!id) continue;
         const sign = r.move_type === 'out_refund' ? -1 : 1;
         const cur = m.get(id) || { name: r.partner_id[1], cents: 0, orders: 0 };
-        cur.cents += toCents(r.amount_untaxed ?? 0) * sign;
+        // Company currency, already signed — see the note on the moves query.
+        cur.cents += toCents(r.amount_untaxed_signed ?? 0);
         if (sign > 0) cur.orders += Number(r.__count) || 0;
         m.set(id, cur);
       }
@@ -556,7 +573,7 @@ export async function GET(request) {
       const id = r.product_id && r.product_id[0]; if (!id) continue;
       const cur = prodAgg.get(id) || { name: r.product_id[1], qty: 0, cents: 0 };
       cur.qty += Number(r.quantity) || 0;
-      cur.cents += toCents(r.price_subtotal ?? 0);
+      cur.cents += toCents(subOf(r));
       prodAgg.set(id, cur);
     }
     const catOf = new Map(prods.map((p) => [p.id, p.categ_id ? p.categ_id[1] : 'Uncategorised']));
@@ -631,14 +648,59 @@ export async function GET(request) {
        reimbursements and supplier rebate claims, typed in by hand. Real income,
        but nothing was bought to earn it, so there is no cost of sales to show.
        Split it here so the page can say which is which instead of guessing. */
+    /* Worthy Oceania is two businesses inside one Odoo company — fabric under
+       "Textiles", the Worthy product range under "WOL Products", plus a small
+       "Fashion" team — and they are told apart by the sales team on the invoice.
+       North is split the same way (Route, Online, Direct), so this is offered for
+       any company that uses teams rather than being special-cased to Oceania. */
+    let teams = null;
+    try {
+      const pull = (from, to) => exec('account.move', 'read_group',
+        [moveDomain(cid, from, to), ['amount_untaxed_signed:sum'],
+         ['team_id', 'invoice_date:month', 'move_type']], { lazy: false });
+      const [now, before] = await Promise.all([
+        pull(range.start, range.end), pull(prior.start, prior.end).catch(() => []),
+      ]);
+      const fold = (rows) => {
+        const m = new Map();
+        for (const r of rows) {
+          const name = r.team_id ? r.team_id[1] : 'Unassigned';
+          const key = rangeStart(r, 'invoice_date:month').substring(0, 7);
+          const cents = toCents(r.amount_untaxed_signed ?? 0);
+          const n = Number(r.__count) || 0;
+          if (!m.has(name)) m.set(name, { revenue: 0, invoices: 0, credits: 0, months: new Map() });
+          const t = m.get(name);
+          t.revenue += cents;
+          if (r.move_type === 'out_refund') t.credits += n; else t.invoices += n;
+          if (key) t.months.set(key, (t.months.get(key) || 0) + cents);
+        }
+        return m;
+      };
+      const cur = fold(now), prev = fold(before);
+      teams = [...cur].map(([name, t]) => ({
+        name,
+        revenue: toDollars(t.revenue), invoices: t.invoices, credits: t.credits,
+        share: pct1(t.revenue, [...cur.values()].reduce((a, x) => a + x.revenue, 0)),
+        prior: toDollars(prev.get(name)?.revenue || 0),
+        growthPct: priorComparable && prev.get(name)?.revenue > 0
+          ? growth(t.revenue, prev.get(name).revenue) : null,
+        months: monthRows.filter((m) => m.started)
+          .map((m) => ({ key: m.key, label: m.label, revenue: toDollars(t.months.get(m.key) || 0) })),
+      })).sort((a, b) => b.revenue - a.revenue);
+      /* The teams must come to the company total, or the split is telling a
+         different story from the headline. */
+      reconcile(teams, present(total, hasCost).revenue, (t) => t.revenue, (t, v) => { t.revenue = v; });
+    } catch (e) {
+      problems.push(`sales teams could not be read (${e.message.slice(0, 80)})`);
+    }
+
     let nonStockRevenue = null;
     try {
-      const side = (type) => exec('account.move.line', 'read_group',
-        [[...lineDomain(cid, range.start, range.end), ['product_id', '=', false],
-          ['move_id.move_type', '=', type]], ['price_subtotal:sum'], []], { lazy: false });
-      const [inv, ref] = await Promise.all([side('out_invoice'), side('out_refund')]);
-      const total = (rows) => rows.reduce((a, r) => a + (Number(r.price_subtotal) || 0), 0);
-      nonStockRevenue = toDollars(toCents(total(inv) - total(ref)));
+      const rows = await exec('account.move.line', 'read_group',
+        [[...lineDomain(cid, range.start, range.end), ['product_id', '=', false]],
+         ['balance:sum'], []], { lazy: false });
+      // `balance` is already signed, so invoices and credit notes add together.
+      nonStockRevenue = toDollars(toCents(rows.reduce((a, r) => a + subOf(r), 0)));
     } catch (e) {
       problems.push(`non-stock revenue could not be split out (${e.message.slice(0, 80)})`);
     }
@@ -662,7 +724,7 @@ export async function GET(request) {
 
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
-      fy, company: cid, nonStockRevenue,
+      fy, company: cid, nonStockRevenue, teams,
       products:   topProducts,
       fastMoving: topMoving,
       categories: categoryRows.slice(0, 30),
