@@ -77,6 +77,15 @@ const lineDomain = (cid, start, end) => [
  * quantity and subtotal as POSITIVE — the sign lives on the move, not the line —
  * so summing them raw ADDS the cost of returned goods to cost of sales instead
  * of taking it off. Each side is fetched separately and the credit side negated. */
+/* Four fabric variants in Worthy Oceania have an attribute value Odoo cannot
+   render, so ANY query that has to name a product dies with "sequence item 1:
+   expected str instance, bool found" — which took every product, category and
+   margin off that company's page. Excluding them by id lets the other 2,842
+   products through; their own figures are fetched separately, by id, where no
+   name is needed. Fixing the four records in Odoo makes this unnecessary, and
+   the page says so. */
+const UNRENDERABLE_VARIANTS = [28085, 28084, 6691, 7503];
+
 const costLineDomain = (cid, start, end, type) => [
   ...lineDomain(cid, start, end), ['product_id', '!=', false], ['date', '!=', false],
   ...(type ? [['move_id.move_type', '=', type]] : []),
@@ -209,10 +218,12 @@ export async function GET(request) {
          * lines directly avoids the grouping; if that fails too the reason is
          * reported rather than leaving an empty table with no explanation. */
         Promise.all([
-          exec('account.move.line', 'read_group', [costLineDomain(cid, start, end, 'out_invoice'),
-            ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }),
-          exec('account.move.line', 'read_group', [costLineDomain(cid, start, end, 'out_refund'),
-            ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }),
+          exec('account.move.line', 'read_group',
+            [[...costLineDomain(cid, start, end, 'out_invoice'), ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
+             ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }),
+          exec('account.move.line', 'read_group',
+            [[...costLineDomain(cid, start, end, 'out_refund'), ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
+             ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }),
         ]).then(([inv, ref]) => [
           ...inv,
           /* Returned goods reduce quantity sold and cost of sales. Quantity is
@@ -440,7 +451,8 @@ export async function GET(request) {
             [[...moveDomain(cid, range.start, range.end), ['move_type', '=', 'out_refund']]],
             { fields: ['invoice_user_id'], limit: 0 }, 25000),
           exec('account.move.line', 'search_read',
-            [costLineDomain(cid, range.start, range.end, 'out_refund')],
+            [[...costLineDomain(cid, range.start, range.end, 'out_refund'),
+              ['product_id', 'not in', UNRENDERABLE_VARIANTS]]],
             { fields: ['move_id', 'product_id', 'quantity', 'balance', 'date'], limit: 0 }, 25000),
         ]);
         const repOfMove = new Map(refMoves.map((m) => [m.id, m.invoice_user_id ? m.invoice_user_id[1] : 'Unassigned']));
@@ -460,7 +472,8 @@ export async function GET(request) {
       const runOne = async ([name, id]) => {
         try {
           const inv = await exec('account.move.line', 'read_group',
-            [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id]],
+            [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id],
+              ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
              ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
           const rows = [...inv, ...(refundByRep.get(name) || [])];
           /* Costed revenue is kept per month as well as for the year. Carrying
@@ -694,6 +707,36 @@ export async function GET(request) {
       problems.push(`sales teams could not be read (${e.message.slice(0, 80)})`);
     }
 
+    /* What was left out, and what it is worth — so the gap is a stated figure
+       rather than a silent omission. Queried by id, and named from the template,
+       because it is only the VARIANT name Odoo cannot build. */
+    let excludedProducts = null;
+    try {
+      const hits = [];
+      for (const pid of UNRENDERABLE_VARIANTS) {
+        const rows = await exec('account.move.line', 'read_group',
+          [[...lineDomain(cid, range.start, range.end), ['product_id', '=', pid]],
+           ['balance:sum', 'quantity:sum'], []], { lazy: false }).catch(() => []);
+        const revenue = rows.reduce((a, r) => a + subOf(r), 0);
+        const units = rows.reduce((a, r) => a + (Number(r.quantity) || 0), 0);
+        if (!rows.length || (revenue === 0 && units === 0)) continue;
+        const info = await exec('product.product', 'read', [[pid]],
+          { fields: ['default_code', 'product_tmpl_id'] }).catch(() => []);
+        hits.push({
+          id: pid, code: info[0]?.default_code || String(pid),
+          title: info[0]?.product_tmpl_id ? info[0].product_tmpl_id[1] : String(pid),
+          revenue: toDollars(toCents(revenue)), unitsSold: Math.round(units),
+        });
+      }
+      if (hits.length) {
+        excludedProducts = {
+          reason: 'Odoo cannot build a name for these variants, which stops it grouping ANY product for this company. They are left out of the product and category tables; their sales are still counted in every total.',
+          revenue: toDollars(toCents(hits.reduce((a, h) => a + toCents(h.revenue), 0))),
+          products: hits,
+        };
+      }
+    } catch (e) { problems.push(`could not measure the excluded variants (${e.message.slice(0, 80)})`); }
+
     let nonStockRevenue = null;
     try {
       const rows = await exec('account.move.line', 'read_group',
@@ -724,7 +767,7 @@ export async function GET(request) {
 
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
-      fy, company: cid, nonStockRevenue, teams,
+      fy, company: cid, nonStockRevenue, teams, excludedProducts,
       products:   topProducts,
       fastMoving: topMoving,
       categories: categoryRows.slice(0, 30),
