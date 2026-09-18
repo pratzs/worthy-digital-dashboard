@@ -731,7 +731,7 @@ export async function GET(request) {
       if (hits.length) {
         excludedProducts = {
           reason: 'Odoo cannot build a name for these variants, which stops it grouping ANY product for this company. They are left out of the product and category tables; their sales are still counted in every total.',
-          revenue: toDollars(toCents(hits.reduce((a, h) => a + toCents(h.revenue), 0))),
+          revenue: Math.round(hits.reduce((a, h) => a + h.revenue, 0) * 100) / 100,
           products: hits,
         };
       }

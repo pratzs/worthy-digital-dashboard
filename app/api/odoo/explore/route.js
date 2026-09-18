@@ -191,6 +191,35 @@ export async function GET(request) {
     /* Why do those variants break? Almost certainly an attribute value whose
        name is blank, so Odoo joins a False into the display name. If that can be
        detected in one query, the fix stays general instead of hardcoding ids. */
+    /* Does this company keep standard costs at all? */
+    let costCoverage = {};
+    try {
+      const BROKEN2 = [28085, 28084, 6691, 7503];
+      const g = await exec('account.move.line', 'read_group',
+        [[...lineDom, ['product_id', 'not in', BROKEN2]], ['balance:sum', 'quantity:sum'], ['product_id']],
+        { lazy: false });
+      const pids = g.map((r) => r.product_id[0]);
+      const prods = [];
+      for (let i = 0; i < pids.length; i += 500)
+        prods.push(...await exec('product.product', 'read', [pids.slice(i, i + 500)],
+          { fields: ['standard_price'] }));
+      const priced = prods.filter((x) => Number(x.standard_price) > 0);
+      const priceOf = new Map(prods.map((x) => [x.id, Number(x.standard_price) || 0]));
+      let revAll = 0, revPriced = 0, cost = 0;
+      for (const r of g) {
+        const rev = -(Number(r.balance) || 0);
+        revAll += rev;
+        if ((priceOf.get(r.product_id[0]) || 0) > 0) { revPriced += rev;
+          cost += (Number(r.quantity) || 0) * priceOf.get(r.product_id[0]); }
+      }
+      costCoverage = { productsSold: prods.length, withAStandardCost: priced.length,
+        revenueAll: Math.round(revAll * 100) / 100,
+        revenueWithCost: Math.round(revPriced * 100) / 100,
+        coveragePct: revAll > 0 ? Math.round((revPriced / revAll) * 1000) / 10 : null,
+        costOfThatRevenue: Math.round(cost * 100) / 100,
+        sampleUnpriced: prods.filter((x) => !(Number(x.standard_price) > 0)).slice(0, 5).map((x) => x.id) };
+    } catch (e) { costCoverage = { error: e.message.slice(0, 200) }; }
+
     let rootCause = {};
     try {
       const pav = await exec('product.attribute.value', 'search_read',
@@ -209,7 +238,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       company: company[0], period: `${start} .. ${end}`,
-      signConvention, brokenProducts, rootCause, lineFields, signedGroupWorks, groupingWithoutBroken,
+      signConvention, brokenProducts, rootCause, costCoverage, lineFields, signedGroupWorks, groupingWithoutBroken,
       documents: moves.length,
       totals: {
         sumOfAmountUntaxed_mixedCurrency: Math.round(moves.reduce((a, r) => a + (Number(r.amount_untaxed) || 0), 0) * 100) / 100,
