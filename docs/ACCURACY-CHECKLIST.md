@@ -312,3 +312,49 @@ exactly revenue minus cost everywhere both are shown. Zero failures. Re-run on
 screen afterwards: every additive column on both companies now equals the total
 printed under it (AOV excepted — it is an average, and its footer correctly
 shows the period figure, not the sum of monthly ones).
+
+## Worthy Oceania — 18 Sep 2026
+
+Oceania is two businesses in one Odoo company, trading in three currencies. Both
+facts were being ignored.
+
+- [x] **34. Revenue was adding US dollars to New Zealand ones.** Oceania raises
+      invoices in USD (204), NZD (763) and AUD (56). The route summed
+      `amount_untaxed`, which is stated in each invoice's OWN currency, so the
+      dashboard showed **NZ$3,207,414 against a true NZ$4,429,231** — 28% of the
+      company missing. Line figures had the same fault through `price_subtotal`.
+      Both now use the company-currency fields Odoo maintains for this:
+      `amount_untaxed_signed` on the document and `balance` on the line.
+
+      Each was verified on this database before use: identical to hand-signed
+      arithmetic on 762 same-currency documents; `-balance` identical to
+      `price_subtotal` on home-currency invoice lines and its exact opposite on
+      credit-note lines; USD lines converting at 1.7106 NZD.
+
+      North was affected too, though barely — one AUD invoice, NZ$174.80. It
+      would have grown silently.
+
+- [x] **35. The two departments are Odoo sales teams.** Fabric trades as
+      **Textiles** (NZ$3,394,212, 76.6%, +12.6%), the Worthy range as **WOL
+      Products** (NZ$899,081, 20.3%, −5.9%), and a small **Fashion** team sits
+      alongside (NZ$135,938, 3.1%). A By Department panel gives each its revenue,
+      share, counts, prior year and growth, reconciled to the company total.
+      North uses teams too (Route, Online, Direct) and gets the same panel.
+
+- [x] **36. Products, categories and margin were entirely absent.** Four fabric
+      variants have an attribute value Odoo cannot render, and any query that has
+      to name a product then fails outright — so the whole company was reduced to
+      a revenue figure. Excluding those four by id lets the other **2,842**
+      products through. Only two had sales in the period (COTGREYCAL36,
+      COTGREYCAL48, NZ$1,521.67); the page names them and says their sales are
+      still in every total. **Fixing those four records in Odoo removes the need
+      for any of this.**
+
+- [x] **37. Oceania still shows no margin, and that is correct.** Not one of the
+      2,842 products it sells carries a standard cost in Odoo — 0% coverage,
+      measured. The margin columns are absent rather than reading 100%, and the
+      banner says why. Populating standard costs in Odoo is the only thing that
+      changes this.
+
+Teams, months, reps and the currency split each add up to the company total, and
+`problems` is empty.

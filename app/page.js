@@ -1932,8 +1932,8 @@ export default function EcommerceDashboard() {
                 <div style={{ color: "#b45309" }}>
                   <strong>{d.excludedProducts.products.length} product{d.excludedProducts.products.length === 1 ? "" : "s"} are
                   missing from the product and category tables below.</strong>{" "}
-                  Odoo cannot build a name for {d.excludedProducts.products.map(p => p.code).join(", ")}, and that stops it
-                  grouping any product for this company at all. Their{" "}
+                  Odoo cannot build a name for {d.excludedProducts.products.map(p => p.code).join(" and ")}, and
+                  that stops it grouping any product for this company at all. Their{" "}
                   {fmtExact(d.excludedProducts.revenue, activeStore.currency)} of sales is still counted in every total
                   above. Fixing those records in Odoo puts them back on the page.
                 </div>
