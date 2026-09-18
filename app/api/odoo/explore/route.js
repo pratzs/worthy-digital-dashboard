@@ -135,9 +135,49 @@ export async function GET(request) {
       }
     }
 
+    /* Line level has the same currency problem: price_subtotal is in the
+       INVOICE's currency. `balance` is in company currency and already signed
+       (revenue sits on the credit side, so it is negative). Prove the relation
+       on same-currency lines before relying on it, and check read_group can sum
+       the signed header field at all. */
+    const BROKEN = [28085, 28084, 6691, 7503];
+    const lineDom = [['move_id.company_id', '=', cid],
+      ['move_id.move_type', 'in', ['out_invoice', 'out_refund']], ['move_id.state', '=', 'posted'],
+      ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end],
+      ['display_type', '=', 'product'], ['product_id', '!=', false]];
+    const sample = await exec('account.move.line', 'search_read',
+      [[...lineDom, ['currency_id.name', '=', home]]],
+      { fields: ['price_subtotal', 'balance', 'move_id'], limit: 4000 });
+    let sub = 0, bal = 0;
+    for (const l of sample) { sub += Number(l.price_subtotal) || 0; bal += -(Number(l.balance) || 0); }
+    const lineFields = {
+      sameCurrencyLinesSampled: sample.length,
+      sumPriceSubtotal: Math.round(sub * 100) / 100,
+      sumNegatedBalance: Math.round(bal * 100) / 100,
+      identical: Math.abs(sub - bal) <= 0.02,
+    };
+
+    let signedGroupWorks = null, groupingWithoutBroken = null;
+    try {
+      const g = await exec('account.move', 'read_group',
+        [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
+          ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end]],
+         ['amount_untaxed_signed:sum'], ['team_id']], { lazy: false });
+      signedGroupWorks = g.map((r) => ({ team: r.team_id ? r.team_id[1] : '(none)',
+        signed: Math.round((Number(r.amount_untaxed_signed) || 0) * 100) / 100, docs: r.__count }));
+    } catch (e) { signedGroupWorks = { error: e.message.slice(0, 160) }; }
+
+    try {
+      const g = await exec('account.move.line', 'read_group',
+        [[...lineDom, ['product_id', 'not in', BROKEN]],
+         ['balance:sum', 'quantity:sum'], ['product_id']], { lazy: false });
+      groupingWithoutBroken = { groups: g.length,
+        revenue: Math.round(g.reduce((a, r) => a - (Number(r.balance) || 0), 0) * 100) / 100 };
+    } catch (e) { groupingWithoutBroken = { error: e.message.slice(0, 160) }; }
+
     return NextResponse.json({
       company: company[0], period: `${start} .. ${end}`,
-      signConvention, brokenProducts,
+      signConvention, brokenProducts, lineFields, signedGroupWorks, groupingWithoutBroken,
       documents: moves.length,
       totals: {
         sumOfAmountUntaxed_mixedCurrency: Math.round(moves.reduce((a, r) => a + (Number(r.amount_untaxed) || 0), 0) * 100) / 100,
