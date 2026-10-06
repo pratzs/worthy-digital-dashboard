@@ -799,9 +799,18 @@ export async function GET(request) {
        reader wondering whether a USD invoice was counted at face value. */
     let currencies = null;
     try {
-      const rows = [...(await exec('account.move', 'read_group',
+      const grouped = await exec('account.move', 'read_group',
         [moveDomain(cid, range.start, range.end), ['amount_untaxed_signed:sum'], ['currency_id']],
-        { lazy: false })), ...(await nonProduct(range.start, range.end))];
+        { lazy: false });
+      /* Fold the non-product adjustments INTO the matching currency row. They are
+         one row per excluded line, so listing them as rows would print the same
+         currency hundreds of times. */
+      const byCurrency = new Map(grouped.map((r) => [r.currency_id ? r.currency_id[0] : null, { ...r }]));
+      for (const a of await nonProduct(range.start, range.end)) {
+        const t = byCurrency.get(a.currency_id ? a.currency_id[0] : null);
+        if (t) t.amount_untaxed_signed = (Number(t.amount_untaxed_signed) || 0) + a.amount_untaxed_signed;
+      }
+      const rows = [...byCurrency.values()];
       const home = (await exec('res.company', 'read', [[cid]], { fields: ['currency_id'] }))[0]?.currency_id?.[1];
       currencies = {
         company: home,

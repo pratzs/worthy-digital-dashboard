@@ -400,3 +400,11 @@ Teams, months, reps and the currency split each add up to the company total, and
       New customers on the Shopify side (Online/POS) are now counted on the
       customer's first-ever order, once, instead of every order from a customer
       created that month — March had read 555 against a true 16.
+
+      Correction, same day: the first deploy printed the currency line as
+      "NZD (0), NZD (0), ..." hundreds of times, because the non-product
+      adjustments were listed as rows instead of being folded into their currency.
+      It had been checked through the API but not looked at on the page. Fixed,
+      then checked in the rendered page: North, Oceania, South, and the North
+      Online tab. A change to what the page shows is not verified until the page
+      has been looked at.
