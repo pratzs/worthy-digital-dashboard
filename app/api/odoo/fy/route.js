@@ -219,25 +219,33 @@ export async function GET(request) {
        amount to take off. Not wrapped in a catch: if this fails the page must
        say so rather than quietly show revenue with the non-sales income back in. */
     const financeBasis = usesFinanceBasis(cid);
-    const nonProduct = async (start, end) => {
-      if (!financeBasis) return [];
+    /* Read the excluded lines ONCE for the company's whole history and slice by
+       date in memory. Several panels need them (months, teams, customers,
+       currencies, last year), and fetching per panel made the route slow enough
+       to threaten the 60-second limit. */
+    let npAll = null;
+    const loadNonProduct = async () => {
       const dom = [['move_id.company_id', '=', cid], ['move_id.move_type', 'in', ['out_invoice', 'out_refund']],
                    ['move_id.state', '=', 'posted'], ['display_type', '=', 'product'], ['product_id', '=', false]];
-      if (start) dom.push(['move_id.invoice_date', '>=', start]);
-      if (end) dom.push(['move_id.invoice_date', '<=', end]);
       const lines = await exec('account.move.line', 'search_read', [dom],
         { fields: ['move_id', 'balance'], limit: 0 }, 45000);
       const ids = [...new Set(lines.map((l) => l.move_id && l.move_id[0]).filter(Boolean))];
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += 1000) chunks.push(ids.slice(i, i + 1000));
       const info = new Map();
-      for (let i = 0; i < ids.length; i += 500) {
-        const moves = await exec('account.move', 'read', [ids.slice(i, i + 500)],
-          { fields: ['invoice_user_id', 'invoice_date', 'move_type', 'team_id', 'partner_id', 'currency_id'] }, 45000);
-        for (const m of moves) info.set(m.id, m);
-      }
+      const reads = await Promise.all(chunks.map((c) => exec('account.move', 'read', [c],
+        { fields: ['invoice_user_id', 'invoice_date', 'move_type', 'team_id', 'partner_id', 'currency_id'] }, 45000)));
+      for (const moves of reads) for (const m of moves) info.set(m.id, m);
       return lines.map((l) => {
         const m = info.get(l.move_id[0]);
         return m ? { ...m, amount_untaxed_signed: Number(l.balance) || 0, __count: 0 } : null;
       }).filter(Boolean);
+    };
+    const nonProduct = async (start, end) => {
+      if (!financeBasis) return [];
+      if (!npAll) npAll = loadNonProduct();
+      const all = await npAll;
+      return all.filter((m) => (!start || dayOf(m.invoice_date) >= start) && (!end || dayOf(m.invoice_date) <= end));
     };
     const dayRange = (m, key) => ({ __range: { [key]: { from: dayOf(m.invoice_date) } } });
     const asMoveRows = (adj) => adj.map((m) => ({ ...m, ...dayRange(m, 'invoice_date:day') }));

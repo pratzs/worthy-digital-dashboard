@@ -408,3 +408,13 @@ Teams, months, reps and the currency split each add up to the company total, and
       then checked in the rendered page: North, Oceania, South, and the North
       Online tab. A change to what the page shows is not verified until the page
       has been looked at.
+
+      Gross profit, later the same day: product standard costs were edited in
+      Odoo at 01:22 UTC on 6 Oct (about 11 products touched, including R0179 to
+      9.94). North's September GP moved from NZ$211,414 to NZ$212,230 (12.3%)
+      with no change to the code or to sales, which is now NZ$219 (0.1%) from the
+      head of finance's NZ$212,449. That supports the earlier reading: the
+      remaining gap is cost as of a different date, because the dashboard costs at
+      today's standard cost and any later edit moves every past month.
+      The non-product lines are now read once per request (about 1.7s) and sliced
+      by date, rather than once per panel.
