@@ -1459,8 +1459,11 @@ export default function EcommerceDashboard() {
     name: c.category, category: c.category, qty: c.unitsSold, unitsSold: c.unitsSold,
     revenue: c.revenue, margin: c.margin, productCount: c.productCount,
   }));
-  // Odoo carries no stock-on-hand valuation here, so slow movers are not offered.
-  const getOdooSlowMoving = () => [];
+  // Stock held today against what sold in the financial year, ranked by capital tied up.
+  const getOdooSlowMoving = () => (fyPayload(selectedYear)?.slowMoving || []).map(p => ({
+    name: p.title, category: p.category, currentStock: p.onHand,
+    qtySold: p.unitsSold, lockedCapital: p.lockedCapital,
+  }));
   /* Rep margin for the Odoo companies. Odoo does not store the salesperson on
      the invoice line, so the endpoint filters lines through the move to get each
      rep's cost. Weeks carry no margin because Odoo holds cost per month. */
@@ -2639,7 +2642,7 @@ export default function EcommerceDashboard() {
                 aiContext="fast-moving Odoo SKUs"
                 aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
               />
-              <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Capital sitting on the shelf, clear, bundle, or discontinue"
+              <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period. Clear, bundle or discontinue"
                 loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
                 columns={[
                   { key: "name",          label: "Product",       color: T.text },

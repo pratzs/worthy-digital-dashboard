@@ -857,6 +857,47 @@ export async function GET(request) {
       }
     }
 
+    /* Slow movers: stock held today against what sold in the period.
+       On hand comes from stock.quant (internal locations, this company) summed
+       inside Odoo in one call. Asking product.product for qty_available on every
+       product is what costs ~13s, so it is not used here. Capital tied up is
+       on hand x today's standard cost, the same cost basis as the margins. A
+       product ranks by capital x the share of its stock that did NOT sell.
+       The variants Odoo cannot name are left out of the query, because grouping
+       by product asks Odoo to name every one and the whole call fails on them. */
+    let slowMoving = [];
+    try {
+      const quants = await exec('stock.quant', 'read_group',
+        [[['location_id.usage', '=', 'internal'], ['company_id', '=', cid], ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
+         ['quantity:sum'], ['product_id']],
+        { lazy: false }, 60000);
+      const held = quants.map((q) => ({ id: q.product_id && q.product_id[0], qty: Number(q.quantity) || 0 }))
+        .filter((h) => h.id && h.qty > 0);
+      if (held.length) {
+        const info = await exec('product.product', 'read', [held.map((h) => h.id)],
+          { fields: ['name', 'default_code', 'categ_id', 'standard_price'],
+            context: { allowed_company_ids: [cid], company_id: cid } }, 60000);
+        const meta = new Map(info.map((r) => [r.id, r]));
+        slowMoving = held.map((h) => {
+          const m = meta.get(h.id) || {};
+          const sold = prodAgg.get(h.id)?.qty || 0;
+          const unit = Number(m.standard_price) || 0;
+          const tied = hasCost ? Math.round(h.qty * unit) : null;
+          const unsold = 1 - Math.min(sold / h.qty, 1);
+          return {
+            code: m.default_code || String(h.id), title: m.name || String(h.id),
+            category: m.categ_id ? m.categ_id[1] : 'Uncategorised',
+            onHand: Math.round(h.qty), unitsSold: Math.round(sold), lockedCapital: tied,
+            score: (tied === null ? h.qty : tied) * unsold,
+          };
+        }).filter((r) => r.score > 0 && (r.lockedCapital === null || r.lockedCapital > 0))
+          .sort((a, b) => b.score - a.score).slice(0, 30)
+          .map(({ score, ...rest }) => rest);
+      }
+    } catch (e) {
+      problems.push(`slow-moving stock could not be read (${e.message.slice(0, 80)})`);
+    }
+
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
       fy, company: cid, nonStockRevenue, teams, excludedProducts, currencies,
@@ -868,6 +909,7 @@ export async function GET(request) {
       nonStockExcluded: financeBasis,
       products:   topProducts,
       fastMoving: topMoving,
+      slowMoving,
       categories: categoryRows.slice(0, 30),
       customers:  customers.filter((c) => c.orderCount > 0).sort(byRev).slice(0, 100),
       clv:        [...customers].sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue).slice(0, 50),
