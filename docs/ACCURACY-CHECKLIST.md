@@ -418,3 +418,16 @@ Teams, months, reps and the currency split each add up to the company total, and
       today's standard cost and any later edit moves every past month.
       The non-product lines are now read once per request (about 1.7s) and sliced
       by date, rather than once per panel.
+
+- [x] **39. North KPI targets table agrees with the Odoo KPI emails.** The Odoo
+      tab on Worthy Products North shows each rep's annual target against
+      year-to-date sales, using the same three targets and selection rules as
+      the KPI scheduled actions (ir.cron 107 Rubin $650,000, 110 Savan $350,000,
+      111 Naitik $300,000). Checked 7 Oct 2026 against the emails Odoo had
+      already sent: Rubin $375,786 (57.8%) and Naitik $268,568 (89.5%) to
+      4 Oct, Savan $230,338 (65.8%) to 27 Sep, all to the dollar. The basis is
+      calendar year, ex GST, invoices less credit notes, so it deliberately
+      differs from the April-March finance basis used elsewhere on the page.
+      The targets live as constants in the crons, not as Odoo fields, so a change
+      there must be copied to lib/kpiTargets.js. `/api/odoo/kpi?asOf=YYYY-MM-DD`
+      reproduces an earlier email.

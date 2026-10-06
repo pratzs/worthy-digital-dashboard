@@ -381,6 +381,51 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
   );
 };
 
+/* Worthy Products North: rep KPI targets, the same three targets and year-to-date
+   figures as the weekly KPI emails run by the Odoo scheduled actions (ir.cron 107,
+   110, 111). Calendar year, ex GST, to the last completed Sunday. */
+const KPI_DOLLAR = (v) => (v === null || v === undefined ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
+const KpiTargetsTable = ({ theme }) => {
+  const [kpi, setKpi] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/odoo/kpi", { cache: "no-store" })
+      .then(r => r.json())
+      .then(j => { if (!live) return; if (j.ok) setKpi(j); else setErr(j.error || "Could not load KPI targets"); })
+      .catch(e => live && setErr(e.message));
+    return () => { live = false; };
+  }, []);
+  const nzDate = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" });
+  const subtitle = err ? `Could not load: ${err}`
+    : kpi ? `Targets set in Odoo scheduled actions · 1 Jan – ${nzDate(kpi.period.to)} · ex GST · ${kpi.paceFraction}% of the year gone`
+    : "Targets set in Odoo scheduled actions";
+  const rows = (kpi?.reps || []).map(r => ({ ...r, repLabel: r.rep }));
+  const barColor = (p) => (p > 75 ? "#16a34a" : p > 40 ? "#f59e0b" : "#dc2626");
+  return (
+    <AdvancedTable theme={theme} title="🎯 KPI Targets — Rep Sales vs Target" subtitle={subtitle}
+      loading={!kpi && !err} currency="NZD" data={rows}
+      columns={[
+        { key: "rep", label: "Rep", color: theme.text },
+        { key: "group", label: "Customers", color: theme.textRow },
+        { key: "target", label: "Annual Target", align: "right", color: "#7C9EC9", format: KPI_DOLLAR },
+        { key: "ytd", label: "YTD Sales", align: "right", color: "#9EC97C", format: KPI_DOLLAR },
+        { key: "pctOfTarget", label: "% of Target", align: "left", format: v => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
+            <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(128,128,128,0.2)", overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, Math.max(0, v))}%`, height: "100%", background: barColor(v) }} />
+            </div>
+            <span style={{ color: barColor(v), fontWeight: 600, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
+          </div>) },
+        { key: "remaining", label: "Remaining", align: "right", color: "#C97C9E", format: v => (v <= 0 ? "Target met" : KPI_DOLLAR(v)) },
+        { key: "vsPace", label: "vs Pace", align: "right", format: v => (
+          <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : ""}{KPI_DOLLAR(v)}</span>) },
+        { key: "week", label: "Last Week", align: "right", color: theme.textRow, format: KPI_DOLLAR },
+      ]}
+    />
+  );
+};
+
 // ── Sales Rep Breakdown — ONE table with annual/monthly/weekly toggle ─────────
 const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, T, accent, exact = false }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
@@ -2424,6 +2469,11 @@ export default function EcommerceDashboard() {
         {/* ODOO ADVANCED SECTION — Worthy North (Odoo tab) and Worthy Oceania (nova) */}
         {((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <>
+            {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
+            {activeStore.id === "worthy" && (
+              <div style={{ marginTop: 28 }}><KpiTargetsTable theme={T} /></div>
+            )}
+
             {/* Odoo: top customers, at-risk, lapsed */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
               <AdvancedTable theme={T} title="🏆 Top Customers — Odoo" subtitle="Ranked by net invoice revenue (customers only — suppliers excluded)"
