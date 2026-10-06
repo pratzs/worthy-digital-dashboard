@@ -80,6 +80,11 @@ const ICON_PATHS = {
   store: <><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M9 20v-6h6v6" /><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" /></>,
   sparkle: <path d="M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6-5.6-1.9 5.6-1.9z" />,
   close: <path d="M18 6 6 18M6 6l12 12" />,
+  download: <path d="M12 3v12M7 10l5 5 5-5M4 20h16" />,
+  refresh: <path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4" />,
+  receipt: <><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" /><path d="M9 8h6M9 12h6" /></>,
+  building: <><path d="M4 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M14 9h5a1 1 0 0 1 1 1v11M2 21h20" /><path d="M8 7h2M8 11h2M8 15h2" /></>,
+  forecast: <path d="M3 17l6-6 4 4 8-9M15 6h6v6" />,
   calendar: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><path d="M3 10h18M8 2.5v4M16 2.5v4" /></>,
   trending: <path d="M22 7l-8.5 8.5-5-5L2 17M16 7h6v6" />,
   dollar: <path d="M12 2v20M17 6.5C16 5 14.3 4.5 12 4.5c-3 0-5 1.3-5 3.3 0 4.7 10 2.3 10 7 0 2-2 3.5-5 3.5-2.5 0-4.3-.7-5.5-2.3" />,
@@ -380,6 +385,41 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
   );
 };
 
+/* CSV export. Writes what the table shows, with a byte-order mark so Excel opens
+   it with the right characters. The period is in the file name. */
+const csvCell = (v) => {
+  if (v === null || v === undefined || typeof v === "object") return "";
+  const t = String(v);
+  return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+const slugOf = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const downloadCsv = (fileName, headers, rows) => {
+  try {
+    const text = [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (e) { console.error("CSV export failed", e); }
+};
+const ExportButton = ({ title, range, columns, data, theme }) => {
+  if (!data || data.length === 0) return null;
+  const run = () => downloadCsv(
+    `${slugOf(title)}${range ? "_" + slugOf(range) : ""}.csv`,
+    columns.map(c => c.label),
+    data.map(row => columns.map(c => row[c.key])),
+  );
+  return (
+    <button onClick={run} title="Download as CSV" aria-label={`Download ${title} as CSV`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.03em",
+               borderRadius: 8, cursor: "pointer", background: "transparent", color: theme?.textSub || "#6b7280",
+               border: `1px solid ${theme?.border || "rgba(128,128,128,0.3)"}` }}>
+      <Icon name="download" size={12} />CSV
+    </button>
+  );
+};
+
 const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, theme, icon, range }) => {
   const T = theme || {
     bgCard: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
@@ -395,7 +435,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
           {icon && <Icon name={icon} size={15} style={{ marginRight: 8, color: T.accent || "#3f7bdd" }} />}{title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
         </div>
-        {headerExtra}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{headerExtra}<ExportButton title={title} range={range} columns={columns} data={data} theme={T} /></div>
       </div>
       {subtitle && <div style={{ fontSize: 10, color: T.textSub, marginTop: 4 }}>{subtitle}</div>}
       {range && <div style={{ marginTop: 8 }}><RangeTag text={range} theme={T} /></div>}
@@ -432,6 +472,190 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
       <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} accent={theme?.accent || "#3f7bdd"} />
     )}
   </div>
+  );
+};
+
+/* Debtors: what customers owe and how overdue it is, as at today. The figure is
+   Odoo's own receivable balance (checked against the ledger to the cent). */
+const DebtorsPanel = ({ companyId, theme, accent, currency = "NZD" }) => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setD(null); setErr(null);
+    fetch(`/api/odoo/debtors?company=${companyId}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(j => { if (!live) return; if (j.ok) setD(j); else setErr(j.error || "Could not load debtors"); })
+      .catch(e => live && setErr(e.message));
+    return () => { live = false; };
+  }, [companyId]);
+  const T = theme;
+  const tile = (label, value, note, color) => (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: color || T.textHead, marginTop: 6 }}>{value}</div>
+      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
+    </div>
+  );
+  const t = d?.totals;
+  const asAt = d ? `As at ${fmtDay(d.asOf)}` : null;
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: T.textHead }}>
+          <Icon name="receipt" size={16} style={{ marginRight: 8, color: accent }} />Debtors
+        </div>
+        <RangeTag text={asAt} theme={T} />
+      </div>
+      {t && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 16 }}>
+          {tile("Owed to us", fmtExact(t.outstanding, currency), `${d.documents.toLocaleString()} open invoices`)}
+          {tile("Overdue", fmtExact(t.overdue, currency), t.overduePct !== null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? "#dc2626" : undefined)}
+          {tile("Over 90 days", fmtExact(t.over90, currency), "Chase first", t.over90 > 0 ? "#dc2626" : undefined)}
+          {tile("Not yet due", fmtExact(t.current, currency), "Inside payment terms")}
+        </div>
+      )}
+      <AdvancedTable theme={T} icon="receipt" title="Overdue by Customer" range={asAt}
+        subtitle={err ? `Could not load: ${err}` : "Open invoices less credit notes, aged by days past the due date. Largest overdue first"}
+        loading={!d && !err} currency={currency} data={d?.customers || []}
+        columns={[
+          { key: "name", label: "Customer", color: T.text },
+          { key: "current", label: "Not Yet Due", align: "right", color: T.textSub, format: v => fmtExact(v, currency) },
+          { key: "d1to30", label: "1 to 30", align: "right", color: T.textSub, format: v => fmtExact(v, currency) },
+          { key: "d31to60", label: "31 to 60", align: "right", color: "#f59e0b", format: v => fmtExact(v, currency) },
+          { key: "d61to90", label: "61 to 90", align: "right", color: "#ea580c", format: v => fmtExact(v, currency) },
+          { key: "over90", label: "Over 90", align: "right", color: "#dc2626", format: v => fmtExact(v, currency) },
+          { key: "total", label: "Total Owed", align: "right", color: accent, format: v => fmtExact(v, currency) },
+        ]}
+      />
+      {d && d.customerCount > d.customers.length && (
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 8 }}>
+          Showing the {d.customers.length} customers with the most overdue, of {d.customerCount.toLocaleString()} who owe us money. The tiles above cover all of them.
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* The three companies side by side, with when each was last read and whether
+   anything went wrong reading it. Shown next to each other and NOT added up:
+   North sells to South and Oceania, so a group total would count that twice. */
+const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
+  const T = theme;
+  const stamp = (iso) => {
+    try {
+      return new Date(iso).toLocaleString("en-NZ", { timeZone: "Pacific/Auckland", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    } catch { return ""; }
+  };
+  return (
+    <div style={{ padding: "20px 32px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, color: T.textHead }}>
+          <Icon name="building" size={15} style={{ marginRight: 8 }} />All companies, {fyLabel}
+        </div>
+        <button onClick={() => window.location.reload()} title="Read everything again" aria-label="Refresh all data"
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, fontWeight: 600, borderRadius: 8,
+                   cursor: "pointer", background: "transparent", color: T.textSub, border: `1px solid ${T.border}` }}>
+          <Icon name="refresh" size={12} />Refresh
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14 }}>
+        {items.map(({ store, d, loading, failed }) => {
+          const t = d?.totals;
+          const notes = d?.problems || [];
+          const status = failed ? { c: "#dc2626", text: "Could not be read", tip: failed }
+            : loading || !d ? { c: "#9ca3af", text: "Reading now", tip: "" }
+            : notes.length ? { c: "#f59e0b", text: `${notes.length} ${notes.length === 1 ? "note" : "notes"}`, tip: notes.join("\n") }
+            : { c: "#16a34a", text: "All read", tip: "Every source answered" };
+          const active = store.id === activeId;
+          return (
+            <div key={store.id} onClick={() => onSelect(store.id)} role="button" tabIndex={0}
+              onKeyDown={e => { if (e.key === "Enter") onSelect(store.id); }}
+              style={{ background: T.bgCard, border: `1px solid ${active ? store.color : T.border}`, borderRadius: 16, padding: "16px 18px", cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.textHead }}>
+                  <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: store.color, marginRight: 8 }} />{store.name}
+                </div>
+                {t && t.priorComparable && t.growthPct !== null && t.growthPct !== undefined && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: t.growthPct >= 0 ? "#16a34a" : "#dc2626" }}>
+                    <Trend up={t.growthPct >= 0} />{Math.abs(t.growthPct)}%
+                  </span>
+                )}
+              </div>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: T.textHead, marginTop: 8 }}>
+                {t ? fmtExact(t.revenue, store.currency).replace(/\.\d\d$/, "") : "-"}
+              </div>
+              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+                {t ? `Sales${t.marginPct !== null && t.marginPct !== undefined ? ` at ${t.marginPct}% margin` : ", margin not available"}` : "Sales"}
+                {d?.range ? ` · ${fmtDay(d.range.start)} to ${fmtDay(d.range.end)}` : ""}
+              </div>
+              <div title={status.tip} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.borderFaint}`, fontSize: 10, color: T.textMuted }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: status.c, flexShrink: 0 }} />
+                <span style={{ fontWeight: 600 }}>{status.text}</span>
+                {d?.generatedAt && <span>· read {stamp(d.generatedAt)}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 8 }}>
+        Shown side by side, not added together: North sells to South and Oceania, so a group total would count that trade twice. Growth is against the same days last year.
+      </div>
+    </div>
+  );
+};
+
+/* Year-end forecast. One method, stated on the card: sales to date, plus what is
+   left of last year's trading at this year's pace against last year. It is a
+   projection from last year's shape, not a budget. */
+const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
+  const T = theme;
+  const t = cur?.totals;
+  if (!cur || !t || cur.range?.complete || !t.priorComparable) return null;
+  const lastYear = prior?.totals;
+  const done = Number(t.revenue) || 0;
+  const sameSpan = Number(t.prior?.revenue) || 0;
+  const full = Number(lastYear?.revenue) || 0;
+  const ready = prior && lastYear && prior.range?.complete && sameSpan > 0 && full > 0;
+  const rest = Math.max(0, full - sameSpan);
+  const pace = ready ? done / sameSpan : null;
+  const projected = ready ? done + rest * pace : null;
+  const flat = ready ? done + rest : null;
+  const money = (v) => fmtExact(v, currency).replace(/\.\d\d$/, "");
+  const tile = (label, value, note, strong) => (
+    <div style={{ background: strong ? `${accent}12` : "transparent", border: `1px solid ${strong ? accent + "55" : T.border}`, borderRadius: 14, padding: "14px 16px" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 21, fontWeight: 700, color: T.textHead, marginTop: 6 }}>{value}</div>
+      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
+    </div>
+  );
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: T.textHead }}>
+          <Icon name="forecast" size={16} style={{ marginRight: 8, color: accent }} />Year-end forecast, {fyLabel}
+        </div>
+        <RangeTag text={`${fmtDay(cur.range.start)} to ${fmtDay(cur.range.lastDay)}`} theme={T} />
+      </div>
+      {!ready ? (
+        <div style={{ fontSize: 12, color: T.textMuted }}>Waiting for last year's figures to load.</div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+            {tile("Sales to date", money(done), `${fmtDay(cur.range.start)} to ${fmtDay(cur.range.end)}`)}
+            {tile("Same days last year", money(sameSpan), `${pace >= 1 ? "Up" : "Down"} ${Math.abs(Math.round((pace - 1) * 1000) / 10)}% on last year`)}
+            {tile("Last year, full year", money(full), "Actual, finished")}
+            {tile("If the rest matches last year", money(flat), `${flat >= full ? "Up" : "Down"} ${Math.abs(Math.round((flat / full - 1) * 1000) / 10)}% on last year`)}
+            {tile("At this year's pace", money(projected), `${projected >= full ? "Up" : "Down"} ${Math.abs(Math.round((projected / full - 1) * 1000) / 10)}% on last year`, true)}
+          </div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 12, lineHeight: 1.6 }}>
+            How this is worked out: sales to date, plus the rest of last year's sales ({money(rest)}) multiplied by this year's pace against last year ({Math.round(pace * 1000) / 10}%).
+            The two projections are the low and high end: the rest of the year either matches last year exactly, or keeps up this year's pace.
+            It is a projection from last year's pattern, not a budget, and it moves as sales come in.
+          </div>
+        </>
+      )}
+    </div>
   );
 };
 
@@ -957,12 +1181,18 @@ export default function EcommerceDashboard() {
     if (cacheRef.current[key] || loadingRef.current[key]) return;
     loadingRef.current[key] = true;
     forceUpdate();
-    try {
-      const r = await fetch(FY_SOURCE[storeId](year), { cache: "no-store" });
-      const json = await r.json();
-      cacheRef.current[key] = json?.error ? { failed: json.error } : json;
-    } catch (e) {
-      cacheRef.current[key] = { failed: e.message };
+    /* One retry. Odoo answers a 502 now and then when several heavy years are
+       requested at once; the same request a few seconds later goes through. */
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(FY_SOURCE[storeId](year), { cache: "no-store" });
+        const json = await r.json();
+        cacheRef.current[key] = json?.error ? { failed: json.error } : json;
+      } catch (e) {
+        cacheRef.current[key] = { failed: e.message };
+      }
+      if (!cacheRef.current[key]?.failed) break;
+      if (attempt === 0) await new Promise(res => setTimeout(res, 4000));
     }
     loadingRef.current[key] = false;
     forceUpdate();
@@ -1242,6 +1472,32 @@ export default function EcommerceDashboard() {
   /* Every company is on a financial year now, so one rule decides whether a
      month has happened: the payload says so. */
   const onFY = (storeId = activeStore.id) => Boolean(FY_SOURCE[storeId]);
+
+  /* The summary row needs every company's year, and the forecast needs last
+     year's. They are read one at a time after the company on screen has loaded,
+     so they never compete with it. Anything already read is not read again. */
+  useEffect(() => {
+    if (!restored) return;
+    let live = true;
+    const settled = (key) => new Promise((resolve) => {
+      let waited = 0;
+      const t = setInterval(() => {
+        waited += 1;
+        if (!loadingRef.current[key] || waited > 120) { clearInterval(t); resolve(); }
+      }, 1000);
+    });
+    (async () => {
+      await settled(fyKey(activeStore.id, selectedYear));
+      for (const st of STORES) {
+        if (!live) return;
+        await fetchFYFor(st.id, selectedYear);
+        await settled(fyKey(st.id, selectedYear));
+      }
+      if (!live) return;
+      await fetchFYFor(activeStore.id, selectedYear - 1);
+    })();
+    return () => { live = false; };
+  }, [restored, activeStore.id, selectedYear]); // eslint-disable-line
 
   /* One set of figures, exactly as Ostendo holds them. Revenue is the product
      lines, which is what Worthy's finance team reports; rebates are shown as
@@ -1935,6 +2191,15 @@ export default function EcommerceDashboard() {
         </div>
       </div>
 
+      <CompanySummary theme={T} activeId={activeStore.id} fyLabel={`FY${String(selectedYear).slice(2)}`}
+        onSelect={(id) => { const st = STORES.find(x => x.id === id); if (st) setActiveStore(st); }}
+        items={STORES.map(st => ({
+          store: st,
+          d: fyPayload(selectedYear, st.id),
+          loading: !!loadingRef.current[fyKey(st.id, selectedYear)],
+          failed: cacheRef.current[fyKey(st.id, selectedYear)]?.failed || null,
+        }))} />
+
       {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
       {(activeStore.id === "worthy" || activeStore.id === "nova") && (
         <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4 }}>
@@ -2168,6 +2433,11 @@ export default function EcommerceDashboard() {
           <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="percent" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
           <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />
         </div>
+
+        {onFYView() && view !== "weekly" && (
+          <ForecastCard cur={fyPayload(selectedYear)} prior={fyPayload(selectedYear - 1)} currency={activeStore.currency}
+            theme={T} accent={accent} fyLabel={`FY${String(selectedYear).slice(2)}`} />
+        )}
 
         {view === "monthly" ? (
           <>
@@ -2566,6 +2836,8 @@ export default function EcommerceDashboard() {
             {activeStore.id === "worthy" && (
               <div style={{ marginTop: 28 }}><KpiTargetsTable theme={T} /></div>
             )}
+
+            <DebtorsPanel companyId={activeStore.odooCompanyId} theme={T} accent={accent} currency={activeStore.currency} />
 
             {/* Odoo: top customers, at-risk, lapsed */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>

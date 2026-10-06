@@ -431,3 +431,20 @@ Teams, months, reps and the currency split each add up to the company total, and
       The targets live as constants in the crons, not as Odoo fields, so a change
       there must be copied to lib/kpiTargets.js. `/api/odoo/kpi?asOf=YYYY-MM-DD`
       reproduces an earlier email.
+
+- [x] **40. Debtors match Odoo's receivable ledger.** Checked 7 Oct 2026 on Worthy
+      Products North two independent ways: open invoices and credit notes
+      (outstanding balance) total $2,486,152.55 over 2,021 documents, and the
+      receivable-account lines (unreconciled, posted) total the same to the cent.
+      Overdue by due date agrees too: $461,599.11 over 457. The ageing buckets add
+      back to the total. The page figure is live, so it moves as invoices are
+      raised and paid. Route: /api/odoo/debtors.
+- [x] **41. Year-end forecast is arithmetic on figures already on the page.**
+      Sales to date, plus the rest of last year's sales multiplied by this year's
+      pace against the same days last year. It is shown with the "rest matches last
+      year" case beside it as the low end. Not a budget.
+- [x] **42. Company summary and CSV export use the same payloads as the tables.**
+      The summary reads each company's financial-year payload and says when it was
+      read and whether anything failed. Companies are not added together because
+      North sells to South and Oceania. CSV exports exactly the rows a table shows,
+      with the period in the file name.
