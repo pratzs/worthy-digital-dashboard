@@ -369,3 +369,34 @@ facts were being ignored.
 
 Teams, months, reps and the currency split each add up to the company total, and
 `problems` is empty.
+
+- [x] **38. North's sales now match the head of finance's MTD sales-rep report.**
+      His report (30 Sep 2026) counts product lines only and groups the
+      non-field reps as "Direct". The dashboard counted every invoice line, so it
+      was NZ$9,221 above him in September (NZ$1,734,128 vs NZ$1,724,907) and its
+      gross profit read NZ$220,636 (12.7%) against his NZ$212,449 (12.3%),
+      because income with no product on it was counted as profit with no cost.
+
+      The gap was invoice lines with no product: an NZ$5,456 intercompany expense
+      reimbursement, NZ$2,738 rent, NZ$1,080 supplier rebate, NZ$1,272 freight,
+      NZ$1,925 of hand-typed "Sales - Local" lines, less NZ$3,226 "Discounts
+      Given". North (company 4 only) now takes those lines out of every revenue
+      aggregate — months, weeks, reps, teams, customers, currencies — so they still
+      add up. Oceania is untouched and its payload was compared field by field
+      before and after: identical.
+
+      Checked against his report for September, per rep, sales difference NZ$0 on
+      all nine lines (total NZ$1,724,906.53 vs NZ$1,724,907). Reps: Hari, Naitik,
+      Nayan, Rubin, Savan, Albert, Nish, Nimesh, and "Direct" (Kishan, Pratham,
+      Pooja, Bansri, Rashmi, unassigned).
+
+      Open: gross profit is NZ$211,414 (12.3%) against his NZ$212,449 (12.3%),
+      0.5% apart, each rep within NZ$270 and 0.2 points. The dashboard costs at
+      today's product standard cost; his figure is NZ$1,035 lower in cost, which
+      points to cost as at the invoice date. Not reproducible without his cost
+      source. Stock-valuation layers were tried and do not match.
+
+      The lines excluded are reported in `nonStockRevenue` and stated on the page.
+      New customers on the Shopify side (Online/POS) are now counted on the
+      customer's first-ever order, once, instead of every order from a customer
+      created that month — March had read 555 against a true 16.

@@ -30,6 +30,7 @@ import {
   toCents, toDollars, pct1, costCovered, fyRange, priorRange, fyMonthKeys, parseIso, iso, MONTH_NAMES,
   nzToday, nzFinancialYear,
 } from '@/lib/ostendo';
+import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -206,6 +207,41 @@ export async function GET(request) {
     const prior = priorRange(range);
 
     const problems = [];
+
+    /* North reports sales on finance's terms: product lines only. Lines with no
+       product (intercompany reimbursements, rent, supplier rebates, freight,
+       "Discounts Given") are taken OUT of every revenue aggregate below, by
+       emitting a negative adjustment row in the same shape read_group returns
+       (same rep, team, partner, currency and date as the invoice it sits on,
+       __count 0 so invoice and credit counts are untouched). Every table is
+       adjusted the same way, so they all keep adding up to the headline.
+       `balance` is the line in company currency, credit-negative, so it IS the
+       amount to take off. Not wrapped in a catch: if this fails the page must
+       say so rather than quietly show revenue with the non-sales income back in. */
+    const financeBasis = usesFinanceBasis(cid);
+    const nonProduct = async (start, end) => {
+      if (!financeBasis) return [];
+      const dom = [['move_id.company_id', '=', cid], ['move_id.move_type', 'in', ['out_invoice', 'out_refund']],
+                   ['move_id.state', '=', 'posted'], ['display_type', '=', 'product'], ['product_id', '=', false]];
+      if (start) dom.push(['move_id.invoice_date', '>=', start]);
+      if (end) dom.push(['move_id.invoice_date', '<=', end]);
+      const lines = await exec('account.move.line', 'search_read', [dom],
+        { fields: ['move_id', 'balance'], limit: 0 }, 45000);
+      const ids = [...new Set(lines.map((l) => l.move_id && l.move_id[0]).filter(Boolean))];
+      const info = new Map();
+      for (let i = 0; i < ids.length; i += 500) {
+        const moves = await exec('account.move', 'read', [ids.slice(i, i + 500)],
+          { fields: ['invoice_user_id', 'invoice_date', 'move_type', 'team_id', 'partner_id', 'currency_id'] }, 45000);
+        for (const m of moves) info.set(m.id, m);
+      }
+      return lines.map((l) => {
+        const m = info.get(l.move_id[0]);
+        return m ? { ...m, amount_untaxed_signed: Number(l.balance) || 0, __count: 0 } : null;
+      }).filter(Boolean);
+    };
+    const dayRange = (m, key) => ({ __range: { [key]: { from: dayOf(m.invoice_date) } } });
+    const asMoveRows = (adj) => adj.map((m) => ({ ...m, ...dayRange(m, 'invoice_date:day') }));
+
     const pull = async (start, end) => {
       const [moves, prodMonth, discRows] = await Promise.all([
         // Revenue and counts, per day, per rep, per type.
@@ -272,7 +308,8 @@ export async function GET(request) {
             { lazy: false }),
         ]).then(([inv, ref]) => [...inv, ...ref]).catch(() => []),
       ]);
-      return { moves, prodMonth, discRows };
+      const adj = await nonProduct(start, end);
+      return { moves: [...moves, ...asMoveRows(adj)], prodMonth, discRows };
     };
 
     const [curr, prev] = await Promise.all([pull(range.start, range.end), pull(prior.start, prior.end)]);
@@ -280,13 +317,18 @@ export async function GET(request) {
     /* Customers: what they spent in this period, and their whole history, so
        lifetime value and "quiet since" mean what they say. */
     const custDomain = (start, end) => [...moveDomain(cid, start, end), ['partner_id', '!=', false]];
-    const [custPeriod, custLifetime] = await Promise.all([
+    const [custPeriodRaw, custLifetimeRaw, npLifetime] = await Promise.all([
       exec('account.move', 'read_group', [custDomain(range.start, range.end),
         ['amount_untaxed_signed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
       exec('account.move', 'read_group',
         [[...allPosted, ['partner_id', '!=', false]],
          ['amount_untaxed_signed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
+      nonProduct(null, null),
     ]);
+    const custAdj = (adj) => adj.filter((m) => m.partner_id).map((m) => ({ ...m }));
+    const inRange = (m) => dayOf(m.invoice_date) >= range.start && dayOf(m.invoice_date) <= range.end;
+    const custPeriod = [...custPeriodRaw, ...custAdj(npLifetime.filter(inRange))];
+    const custLifetime = [...custLifetimeRaw, ...custAdj(npLifetime)];
     // First and last invoice per customer, for new-customer counts and lapse.
     const [firstSeen, lastSeen] = await Promise.all([
       exec('account.move', 'read_group', [[...allPosted, ['move_type', '=', 'out_invoice']],
@@ -335,7 +377,7 @@ export async function GET(request) {
         // Already signed and already in company currency — do not sign it again.
         const cents = toCents(r.amount_untaxed_signed ?? 0);
         const n = Number(r.__count) || 0;
-        const rep = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
+        const rep = repGroup(cid, r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned');
         if (!days.has(d)) days.set(d, { total: blank(), reps: new Map() });
         const entry = days.get(d);
         if (!entry.reps.has(rep)) entry.reps.set(rep, blank());
@@ -438,11 +480,12 @@ export async function GET(request) {
      * be filtered through move_id.invoice_user_id, so one grouped query per rep
      * gives that rep's quantity by product and month — and therefore their cost
      * and margin. Sixteen reps come back in a few seconds at four at a time. */
+    /* rep group name -> every Odoo user id behind it. "Direct" is several people. */
     const repIds = new Map();
     for (const r of curr.moves) {
       const id = r.invoice_user_id ? r.invoice_user_id[0] : null;
-      const nm = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
-      if (id) repIds.set(nm, id);
+      const nm = repGroup(cid, r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned');
+      if (id) { if (!repIds.has(nm)) repIds.set(nm, new Set()); repIds.get(nm).add(id); }
     }
     /** rep name -> Map(monthKey -> cost in cents), and a whole-period total */
     const repCost = new Map();
@@ -461,7 +504,7 @@ export async function GET(request) {
               ['product_id', 'not in', UNRENDERABLE_VARIANTS]]],
             { fields: ['move_id', 'product_id', 'quantity', 'balance', 'date'], limit: 0 }, 25000),
         ]);
-        const repOfMove = new Map(refMoves.map((m) => [m.id, m.invoice_user_id ? m.invoice_user_id[1] : 'Unassigned']));
+        const repOfMove = new Map(refMoves.map((m) => [m.id, repGroup(cid, m.invoice_user_id ? m.invoice_user_id[1] : 'Unassigned')]));
         for (const l of refLines) {
           const name = repOfMove.get(l.move_id && l.move_id[0]); if (!name || !l.date) continue;
           if (!refundByRep.has(name)) refundByRep.set(name, []);
@@ -475,10 +518,10 @@ export async function GET(request) {
         }
       } catch (e) { problems.push(`credit-note lines could not be split by rep (${e.message.slice(0, 80)})`); }
 
-      const runOne = async ([name, id]) => {
+      const runOne = async ([name, ids]) => {
         try {
           const inv = await exec('account.move.line', 'read_group',
-            [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', '=', id],
+            [[...costLineDomain(cid, range.start, range.end, 'out_invoice'), ['move_id.invoice_user_id', 'in', [...ids]],
               ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
              ['quantity:sum', 'balance:sum'], ['product_id', 'date:month']], { lazy: false }, 30000);
           const rows = [...inv, ...(refundByRep.get(name) || [])];
@@ -677,9 +720,13 @@ export async function GET(request) {
       const pull = (from, to) => exec('account.move', 'read_group',
         [moveDomain(cid, from, to), ['amount_untaxed_signed:sum'],
          ['team_id', 'invoice_date:month', 'move_type']], { lazy: false });
-      const [now, before] = await Promise.all([
+      const [nowRaw, beforeRaw, npNow, npBefore] = await Promise.all([
         pull(range.start, range.end), pull(prior.start, prior.end).catch(() => []),
+        nonProduct(range.start, range.end), nonProduct(prior.start, prior.end),
       ]);
+      const monthRows_ = (adj) => adj.map((m) => ({ ...m, ...dayRange(m, 'invoice_date:month') }));
+      const now = [...nowRaw, ...monthRows_(npNow)];
+      const before = [...beforeRaw, ...monthRows_(npBefore)];
       const fold = (rows) => {
         const m = new Map();
         for (const r of rows) {
@@ -752,9 +799,9 @@ export async function GET(request) {
        reader wondering whether a USD invoice was counted at face value. */
     let currencies = null;
     try {
-      const rows = await exec('account.move', 'read_group',
+      const rows = [...(await exec('account.move', 'read_group',
         [moveDomain(cid, range.start, range.end), ['amount_untaxed_signed:sum'], ['currency_id']],
-        { lazy: false });
+        { lazy: false })), ...(await nonProduct(range.start, range.end))];
       const home = (await exec('res.company', 'read', [[cid]], { fields: ['currency_id'] }))[0]?.currency_id?.[1];
       currencies = {
         company: home,
@@ -796,6 +843,12 @@ export async function GET(request) {
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
       fy, company: cid, nonStockRevenue, teams, excludedProducts, currencies,
+      /* What "revenue" means in this payload. For North it is finance's basis,
+         and nonStockRevenue is the non-product income that was left OUT of it. */
+      salesBasis: financeBasis
+        ? 'product lines only; lines with no product (reimbursements, rent, rebates, freight, discount lines) are excluded'
+        : 'all invoice lines',
+      nonStockExcluded: financeBasis,
       products:   topProducts,
       fastMoving: topMoving,
       categories: categoryRows.slice(0, 30),

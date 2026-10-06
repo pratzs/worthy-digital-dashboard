@@ -17,10 +17,11 @@ export async function GET(request) {
         pageInfo { hasNextPage endCursor }
         edges {
           node {
+            id
             createdAt
             totalPriceSet      { shopMoney { amount } }
             totalDiscountsSet  { shopMoney { amount } }
-            customer           { createdAt }
+            customer           { id orders(first: 1, sortKey: CREATED_AT) { edges { node { id } } } }
             app                { name }
             lineItems(first: 50) {
               edges {
@@ -149,11 +150,10 @@ export async function GET(request) {
         if (cost > 0) { lineCost += cost * qty; lineMargRev += price * qty; hasCD = true; }
       });
 
-      const isNew = (() => {
-        if (!order.customer?.createdAt) return false;
-        const cd = new Date(order.customer.createdAt);
-        return cd.getFullYear() === year && cd.getMonth() === i;
-      })();
+      // New customer = this is the customer's first order ever, so each customer
+      // is counted once, in the month of that first order. Bulk-created customer
+      // records and repeat orders no longer inflate the figure.
+      const isNew = order.customer?.orders?.edges?.[0]?.node?.id === order.id;
 
       [allB, isPos ? posB : onlineB].forEach(b => {
         b[i].revenue            += rev;

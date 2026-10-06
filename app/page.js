@@ -1942,11 +1942,19 @@ export default function EcommerceDashboard() {
                   company-wide, but it is the whole reason a handful of reps show no
                   margin at all, and a reader who spots the blanks deserves the size
                   of it rather than a guess. */}
+              {d.nonStockExcluded && d.nonStockRevenue != null && d.nonStockRevenue !== 0 && (
+                <div>
+                  Sales here are <strong>product lines only</strong>, the same basis as finance's report.{" "}
+                  <strong>{fmtExact(d.nonStockRevenue, activeStore.currency)}</strong> invoiced with no product on the line
+                  (freight recharges, pallet and parking rent, expense reimbursements, supplier rebates and
+                  discount lines) is left out of sales and of margin.
+                </div>
+              )}
               {activeStore.id !== "luxe" && d.hasCost && t.uncoveredRevenue > 0 && (
                 <div>
                   <strong>{fmtExact(t.uncoveredRevenue, activeStore.currency)}</strong> of these sales
                   ({(100 - (t.costCoverage ?? 100)).toFixed(1)}%) carry no cost of sales.
-                  {d.nonStockRevenue > 0 && <> {fmtExact(d.nonStockRevenue, activeStore.currency)} of that is
+                  {!d.nonStockExcluded && d.nonStockRevenue > 0 && <> {fmtExact(d.nonStockRevenue, activeStore.currency)} of that is
                   invoiced with no product on the line — freight recharges, pallet rent, expense
                   reimbursements and supplier rebate claims.</>} Odoo holds a cost price for practically every
                   product Worthy sells; this is income earned without buying anything, so there is no cost to
