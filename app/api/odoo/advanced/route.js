@@ -58,7 +58,7 @@ export async function GET(request) {
       return out;
     };
 
-    // ── PHASE 1: invoice IDs (cheap — just IDs) ───────────────────────────────
+    // ── PHASE 1: invoice IDs (cheap - just IDs) ───────────────────────────────
     const invDomain = [
       ['company_id',    '=',  companyId],
       ['move_type',     'in', ['out_invoice', 'out_refund']],
@@ -95,7 +95,7 @@ export async function GET(request) {
     }
 
     // ── PHASE 2: invoice lines via search_read in tight chunks ────────────────
-    // Minimal field set — keeps payload small (~80 bytes per line).
+    // Minimal field set - keeps payload small (~80 bytes per line).
     // 500 invoices per chunk × ~5 lines = ~2.5k lines per call. With 20+ chunks
     // running 8-parallel, total wall time ~10-15s even for 10k invoices.
     // We deliberately use search_read (NOT read_group) because this Odoo
@@ -106,7 +106,7 @@ export async function GET(request) {
     // module). Cost comes from product.template.standard_price instead.
     // product_uom_id needed so we can convert line qty (e.g. "Case of 24")
     // into the same UoM the template's standard_price is stored against
-    // (e.g. "Each") — otherwise cost is multiplied by the case-pack factor
+    // (e.g. "Each") - otherwise cost is multiplied by the case-pack factor
     // and margin comes out wildly negative.
     const lineFields = ['move_id', 'product_id', 'quantity', 'price_subtotal', 'product_uom_id'];
     const sanitizedIds = invoiceIds.filter(id => typeof id === 'number' && id > 0);
@@ -140,7 +140,7 @@ export async function GET(request) {
     const rawLines = chunkResults.flat();
 
     // Drop zero-subtotal rows (tax / payment / receivable lines)
-    // and rows with no product_id (out of scope — see prodAgg comment below).
+    // and rows with no product_id (out of scope - see prodAgg comment below).
     const lines = rawLines.filter(l => {
       const sub = parseFloat(l.price_subtotal || 0);
       return sub !== 0;
@@ -155,7 +155,7 @@ export async function GET(request) {
 
     // ── PHASE 3: aggregate per product (sign-flip refunds) ────────────────────
     // Lines without product_id are skipped here. For Oceania (which uses
-    // manual-description lines on some invoices) this is acceptable — those
+    // manual-description lines on some invoices) this is acceptable - those
     // entries don't have a product/category to roll up anyway.
     const prodAgg = {};
     let withProduct = 0, withoutProduct = 0;
@@ -175,7 +175,7 @@ export async function GET(request) {
       prodAgg[pid].revenue += rev;
       prodAgg[pid].qty     += qty;
     }
-    console.log(`[Odoo/adv] line breakdown — withProduct=${withProduct} withoutProduct=${withoutProduct}`);
+    console.log(`[Odoo/adv] line breakdown, withProduct=${withProduct} withoutProduct=${withoutProduct}`);
 
     const productIds = Object.keys(prodAgg).map(Number);
 
@@ -328,7 +328,7 @@ export async function GET(request) {
         repAgg[repName].weekly[wkey].marginableRev += rev;
       }
     }
-    console.log(`[Odoo/adv] cost pass — linesWithCost=${linesWithCost} linesNoCost=${linesNoCost} totalCost=${Math.round(totalCostAccum)}`);
+    console.log(`[Odoo/adv] cost pass, linesWithCost=${linesWithCost} linesNoCost=${linesNoCost} totalCost=${Math.round(totalCostAccum)}`);
 
     // ── PHASE 5: shape output ────────────────────────────────────────────────
     const allProducts = Object.values(prodAgg)

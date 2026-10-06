@@ -50,7 +50,7 @@ export async function GET(request) {
     }
   `;
 
-  // Staff query — only net_sales grouped by name (no order count, avoids bad column names)
+  // Staff query - only net_sales grouped by name (no order count, avoids bad column names)
   const staffAnalyticsQuery = `
     {
       shopifyqlQuery(query: "FROM sales SHOW staff_member_name, net_sales SINCE ${year}-01-01 UNTIL ${year}-12-31 GROUP BY staff_member_name ORDER BY net_sales DESC") {
@@ -95,7 +95,7 @@ export async function GET(request) {
       cursor      = data.orders.pageInfo.endCursor;
     }
 
-    // ── Staff sales via ShopifyQL — only fetch for current/recent years to avoid rate limits ─
+    // ── Staff sales via ShopifyQL - only fetch for current/recent years to avoid rate limits ─
     let salespeopleFromAnalytics = [];
     const currentYear = new Date().getFullYear();
     if (year >= currentYear - 1) { // only fetch staff for current and previous year
@@ -165,7 +165,7 @@ export async function GET(request) {
         if (isNew) b[i].newCustomers += 1;
       });
 
-      // Accumulate weekly — all, pos, online separately (including cost for margin)
+      // Accumulate weekly - all, pos, online separately (including cost for margin)
       const wkey = `${i}_${weekNum}`;
       const mkW  = () => ({ month: i, week: weekNum, revenue: 0, orders: 0, totalDiscounts: 0, newCustomers: 0, totalCost: 0, marginableRevenue: 0, hasCostData: false });
       [weeklyAllB, isPos ? weeklyPosB : weeklyOnlineB].forEach(wb => {

@@ -1,6 +1,6 @@
 export const metadata = {
   title: "Worthy - Accounting Dashboard",
-  description: "Internal accounting dashboard for Worthy — restricted access.",
+  description: "Internal accounting dashboard for Worthy - restricted access.",
   icons: {
     icon: [
       { url: "/favicon.png", type: "image/png" },

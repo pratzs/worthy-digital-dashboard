@@ -1,5 +1,5 @@
 /**
- * Worthy Products North / Oceania — cost per salesperson per WEEK, one month.
+ * Worthy Products North / Oceania - cost per salesperson per WEEK, one month.
  *
  * Kept out of /api/odoo/fy deliberately. Cost is quantity x product standard
  * cost, so week-level cost needs the lines grouped by product AND day, for each

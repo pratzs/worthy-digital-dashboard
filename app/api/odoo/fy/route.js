@@ -1,5 +1,5 @@
 /**
- * Worthy Products North and Worthy Oceania — one financial year, resolved.
+ * Worthy Products North and Worthy Oceania - one financial year, resolved.
  *
  * Mirrors /api/ostendo/fy so all three companies report the same way: an
  * April–March financial year, a part-finished period compared only against the
@@ -14,7 +14,7 @@
  *
  *   Cost is quantity x product.standard_price. Odoo holds no cost on the
  *   invoice line, so this is today's standard cost rather than the cost at the
- *   time of sale — stated on the dashboard rather than implied. Worthy Oceania
+ *   time of sale - stated on the dashboard rather than implied. Worthy Oceania
  *   carries no product costs at all, so its margin is reported as unavailable
  *   instead of showing 100%.
  *
@@ -75,12 +75,12 @@ const lineDomain = (cid, start, end) => [
  * Neither can carry a cost, so they are excluded from the cost query only.
  *
  * `type` splits invoices from credit notes. Odoo stores a credit note's line
- * quantity and subtotal as POSITIVE — the sign lives on the move, not the line —
+ * quantity and subtotal as POSITIVE - the sign lives on the move, not the line  - 
  * so summing them raw ADDS the cost of returned goods to cost of sales instead
  * of taking it off. Each side is fetched separately and the credit side negated. */
 /* Four fabric variants in Worthy Oceania have an attribute value Odoo cannot
    render, so ANY query that has to name a product dies with "sequence item 1:
-   expected str instance, bool found" — which took every product, category and
+   expected str instance, bool found" - which took every product, category and
    margin off that company's page. Excluding them by id lets the other 2,842
    products through; their own figures are fetched separately, by id, where no
    name is needed. Fixing the four records in Odoo makes this unnecessary, and
@@ -88,7 +88,7 @@ const lineDomain = (cid, start, end) => [
 const UNRENDERABLE_VARIANTS = [28085, 28084, 6691, 7503];
 
 /* Odoo's sales teams are not quite the departments Worthy runs. Fashion is part
-   of the fabric business, not a department of its own — confirmed by Worthy —
+   of the fabric business, not a department of its own - confirmed by Worthy  - 
    so it is reported inside Textiles. Anything not listed here stands alone. */
 const TEAM_DEPARTMENT = { Fashion: 'Textiles' };
 const departmentOf = (team) => TEAM_DEPARTMENT[team] || team;
@@ -100,7 +100,7 @@ const costLineDomain = (cid, start, end, type) => [
 
 /* A line's `price_subtotal` is in the INVOICE's currency, so it cannot be added
    across an Oceania that bills in USD, AUD and NZD. `balance` is the same money
-   in the COMPANY's currency, and it is already signed — revenue sits on the
+   in the COMPANY's currency, and it is already signed - revenue sits on the
    credit side, so negating it gives a positive sale and a negative return. Every
    line figure goes through here, and nothing negates refunds by hand any more. */
 const subOf = (r) => -(Number(r.balance) || 0);
@@ -117,7 +117,7 @@ const present = (a, hasCost) => {
   const gp = a.revenue - a.cost;
   /* Only quote a margin when Odoo actually holds a cost for what was sold.
      Some reps sell almost nothing but freight and service lines, which carry no
-     standard cost: summing those as cost zero produced a 100% margin — a number
+     standard cost: summing those as cost zero produced a 100% margin - a number
      that is not just wrong but unbelievable, and one wrong row costs the reader
      their trust in every other row. Where the cost is missing the margin is left
      blank and said to be missing. Revenue and recorded cost are untouched, so
@@ -137,7 +137,7 @@ const present = (a, hasCost) => {
     discounts: toDollars(a.discount),
     /* Revenue with a real cost behind it, and revenue without. A line carrying
        no product, or a product with no standard cost, contributes sales but no
-       cost — so its margin reads 100% because the cost is missing, not because
+       cost - so its margin reads 100% because the cost is missing, not because
        the sale was that good. */
     costedRevenue:   hasCost ? toDollars(a.costedRevenue) : null,
     uncoveredRevenue: hasCost ? toDollars(a.revenue - a.costedRevenue) : null,
@@ -257,11 +257,11 @@ export async function GET(request) {
            US dollars to New Zealand ones. Worthy Oceania invoices in USD, AUD and
            NZD, and its revenue was understated by about a quarter as a result.
            `amount_untaxed_signed` is the same figure converted to the company's
-           currency AND already signed for credit notes — verified on this
+           currency AND already signed for credit notes - verified on this
            database against hand-signed arithmetic, to the cent. */
         exec('account.move', 'read_group', [moveDomain(cid, start, end),
           ['amount_untaxed_signed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false }),
-        // Quantity per product per month — cost is a per-product figure.
+        // Quantity per product per month - cost is a per-product figure.
         /* Grouping by product asks Odoo to build each product's display name, and
          * Worthy Oceania has variants whose attributes are incomplete, so the
          * whole call fails with "expected str instance, bool found". Reading the
@@ -382,7 +382,7 @@ export async function GET(request) {
         const d = rangeStart(r, 'invoice_date:day');
         if (!d) continue;
         const isCredit = r.move_type === 'out_refund';
-        // Already signed and already in company currency — do not sign it again.
+        // Already signed and already in company currency - do not sign it again.
         const cents = toCents(r.amount_untaxed_signed ?? 0);
         const n = Number(r.__count) || 0;
         const rep = repGroup(cid, r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned');
@@ -486,7 +486,7 @@ export async function GET(request) {
     /* Cost per salesperson.
      * Odoo does not store the salesperson on the invoice line, but the line CAN
      * be filtered through move_id.invoice_user_id, so one grouped query per rep
-     * gives that rep's quantity by product and month — and therefore their cost
+     * gives that rep's quantity by product and month - and therefore their cost
      * and margin. Sixteen reps come back in a few seconds at four at a time. */
     /* rep group name -> every Odoo user id behind it. "Direct" is several people. */
     const repIds = new Map();
@@ -535,7 +535,7 @@ export async function GET(request) {
           const rows = [...inv, ...(refundByRep.get(name) || [])];
           /* Costed revenue is kept per month as well as for the year. Carrying
              only the year figure made a single month's cost coverage read against
-             twelve months of costed sales — 3,066% for one rep — which is how a
+             twelve months of costed sales - 3,066% for one rep - which is how a
              month with no cost at all still passed for a real 100% margin. */
           const byMonth = new Map(), crByMonth = new Map();
           let total = 0, costedRev = 0;
@@ -556,7 +556,7 @@ export async function GET(request) {
           problems.push(`cost for ${name} could not be read (${e.message.slice(0, 80)})`);
         }
       };
-      // Four at a time — fast enough, and gentle on Odoo.
+      // Four at a time - fast enough, and gentle on Odoo.
       for (let i = 0; i < entries.length; i += 4) {
         await Promise.all(entries.slice(i, i + 4).map(runOne));
       }
@@ -595,7 +595,7 @@ export async function GET(request) {
 
     const started = monthRows.filter((m) => m.started);
     /* Add up the RAW accumulators. Summing the rounded months instead let half a
-       cent per month accumulate — the year's cost landed two cents above the true
+       cent per month accumulate - the year's cost landed two cents above the true
        figure, and reconciliation then pushed those two cents onto the largest
        rep, where they showed. Round once, at the end. */
     const total = blank();
@@ -611,7 +611,7 @@ export async function GET(request) {
         const id = r.partner_id && r.partner_id[0]; if (!id) continue;
         const sign = r.move_type === 'out_refund' ? -1 : 1;
         const cur = m.get(id) || { name: r.partner_id[1], cents: 0, orders: 0 };
-        // Company currency, already signed — see the note on the moves query.
+        // Company currency, already signed - see the note on the moves query.
         cur.cents += toCents(r.amount_untaxed_signed ?? 0);
         if (sign > 0) cur.orders += Number(r.__count) || 0;
         m.set(id, cur);
@@ -662,7 +662,7 @@ export async function GET(request) {
       const cur = catAgg.get(p.category) || { revenue: 0, cost: 0, units: 0, products: 0 };
       /* Sum the RAW quantities and round once at the end. Adding up units that
          were each already rounded to a whole item let half a unit per product
-         accumulate — 2.29 units across Soft Drinks — so the category total did
+         accumulate - 2.29 units across Soft Drinks - so the category total did
          not equal the products beneath it. */
       cur.revenue += p.revenue; cur.cost += p.cost || 0; cur.units += p.rawQty; cur.products += 1;
       catAgg.set(p.category, cur);
@@ -710,17 +710,17 @@ export async function GET(request) {
     /* Stock on hand, for the products that actually get shown and no others.
        `qty_available` is computed per product, so asking for all few-thousand
        would cost ~13s on a route that already takes 25; the 60-odd rows on
-       screen cost about 260ms. Company context matters — without it Odoo sums
+       screen cost about 260ms. Company context matters - without it Odoo sums
        the quantity across every company on the database. */
     /* Why some revenue carries no cost. Odoo does hold a cost price for virtually
-       every product Worthy sells — the gap is almost entirely invoice lines with
+       every product Worthy sells - the gap is almost entirely invoice lines with
        NO product on them at all: freight recharges, pallet rent, expense
        reimbursements and supplier rebate claims, typed in by hand. Real income,
        but nothing was bought to earn it, so there is no cost of sales to show.
        Split it here so the page can say which is which instead of guessing. */
-    /* Worthy Oceania is two businesses inside one Odoo company — fabric under
+    /* Worthy Oceania is two businesses inside one Odoo company - fabric under
        "Textiles", the Worthy product range under "WOL Products", plus a small
-       "Fashion" team — and they are told apart by the sales team on the invoice.
+       "Fashion" team - and they are told apart by the sales team on the invoice.
        North is split the same way (Route, Online, Direct), so this is offered for
        any company that uses teams rather than being special-cased to Oceania. */
     let teams = null;
@@ -772,7 +772,7 @@ export async function GET(request) {
       problems.push(`sales teams could not be read (${e.message.slice(0, 80)})`);
     }
 
-    /* What was left out, and what it is worth — so the gap is a stated figure
+    /* What was left out, and what it is worth - so the gap is a stated figure
        rather than a silent omission. Queried by id, and named from the template,
        because it is only the VARIANT name Odoo cannot build. */
     let excludedProducts = null;
@@ -902,7 +902,7 @@ export async function GET(request) {
         growthPct: priorComparable ? growth(total.revenue, priorTotal.revenue) : null,
         priorComparable,
         comparable: !priorComparable
-          ? `no comparison shown — Odoo's records start ${firstLoaded || 'later'}, so ${prior.start} to ${prior.end} is not fully on file`
+          ? `no comparison shown, Odoo's records start ${firstLoaded || 'later'}, so ${prior.start} to ${prior.end} is not fully on file`
           : !range.complete ? `1 Apr – ${range.end} vs 1 Apr – ${prior.end}`
           : 'full financial year vs full financial year',
       },

@@ -1,12 +1,12 @@
 /**
- * Worthy Products South (Dutch Rusk) — analytics tables.
+ * Worthy Products South (Dutch Rusk) - analytics tables.
  *
  * WHAT CHANGED AND WHY
  * The previous version pulled every invoice LINE for the period over HTTP, 60
  * invoice numbers at a time. A financial year is ~20,000 invoices and ~330,000
  * lines, so that was ~345 round trips and it exceeded the 60s function limit
  * every single time. The whole analytics half of the dashboard showed
- * "No data available" as a result — silently, because the failure was caught
+ * "No data available" as a result - silently, because the failure was caught
  * and replaced with empty arrays.
  *
  * Everything is now aggregated inside Firebird: six queries, a few hundred rows
@@ -20,7 +20,7 @@
  *    The old code overwrote it with today's ITEMMASTER.AVERAGECOST, which
  *    priced last year's sales at this year's cost.
  *  - Customer lifetime value and "days since last order" are measured over all
- *    of history and against the end of the period being viewed — not against
+ *    of history and against the end of the period being viewed - not against
  *    today, which made every customer look lapsed whenever a past year was open.
  *  - Rebates and credits (descriptor-code lines, no cost) are reported in their
  *    own table instead of appearing as products with impossible margins.
@@ -83,7 +83,7 @@ export async function GET(request) {
         WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
         GROUP BY l.LINECODE ORDER BY 5 DESC`),
 
-      // 2. Categories — from the item master, because the line column is blank.
+      // 2. Categories - from the item master, because the line column is blank.
       ostendoSql(`
         SELECT i.ITEMCATEGORY AS CAT, COUNT(DISTINCT l.LINECODE) AS NPROD,
                SUM(l.INVOICEQTY) AS QTY, SUM(l.EXTENDEDNETTPRICE) AS NETT,
@@ -103,7 +103,7 @@ export async function GET(request) {
         WHERE h.INVOICEDATE BETWEEN ${q(start)} AND ${q(end)} AND h.INVOICEORCREDIT <> 'Credit'
         GROUP BY h.CUSTOMER`),
 
-      // 4. Whole trading history — the only honest basis for lifetime value and
+      // 4. Whole trading history - the only honest basis for lifetime value and
       //    for how long a customer has actually been quiet.
       ostendoSql(`
         SELECT h.CUSTOMER AS NAME, COUNT(*) AS N, SUM(h.INVOICENETTAMOUNT) AS NETT,
@@ -121,7 +121,7 @@ export async function GET(request) {
 
       // 6. Units sold for EVERY stock code, not just the top sellers.
       //     The slow-moving table was looking its quantities up in the top-200
-      //     by revenue, which by definition a slow mover is never in — so every
+      //     by revenue, which by definition a slow mover is never in - so every
       //     row reported "0 sold" even for items that plainly had sold.
       ostendoSql(`
         SELECT l.LINECODE AS CODE, SUM(l.INVOICEQTY) AS QTY
@@ -129,7 +129,7 @@ export async function GET(request) {
         WHERE l.INVOICENUMBER IN (${inPeriod}) AND l.CODETYPE = 'Item Code'
         GROUP BY l.LINECODE`),
 
-      // 7. Rebates, credits and write-offs — non-stock lines carrying no cost.
+      // 7. Rebates, credits and write-offs - non-stock lines carrying no cost.
       ostendoSql(`
         SELECT l.LINECODE AS CODE, MAX(l.LINEDESCRIPTION) AS NAME, COUNT(*) AS N,
                SUM(l.EXTENDEDNETTPRICE) AS NETT

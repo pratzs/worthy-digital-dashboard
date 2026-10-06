@@ -5,7 +5,7 @@ system. Evidence is recorded beside each one.
 
 ## Worthy Products North (Odoo company 4)
 
-- [x] **1. January 2026 is missing entirely — NZ$936,451.83 and 835 invoices.** FIXED.
+- [x] **1. January 2026 is missing entirely - NZ$936,451.83 and 835 invoices.** FIXED.
   The invoice fetch carries `limit: 10000`. Odoo holds **10,870** matching
   invoices for 2026, and `account.move` returns newest first, so the 870 oldest
   were dropped. Reported FY-to-date revenue is understated by roughly NZ$936k.
@@ -27,7 +27,7 @@ system. Evidence is recorded beside each one.
 
 ## Worthy Products South / Dutch Rusk (Ostendo)
 
-- [x] **6. Total Discounts is wrong — it reads NZ$282.78 for September.** FIXED.
+- [x] **6. Total Discounts is wrong - it reads NZ$282.78 for September.** FIXED.
   `DISCOUNTAMOUNT` sums to NZ$146.81 for the whole year and the header's
   `LINEDISCOUNTAMOUNT` to NZ$14,548.93, because neither column is how this
   business records a discount. `DISCOUNTPERCENT` is populated on 208,736 of
@@ -38,37 +38,37 @@ system. Evidence is recorded beside each one.
   Recorded margin swings 3.6%–18.4% across six months and tracks the cost faults
   exactly: June carries NZ$320,423 of impossible cost and reads 3.6%; April
   NZ$118,993 and reads 11.9%; May, August and September carry almost none and
-  read 17.2%, 18.4%, 16.9%. Excluding only lines whose cost exceeds the sale —
-  nothing estimated — every month lands 17.1%–18.7% and the year at 17.9%. The
+  read 17.2%, 18.4%, 16.9%. Excluding only lines whose cost exceeds the sale  - 
+  nothing estimated - every month lands 17.1%–18.7% and the year at 17.9%. The
   damage clusters on **22–30 June and 8–9 April**: the signature of a stock
   receipt corrupting the running average cost. No derived basis repairs it
   (item master 28.9%, per-item median 28.7%, invoiced 14.7%), so a
   **Margin (clean)** column sits beside the recorded one and the cost data needs
   correcting in Ostendo.
   Of FY26 stock sales: 97.0% of revenue runs at a **19.7%** margin. The
-  remaining 3.0% carries NZ$554,321 of cost against NZ$244,735 of revenue — one
+  remaining 3.0% carries NZ$554,321 of cost against NZ$244,735 of revenue - one
   band has cost at **4.3x** the revenue earned. That drags the reported figure to
   15.3% on stock lines, and to 13.4% overall once rebates are included.
   14,493 lines carry an invoiced cost more than **3x** the item master's buy
   price, which points at a pack-size/unit-of-measure problem in Ostendo rather
   than real trading.
 
-- [x] **8. Fast-Moving SKU margins follow from item 7** — same root cause, now explained on screen. — the four Mars lines
+- [x] **8. Fast-Moving SKU margins follow from item 7** - same root cause, now explained on screen. - the four Mars lines
   showing −4.6% to −6.7% are the same bad-cost lines, not loss-making trade.
 
-- [x] **9. Slow-Moving "Sold" read 0 on every row** — it looked quantities up in
+- [x] **9. Slow-Moving "Sold" read 0 on every row** - it looked quantities up in
   the top 200 products by revenue, which a slow mover is never in. FIXED.
 
 - [x] **10. Cause of the cost fault confirmed by Worthy's head of finance: a
-  unit-of-measure problem, now resolved.** Data agrees exactly — ran Mar–Jul 2026,
+  unit-of-measure problem, now resolved.** Data agrees exactly - ran Mar–Jul 2026,
   peaked in June, stopped by August. The dashboard shows Ostendo's own figures by
   default and flags only the months materially affected.
 
 ## Done
 
-- [x] Sales-by-Rep month columns landed three months out — fixed, verified.
-- [x] Weekly Gross Profit column read NZ$0.00 — fixed, verified.
-- [x] Reps with no activity in the period listed as rows of zeros — removed.
+- [x] Sales-by-Rep month columns landed three months out - fixed, verified.
+- [x] Weekly Gross Profit column read NZ$0.00 - fixed, verified.
+- [x] Reps with no activity in the period listed as rows of zeros - removed.
 - [x] New Customers and Returns populated for South.
 - [x] Revenue, cost, invoice and credit figures for South tie to Ostendo to the
       cent, cross-checked against a query sharing no code with the dashboard.
@@ -101,12 +101,12 @@ system. Evidence is recorded beside each one.
       printed beside them. Rashmi Jani's September read NZ$5,025 across her weeks
       against a NZ$4,752 month total; Chris, August, South showed NZ$85,519.56 of
       weeks against an NZ$85,424.20 total. Negative figures now show, in red.
-      Only a true zero is blank. South's own figures are unchanged — the hidden
+      Only a true zero is blank. South's own figures are unchanged - the hidden
       NZ$95.36 simply became visible.
 
 - [x] **15. The monthly footer summed each row's gross profit,** which would
       shrink away from the company figure wherever a margin is withheld. It
-      derives gross profit from revenue minus cost instead — the same number for
+      derives gross profit from revenue minus cost instead - the same number for
       every row that has both, verified across all 116 South rows. The footer now
       reads NZ$7,811,769 / NZ$1,076,720 / 13.8%, exactly the company KPI.
 
@@ -127,16 +127,16 @@ system. Evidence is recorded beside each one.
 ### Known, explained, not a defect
 
 - Albert Lee, April 2025, reads −261.2%. Six invoices worth NZ$3,499.87 and one
-  credit note of NZ$2,701.35 that carries no product lines — a price adjustment,
-  not a return — so no goods came back and no cost reversed. Net revenue
+  credit note of NZ$2,701.35 that carries no product lines - a price adjustment,
+  not a return - so no goods came back and no cost reversed. Net revenue
   NZ$798.52 against NZ$2,883.90 of cost. The figure is correct.
 
 ### Checked against Odoo itself, not just against ourselves
 
 Every figure above was first proven self-consistent (1,864 checks). That only
 shows the dashboard agrees with itself. A temporary route then recomputed the
-same numbers from whole Odoo records in plain JavaScript — no `read_group`, no
-shared helper, no micro-dollar arithmetic, no reconciliation — and compared.
+same numbers from whole Odoo records in plain JavaScript - no `read_group`, no
+shared helper, no micro-dollar arithmetic, no reconciliation - and compared.
 
 - [x] **18. 302 figures agree to the cent** across North FY26, the prior
       comparison period, all six started months, all 16 reps (revenue, cost and
@@ -147,12 +147,12 @@ shared helper, no micro-dollar arithmetic, no reconciliation — and compared.
 
 - [x] **19. Category units were summed after rounding.** Each product's units
       were rounded to a whole item before being added into its category, so half
-      a unit per product accumulated — Soft Drinks read 19,299 against a true
+      a unit per product accumulated - Soft Drinks read 19,299 against a true
       19,296.71. Raw quantities are summed and rounded once.
 
 - [x] **20. On Hand was blank on all 20 Fast-Moving rows.** Odoo had the figure;
       the route never asked. Fetched for the ~60 products actually shown, with
-      company context — without it Odoo sums stock across every company.
+      company context - without it Odoo sums stock across every company.
 
 - [x] **21. Margins were quoted two ways on one screen.** The Monthly Breakdown
       footer rounded to whole numbers and read 14% while the rep table read 13.8%
@@ -164,18 +164,18 @@ shared helper, no micro-dollar arithmetic, no reconciliation — and compared.
       correct `orderCount` then overwrote it with an undefined `c.orders`. A
       sweep of every table on the page now finds no all-blank column.
 
-### 23. The uncosted revenue is NOT missing product costs — corrected
+### 23. The uncosted revenue is NOT missing product costs - corrected
 
 Pratham challenged the claim that NZ$37,029.70 of North's sales carry no cost
 "because Odoo holds no cost for them". He was right to. Checked against Odoo:
 
 - Of the **1,480 products** North sold in FY26, **1,470 carry a cost price**.
-- The **10 that do not** account for **NZ$1,287.52** — and five of those are
+- The **10 that do not** account for **NZ$1,287.52** - and five of those are
   display stands and promo shirts given away at nil revenue (Pringles display
   stand, KitKat F1 polo shirt, Warheads towel, Fruity Ice freezer, Fruity Burst
   stand). The only one of any size is `B0055` BIC Razor Flex 3, NZ$958.32.
 - The real gap is **NZ$35,742.18 across 428 invoice lines with no product on
-  them at all** — freight recharges, pallet rent, expense reimbursements,
+  them at all** - freight recharges, pallet rent, expense reimbursements,
   insurance write-off claims and supplier rebate claims (Nestlé King Share Bar,
   Bundaberg, Mars), all typed in by hand. Real income, nothing bought to earn
   it, so no cost of sales exists to show. This is also why the three withheld
@@ -188,23 +188,23 @@ guessing at the cause, and the banner and rep note say what it actually is.
 **Also checked and ruled out:** `standard_price` is `company_dependent: false`
 on this database, the service login already defaults to Worthy Products Ltd
 (company 4), and **not one of the 1,480 prices changes** when read with company
-context. The cost basis is sound. (`qty_available` *is* company-sensitive —
+context. The cost basis is sound. (`qty_available` *is* company-sensitive  - 
 that read does carry context.)
 
 ### Known, not a defect
 
 - The service account cannot read `product.product` records belonging to other
   companies ("security restrictions … Product Variant"). It does not affect any
-  figure — every product North sells is readable — but a query that sweeps
+  figure - every product North sells is readable - but a query that sweeps
   products without a company filter will fail.
 - Oceania (company 1) still returns `sequence item 1: expected str instance,
   bool found` on any product read. The independent route, using plain
-  `search_read` with no grouping, fails identically — so the fault is a broken
+  `search_read` with no grouping, fails identically - so the fault is a broken
   product-variant record in Odoo, not the dashboard's query. Oceania therefore
   shows revenue but no margin, products or categories, and says so on screen.
 
 
-## Visual double-verification, North and South — 18 Sep 2026
+## Visual double-verification, North and South - 18 Sep 2026
 
 Every rendered cell read back out of the browser and compared against the API
 response that produced it. **2,190 cells: 1,165 on North, 1,025 on South.** No
@@ -228,7 +228,7 @@ Six defects found and fixed in this pass:
       wrong: TNCC Party Mix (4,676 units), Pascall Party Pack (4,568) and seven
       others were absent, displaced by items ranking high only on revenue. The
       endpoint already built the correct list and the client already mapped it
-      in — the panel never read it.
+      in - the panel never read it.
 
 - [x] **26. April was dropped from the charts' month axis.** South's YoY chart
       drew six bars but eleven labels; Recharts discards ticks it thinks will not
@@ -245,11 +245,11 @@ Six defects found and fixed in this pass:
 
 - [x] **28. KPI counters animated into background tabs.** Browsers throttle
       `setInterval` to about once a second when a tab is hidden, turning a 0.8s
-      count-up into a 40s one — load the dashboard, switch away, come back, and
+      count-up into a 40s one - load the dashboard, switch away, come back, and
       Total Revenue was still climbing through numbers that were not the answer.
       Hidden tabs now show the real figure at once.
 
-- [x] **29. Category units were summed after rounding** (see item 19) — retested
+- [x] **29. Category units were summed after rounding** (see item 19) - retested
       and holding: largest category now within 0.5 of a whole unit.
 
 ### North and South are not like-for-like on cost
@@ -260,15 +260,15 @@ actually cost on the day it was invoiced.** North's figures round to the dollar,
 South's are exact to the cent. The two margins are both correct and are not
 measuring quite the same thing.
 
-## Both companies checked against their own source systems — 18 Sep 2026
+## Both companies checked against their own source systems - 18 Sep 2026
 
 North had been recomputed from Odoo's raw records; South had only ever been
 checked screen-against-API, which proves the page matches the payload, not that
 the payload matches Ostendo. Both now have an outside check.
 
-**South** — a temporary route recomputed every figure from Ostendo sharing
+**South** - a temporary route recomputed every figure from Ostendo sharing
 nothing with the route it checks: `>= start AND < day-after-end` instead of
-`BETWEEN` (so a boundary bug cannot hide behind the same predicate — an earlier
+`BETWEEN` (so a boundary bug cannot hide behind the same predicate - an earlier
 check reused `BETWEEN` and could never have caught one), aggregation per invoice
 rather than per day and salesperson, and `COUNT(DISTINCT)` for the document
 count. **104 figures agree**: FY24, FY25 and FY26 totals, the prior-comparison
@@ -276,12 +276,12 @@ window, all six months queried as separate windows, and all eight reps on
 revenue, cost, invoices and credits. `netSales` independently equals the sum of
 header nett amounts and GST comes out at exactly 1.1500.
 
-**North** — FY25 rebuilt from 13,015 invoices and 213,571 lines, FY26 from
+**North** - FY25 rebuilt from 13,015 invoices and 213,571 lines, FY26 from
 7,692 and 132,402, every count matching Odoo's own, no orphaned lines.
 
 - [x] **30. The year's totals were two cents wrong.** They were built by adding
       up twelve already-rounded months, so half a cent per month accumulated.
-      FY25's cost came out two cents above the true sum — and because per-rep
+      FY25's cost came out two cents above the true sum - and because per-rep
       costs are reconciled to that company figure, the two cents were pushed onto
       the largest rep, where they showed. Totals now add the untouched
       accumulators and round once.
@@ -293,7 +293,7 @@ header nett amounts and GST comes out at exactly 1.1500.
 
 - [x] **32. The screen still did not add up, a level above the cents.** North
       printed whole dollars, so six visible cost figures came to NZ$6,732,940
-      against a footer of NZ$6,732,941 — a dollar that existed only in the
+      against a footer of NZ$6,732,941 - a dollar that existed only in the
       display. Precision now follows the data, not the source system: every
       financial-year view shows cents, as South already did.
 
@@ -310,10 +310,10 @@ reps sum to the year, each rep's months sum to that rep, each rep's weeks sum to
 that rep's month, company weeks sum to the company month, and gross profit is
 exactly revenue minus cost everywhere both are shown. Zero failures. Re-run on
 screen afterwards: every additive column on both companies now equals the total
-printed under it (AOV excepted — it is an average, and its footer correctly
+printed under it (AOV excepted - it is an average, and its footer correctly
 shows the period figure, not the sum of monthly ones).
 
-## Worthy Oceania — 18 Sep 2026
+## Worthy Oceania - 18 Sep 2026
 
 Oceania is two businesses in one Odoo company, trading in three currencies. Both
 facts were being ignored.
@@ -321,7 +321,7 @@ facts were being ignored.
 - [x] **34. Revenue was adding US dollars to New Zealand ones.** Oceania raises
       invoices in USD (204), NZD (763) and AUD (56). The route summed
       `amount_untaxed`, which is stated in each invoice's OWN currency, so the
-      dashboard showed **NZ$3,207,414 against a true NZ$4,429,231** — 28% of the
+      dashboard showed **NZ$3,207,414 against a true NZ$4,429,231** - 28% of the
       company missing. Line figures had the same fault through `price_subtotal`.
       Both now use the company-currency fields Odoo maintains for this:
       `amount_untaxed_signed` on the document and `balance` on the line.
@@ -331,11 +331,11 @@ facts were being ignored.
       `price_subtotal` on home-currency invoice lines and its exact opposite on
       credit-note lines; USD lines converting at 1.7106 NZD.
 
-      North was affected too, though barely — one AUD invoice, NZ$174.80. It
+      North was affected too, though barely - one AUD invoice, NZ$174.80. It
       would have grown silently.
 
-- [x] **35. The two departments are Odoo sales teams.** Odoo carries three —
-      Textiles, WOL Products and Fashion — but Worthy runs Fashion as part of the
+- [x] **35. The two departments are Odoo sales teams.** Odoo carries three  - 
+      Textiles, WOL Products and Fashion - but Worthy runs Fashion as part of the
       fabric business, so it is reported inside Textiles:
 
       | Department | Revenue | Share | vs last year |
@@ -354,7 +354,7 @@ facts were being ignored.
 
 - [x] **36. Products, categories and margin were entirely absent.** Four fabric
       variants have an attribute value Odoo cannot render, and any query that has
-      to name a product then fails outright — so the whole company was reduced to
+      to name a product then fails outright - so the whole company was reduced to
       a revenue figure. Excluding those four by id lets the other **2,842**
       products through. Only two had sales in the period (COTGREYCAL36,
       COTGREYCAL48, NZ$1,521.67); the page names them and says their sales are
@@ -362,7 +362,7 @@ facts were being ignored.
       for any of this.**
 
 - [x] **37. Oceania still shows no margin, and that is correct.** Not one of the
-      2,842 products it sells carries a standard cost in Odoo — 0% coverage,
+      2,842 products it sells carries a standard cost in Odoo - 0% coverage,
       measured. The margin columns are absent rather than reading 100%, and the
       banner says why. Populating standard costs in Odoo is the only thing that
       changes this.
@@ -381,7 +381,7 @@ Teams, months, reps and the currency split each add up to the company total, and
       reimbursement, NZ$2,738 rent, NZ$1,080 supplier rebate, NZ$1,272 freight,
       NZ$1,925 of hand-typed "Sales - Local" lines, less NZ$3,226 "Discounts
       Given". North (company 4 only) now takes those lines out of every revenue
-      aggregate — months, weeks, reps, teams, customers, currencies — so they still
+      aggregate - months, weeks, reps, teams, customers, currencies - so they still
       add up. Oceania is untouched and its payload was compared field by field
       before and after: identical.
 
@@ -399,7 +399,7 @@ Teams, months, reps and the currency split each add up to the company total, and
       The lines excluded are reported in `nonStockRevenue` and stated on the page.
       New customers on the Shopify side (Online/POS) are now counted on the
       customer's first-ever order, once, instead of every order from a customer
-      created that month — March had read 555 against a true 16.
+      created that month - March had read 555 against a true 16.
 
       Correction, same day: the first deploy printed the currency line as
       "NZD (0), NZD (0), ..." hundreds of times, because the non-product
@@ -419,7 +419,7 @@ Teams, months, reps and the currency split each add up to the company total, and
       The non-product lines are now read once per request (about 1.7s) and sliced
       by date, rather than once per panel.
 
-- [x] **39. North KPI targets table agrees with the Odoo KPI emails.** The Odoo
+- [x] **39. North "Sales vs Target" table agrees with the Odoo KPI emails.** The Odoo
       tab on Worthy Products North shows each rep's annual target against
       year-to-date sales, using the same three targets and selection rules as
       the KPI scheduled actions (ir.cron 107 Rubin $650,000, 110 Savan $350,000,

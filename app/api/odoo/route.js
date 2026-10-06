@@ -42,7 +42,7 @@ export async function GET(request) {
       params: { service: 'common', method: 'authenticate', args: [db, username, password, {}] },
     }, 15000);
     const uid = authJson.result;
-    if (!uid) throw new Error('Authentication failed — check ODOO_USER / ODOO_PASSWORD');
+    if (!uid) throw new Error('Authentication failed, check ODOO_USER / ODOO_PASSWORD');
 
     const exec = async (model, method, args, kwargs = {}, timeout = 45000) => {
       const j = await odooCall(url, {
@@ -66,7 +66,7 @@ export async function GET(request) {
      *
      * This used to be a single call with `limit: 10000`. account.move returns
      * newest first, so once a company passed ten thousand invoices in a year the
-     * OLDEST ones were silently dropped — Worthy North has 10,870 for 2026, and
+     * OLDEST ones were silently dropped - Worthy North has 10,870 for 2026, and
      * the whole of January (835 invoices, NZ$936,451.83) simply vanished from
      * the dashboard. Paging until a short page comes back cannot truncate, and
      * the count is checked against the database afterwards. */
@@ -98,7 +98,7 @@ export async function GET(request) {
       return out;
     };
 
-    // Lines + product analytics now live in /api/odoo/advanced — keeps this
+    // Lines + product analytics now live in /api/odoo/advanced - keeps this
     // route fast (just invoice headers + partner filter for customers/reps).
 
     // ── 3. Fetch partner records (for supplier vs customer filter) ────────────
@@ -137,7 +137,7 @@ export async function GET(request) {
     // OR if customer_rank field unavailable (older Odoo) AND not pure supplier.
     const isCustomerPartner = (pid) => {
       const p = partnerById[pid];
-      if (!p) return true; // unknown — keep
+      if (!p) return true; // unknown - keep
       if (typeof p.customer_rank === 'number' || typeof p.supplier_rank === 'number') {
         const cr = p.customer_rank || 0;
         const sr = p.supplier_rank || 0;
@@ -265,7 +265,7 @@ export async function GET(request) {
       return { name, weekly: wkly };
     }).sort((a, b) => b.weekly.reduce((s, w) => s + w.revenue, 0) - a.weekly.reduce((s, w) => s + w.revenue, 0));
 
-    // ── 10. Top customers (CUSTOMERS ONLY — exclude pure suppliers) ───────────
+    // ── 10. Top customers (CUSTOMERS ONLY - exclude pure suppliers) ───────────
     const custData = {};
     const todayMs = Date.now();
     for (const inv of invoices) {

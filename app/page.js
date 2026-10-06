@@ -41,14 +41,14 @@ const FY_MONTHS = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","
 const calcGrowth = (c, p) => (!p || p === 0) ? null : +((( c - p) / p) * 100).toFixed(1);
 const fmt   = (n, cur = "NZD") => new Intl.NumberFormat("en-NZ", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n || 0);
 const fmtK  = (n, cur = "NZD") => {
-  if (n === null || n === undefined) return "—";
+  if (n === null || n === undefined) return "-";
   const s = cur === "NZD" ? "NZ$" : "$";
   const sign = (n || 0) < 0 ? "-" : "";
   return `${sign}${s}${Math.abs(Math.round(n || 0)).toLocaleString('en-NZ')}`;
 };
-// Exact whole-and-cents amount, e.g. NZ$1,277,734.48 — ties to Ostendo to the cent
+// Exact whole-and-cents amount, e.g. NZ$1,277,734.48 - ties to Ostendo to the cent
 const fmtExact = (n, cur = "NZD") => {
-  if (n === null || n === undefined) return "—";
+  if (n === null || n === undefined) return "-";
   const s = cur === "NZD" ? "NZ$" : "$";
   const sign = n < 0 ? "-" : "";
   return `${sign}${s}${Math.abs(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -59,18 +59,71 @@ const round2 = (n) => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
    13.8% and 12.1% for the same trading, which reads as two systems disagreeing
    rather than one number formatted two ways. */
 const marginPct1 = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : null);
-const fmtPct = (n) => (n === null || n === undefined) ? "—" : `${n > 0 ? "+" : ""}${n}%`;
+const fmtPct = (n) => (n === null || n === undefined) ? "-" : `${n > 0 ? "+" : ""}${n}%`;
+
+/* Line icons, one consistent set (24px grid, 1.6 stroke, rounded caps). They take
+   the colour of the text around them, so they follow light and dark mode. */
+const ICON_PATHS = {
+  target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" /></>,
+  trophy: <><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></>,
+  alert: <><path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9.5v4M12 17h.01" /></>,
+  userMinus: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M17 11h6" /></>,
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
+  award: <><circle cx="12" cy="9" r="6" /><path d="M8.5 14.5 7 22l5-3 5 3-1.5-7.5" /></>,
+  zap: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
+  hourglass: <path d="M6 2h12M6 22h12M7 2v4a5 5 0 0 0 2 4l3 2-3 2a5 5 0 0 0-2 4v4M17 2v4a5 5 0 0 1-2 4l-3 2 3 2a5 5 0 0 1 2 4v4" />,
+  user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+  chart: <path d="M3 3v18h18M8 17v-5M13 17V7M18 17v-8" />,
+  gem: <><path d="M6 3h12l4 6-10 12L2 9z" /><path d="M2 9h20M9 3 8 9l4 12M15 3l1 6-4 12" /></>,
+  cloud: <path d="M17.5 19H7a5 5 0 1 1 1-9.9 6 6 0 0 1 11.5 2.4A3.8 3.8 0 0 1 17.5 19z" />,
+  globe: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" /></>,
+  store: <><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M9 20v-6h6v6" /><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" /></>,
+  sparkle: <path d="M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6-5.6-1.9 5.6-1.9z" />,
+  close: <path d="M18 6 6 18M6 6l12 12" />,
+  calendar: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><path d="M3 10h18M8 2.5v4M16 2.5v4" /></>,
+  trending: <path d="M22 7l-8.5 8.5-5-5L2 17M16 7h6v6" />,
+  dollar: <path d="M12 2v20M17 6.5C16 5 14.3 4.5 12 4.5c-3 0-5 1.3-5 3.3 0 4.7 10 2.3 10 7 0 2-2 3.5-5 3.5-2.5 0-4.3-.7-5.5-2.3" />,
+  bag: <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" />,
+  percent: <><path d="M19 5 5 19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></>,
+  wallet: <><path d="M20 12V8a2 2 0 0 0-2-2H5a2 2 0 0 1 0-4h13M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></>,
+};
+const Icon = ({ name, size = 16, style }) => {
+  const filled = name === "up" || name === "down";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+      fill={filled ? "currentColor" : "none"} stroke={filled ? "none" : "currentColor"}
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink: 0, display: "inline-block", verticalAlign: "-0.15em", ...style }}>
+      {name === "up" ? <path d="M12 6l7 12H5z" /> : name === "down" ? <path d="M12 18 5 6h14z" /> : ICON_PATHS[name] || null}
+    </svg>
+  );
+};
+/* "2026-04-01" -> "1 Apr 2026". Read from the text, never through Date, so a
+   timezone can never move a day. */
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtDay = (iso) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  return m ? `${Number(m[3])} ${SHORT_MONTHS[Number(m[2]) - 1]} ${m[1]}` : "";
+};
+const RangeTag = ({ text, theme, style }) => !text ? null : (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, letterSpacing: "0.02em",
+                 padding: "3px 9px", borderRadius: 999, color: theme?.textSub || "#6b7280",
+                 border: `1px solid ${theme?.border || "rgba(128,128,128,0.25)"}`, whiteSpace: "nowrap", ...style }}>
+    <Icon name="calendar" size={11} />{text}
+  </span>
+);
+const Trend = ({ up, size = 9 }) => <Icon name={up ? "up" : "down"} size={size} style={{ marginRight: 3, verticalAlign: "0" }} />;
 
 const GrowthBadge = ({ value }) => {
-  if (value === null || value === undefined) return <span style={{ color: "#888" }}>—</span>;
+  if (value === null || value === undefined) return <span style={{ color: "#888" }}>-</span>;
   const pos = value >= 0;
-  // Round at the point of display — a percentage that arrives as binary noise
+  // Round at the point of display - a percentage that arrives as binary noise
   // must never reach the screen as "0.5999999999999996%".
-  return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}>{pos ? "▲" : "▼"} {Math.round(Math.abs(value) * 10) / 10}%</span>;
+  return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}><Trend up={pos} />{Math.round(Math.abs(value) * 10) / 10}%</span>;
 };
 
 const MarginBar = ({ value, accent = "#3f7bdd" }) => {
-  if (value === null || value === undefined) return <span style={{ color: "#888" }}>—</span>;
+  if (value === null || value === undefined) return <span style={{ color: "#888" }}>-</span>;
   const color = value > 40 ? "#4ade80" : value > 20 ? accent : "#f87171";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -125,13 +178,13 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
     <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 16, padding: "22px 24px", position: "relative", overflow: "hidden", transition: "transform 0.2s,box-shadow 0.2s", cursor: "default" }}>
       <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, background: `radial-gradient(circle,${accent}20 0%,transparent 70%)`, borderRadius: "50%" }} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
+        <div style={{ width: 38, height: 38, borderRadius: 10, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", color: accent, background: `${accent}1f` }}><Icon name={icon} size={20} /></div>
         <div style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: growth === null ? textMuted : isPos ? "#4ade80" : "#f87171", background: growth === null ? (darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)") : isPos ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)" }}>
-          {growth === null ? "No prior yr" : `${isPos ? "▲" : "▼"} ${Math.round(Math.abs(growth) * 10) / 10}%`}
+          {growth === null ? "No prior yr" : <><Trend up={isPos} />{Math.round(Math.abs(growth) * 10) / 10}%</>}
         </div>
       </div>
       <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
-        {value === null ? "—" : sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
+        {value === null ? "-" : sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
       </div>
       <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
       {compareText && <div style={{ fontSize: 10, color: textMuted, marginTop: 4, opacity: 0.8 }}>{compareText}</div>}
@@ -157,7 +210,7 @@ BUSINESS OVERVIEW:
 - Also runs a small B2C channel where end customers buy by the carton and pay online directly
 - B2B customers are on credit terms; B2C customers pay upfront online
 - Currency: NZD. Target gross margin: 20% annually
-- Main competitors: DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports — all aggressive online
+- Main competitors: DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports - all aggressive online
 
 SALES TEAM (5 reps, all via POS/field sales):
 - Hari Patel: Auckland East, West, North Shore
@@ -168,37 +221,37 @@ SALES TEAM (5 reps, all via POS/field sales):
 
 CHANNELS:
 - POS/Field Sales: Reps visit stores directly, take orders on the spot
-- Online Sales: Covers ALL of NZ — rep territories + remote areas reps can't reach. Strategic priority to grow online significantly to compete with DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports.
+- Online Sales: Covers ALL of NZ - rep territories + remote areas reps can't reach. Strategic priority to grow online significantly to compete with DKSH, Gilmours, Geneva, Stock4Shop, Nalsun Imports.
 
-NZ SEASONS (Southern Hemisphere — opposite to northern hemisphere):
-- Summer: December, January, February — hottest months, beverages/cold drinks/iced confectionery peak
-- Autumn: March, April, May — transitioning, beverage demand tapering, confectionery starting to pick up
-- Winter: June, July, August — coldest months, chocolate and warm confectionery peak demand
-- Spring: September, October, November — warming up, mixed demand
+NZ SEASONS (Southern Hemisphere - opposite to northern hemisphere):
+- Summer: December, January, February - hottest months, beverages/cold drinks/iced confectionery peak
+- Autumn: March, April, May - transitioning, beverage demand tapering, confectionery starting to pick up
+- Winter: June, July, August - coldest months, chocolate and warm confectionery peak demand
+- Spring: September, October, November - warming up, mixed demand
 
 TODAY'S DATE: ${new Date().toLocaleDateString('en-NZ', { month: 'long', day: 'numeric', year: 'numeric' })}
 CURRENT NZ SEASON: ${(() => {
   const m = new Date().getMonth(); // 0-indexed
-  if (m <= 1 || m === 11) return "Summer (December–February) — peak beverage and cold drink season";
-  if (m <= 4) return "Autumn (March–May) — beverages tapering, confectionery starting to rise";
-  if (m <= 7) return "Winter (June–August) — peak chocolate and confectionery season";
-  return "Spring (September–November) — mixed demand, beverages beginning to recover";
+  if (m <= 1 || m === 11) return "Summer (December–February) - peak beverage and cold drink season";
+  if (m <= 4) return "Autumn (March–May) - beverages tapering, confectionery starting to rise";
+  if (m <= 7) return "Winter (June–August) - peak chocolate and confectionery season";
+  return "Spring (September–November) - mixed demand, beverages beginning to recover";
 })()}
 
 STRATEGIC PRIORITIES:
-1. Grow online sales aggressively — this is the #1 growth lever right now
+1. Grow online sales aggressively - this is the #1 growth lever right now
 2. Defend territory against competitors with strong online presence
 3. Maintain 20% gross margin target
 4. Identify slow-moving imported stock early (import lead times make overstock costly)
-5. Keep B2B credit customers ordering regularly — churn is expensive to recover
+5. Keep B2B credit customers ordering regularly - churn is expensive to recover
 
 When analysing data, always:
 - Reference specific rep names and their territories where relevant
-- Correctly apply NZ seasonality — summer is Dec–Feb, winter is Jun–Aug
+- Correctly apply NZ seasonality - summer is Dec–Feb, winter is Jun–Aug
 - Flag margin concerns vs the 20% target
 - Highlight online channel growth opportunities specifically
 - Note if imported product lines are at risk (slow-moving imported stock ties up capital and has long reorder lead times)
-- Be direct and actionable — the audience is the owner and sales manager, not an analyst
+- Be direct and actionable - the audience is the owner and sales manager, not an analyst
 `;
 
 // ── AI Insights Panel ─────────────────────────────────────────────────────────
@@ -240,7 +293,7 @@ No generic advice. Every point must reference something specific in the data.`;
   return (
     <div style={{ marginTop: 12 }}>
       <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${accent}50`, background: `${accent}10`, color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
-        <span>✦</span>{loading ? "Analysing…" : open ? "Hide AI Insights" : "✦ AI Insights"}
+        <Icon name="sparkle" size={13} />{loading ? "Analysing…" : open ? "Hide AI Insights" : "AI Insights"}
       </button>
       {open && !loading && insight && (
         <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#c0a870", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
@@ -249,7 +302,7 @@ No generic advice. Every point must reference something specific in the data.`;
       )}
       {open && loading && (
         <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#8a9aaa" }}>
-          ✦ Analysing Worthy Products data…
+          <Icon name="sparkle" size={13} style={{ marginRight: 6 }} />Analysing Worthy Products data…
         </div>
       )}
     </div>
@@ -271,19 +324,19 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
             <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 16, color: accent, fontWeight: 700 }}>{category}</div>
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{(products||[]).length} products · click outside to close</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 20, cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 20, cursor: "pointer", display: "flex" }} aria-label="Close"><Icon name="close" size={20} /></button>
         </div>
 
         {top.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▲ Top Performers</div>
+            <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}><Trend up /> Top Performers</div>
             {top.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 <div style={{ fontSize: 12, color: "#e8e4dc", flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
-                  <span style={{ color: accent }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "—"}</span>
+                  <span style={{ color: accent }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "-"}</span>
                   <span style={{ color: "#7C9EC9" }}>{p.qtySold} units</span>
-                  {p.yoyChange !== null && <span style={{ color: p.yoyChange >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>{p.yoyChange >= 0 ? "▲" : "▼"}{Math.abs(p.yoyChange)}% YoY</span>}
+                  {p.yoyChange !== null && <span style={{ color: p.yoyChange >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}><Trend up={p.yoyChange >= 0} />{Math.abs(p.yoyChange)}% YoY</span>}
                 </div>
               </div>
             ))}
@@ -292,11 +345,11 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
 
         {rising.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📈 Growing Fast</div>
+            <div style={{ fontSize: 11, color: accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}><Icon name="trending" size={14} style={{ marginRight: 6 }} />Growing Fast</div>
             {rising.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 <div style={{ fontSize: 12, color: "#e8e4dc" }}>{p.name}</div>
-                <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 11 }}>▲{p.yoyChange}% YoY</span>
+                <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 11 }}><Trend up />{p.yoyChange}% YoY</span>
               </div>
             ))}
           </div>
@@ -304,13 +357,13 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
 
         {declining.length > 0 && (
           <div>
-            <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>▼ Declining in This Category</div>
+            <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}><Trend up={false} /> Declining in This Category</div>
             {declining.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 <div style={{ fontSize: 12, color: "#e8e4dc", flex: 1 }}>{p.name}</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
                   <span style={{ color: "#8a7860" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
-                  <span style={{ color: "#f87171", fontWeight: 700 }}>▼{Math.abs(p.yoyChange)}% YoY</span>
+                  <span style={{ color: "#f87171", fontWeight: 700 }}><Trend up={false} />{Math.abs(p.yoyChange)}% YoY</span>
                 </div>
               </div>
             ))}
@@ -327,7 +380,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
   );
 };
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, theme }) => {
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, theme, icon, range }) => {
   const T = theme || {
     bgCard: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
     border: "rgba(255,255,255,0.07)", bgTableHead: "#0a0c12",
@@ -340,11 +393,12 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
-          {title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
+          {icon && <Icon name={icon} size={15} style={{ marginRight: 8, color: T.accent || "#3f7bdd" }} />}{title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
         </div>
         {headerExtra}
       </div>
       {subtitle && <div style={{ fontSize: 10, color: T.textSub, marginTop: 4 }}>{subtitle}</div>}
+      {range && <div style={{ marginTop: 8 }}><RangeTag text={range} theme={T} /></div>}
     </div>
     <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -381,10 +435,11 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
   );
 };
 
-/* Worthy Products North: rep KPI targets, the same three targets and year-to-date
-   figures as the weekly KPI emails run by the Odoo scheduled actions (ir.cron 107,
-   110, 111). Calendar year, ex GST, to the last completed Sunday. */
-const KPI_DOLLAR = (v) => (v === null || v === undefined ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
+/* Worthy Products North: each rep's sales against the annual target set in Odoo.
+   Same targets and year-to-date figures as the weekly emails sent by the Odoo
+   scheduled actions (ir.cron 107, 110, 111). Calendar year, ex GST, to the last
+   completed Sunday. */
+const KPI_DOLLAR = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
 const KpiTargetsTable = ({ theme }) => {
   const [kpi, setKpi] = useState(null);
   const [err, setErr] = useState(null);
@@ -392,18 +447,16 @@ const KpiTargetsTable = ({ theme }) => {
     let live = true;
     fetch("/api/odoo/kpi", { cache: "no-store" })
       .then(r => r.json())
-      .then(j => { if (!live) return; if (j.ok) setKpi(j); else setErr(j.error || "Could not load KPI targets"); })
+      .then(j => { if (!live) return; if (j.ok) setKpi(j); else setErr(j.error || "Could not load sales vs target"); })
       .catch(e => live && setErr(e.message));
     return () => { live = false; };
   }, []);
-  const nzDate = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" });
-  const subtitle = err ? `Could not load: ${err}`
-    : kpi ? `Targets set in Odoo scheduled actions · 1 Jan – ${nzDate(kpi.period.to)} · ex GST · ${kpi.paceFraction}% of the year gone`
-    : "Targets set in Odoo scheduled actions";
+  const subtitle = err ? `Could not load: ${err}` : "Annual targets as set in Odoo, ex GST";
+  const range = kpi ? `${fmtDay(kpi.period.from)} to ${fmtDay(kpi.period.to)}` : null;
   const rows = (kpi?.reps || []).map(r => ({ ...r, repLabel: r.rep }));
   const barColor = (p) => (p > 75 ? "#16a34a" : p > 40 ? "#f59e0b" : "#dc2626");
   return (
-    <AdvancedTable theme={theme} title="🎯 KPI Targets — Rep Sales vs Target" subtitle={subtitle}
+    <AdvancedTable theme={theme} icon="target" title="Sales vs Target" subtitle={subtitle} range={range}
       loading={!kpi && !err} currency="NZD" data={rows}
       columns={[
         { key: "rep", label: "Rep", color: theme.text },
@@ -426,8 +479,8 @@ const KpiTargetsTable = ({ theme }) => {
   );
 };
 
-// ── Sales Rep Breakdown — ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, T, accent, exact = false }) => {
+// ── Sales Rep Breakdown - ONE table with annual/monthly/weekly toggle ─────────
+const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, accent, exact = false }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
   const marginByName = {};
   for (const m of (repMargins || [])) marginByName[m.name] = m;
@@ -437,7 +490,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   /* Look each month column up by its NAME, not by arithmetic on the position.
    * The financial-year payload already arrives in April-to-March order; the old
    * index shift assumed a January-to-December array and so moved every figure
-   * three months along — April's total appeared under January. */
+   * three months along - April's total appeared under January. */
   const monthAt = (months, fi) => {
     const label = displayMonths[fi];
     const list  = months || [];
@@ -455,7 +508,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   const headStyle    = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
   const numStyle     = (v) => ({ padding: "10px 12px", textAlign: "right", color: T.textSub, fontSize: 12, whiteSpace: "nowrap" });
 
-  // Annual rows (summary) — merged with cost/margin when available
+  // Annual rows (summary) - merged with cost/margin when available
   const annualRows = (salespeople || []).map(s => {
     const m = marginByName[s.name];
     return {
@@ -501,13 +554,14 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: T.textHead, fontWeight: 700 }}>
-            👤 Sales by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
+            <Icon name="user" size={15} style={{ marginRight: 8, color: accent }} />Sales by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
           </div>
           <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>
-            {repView === "annual"  ? `${fyMonths ? "FY totals" : "Annual totals"} — ${currency}` :
-             repView === "monthly" ? `${fyMonths ? "FY monthly" : "Monthly"} breakdown by rep — ${currency}` :
-                                     `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} — ${currency}`}
+            {repView === "annual"  ? `${fyMonths ? "FY totals" : "Annual totals"} · ${currency}` :
+             repView === "monthly" ? `${fyMonths ? "FY monthly" : "Monthly"} breakdown by rep · ${currency}` :
+                                     `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} · ${currency}`}
           </div>
+          {(repView === "weekly" ? monthRangeLabel : rangeLabel) && <div style={{ marginTop: 8 }}><RangeTag text={repView === "weekly" ? monthRangeLabel : rangeLabel} theme={T} /></div>}
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => setRepView("annual")}  style={pillBtn(repView === "annual")}>Annual</button>
@@ -543,12 +597,12 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   <td style={cellStyle(r.aov)}>{money(r.aov, currency)}</td>
                   {hasMargin && (
                     <td style={{ ...cellStyle(r.grossProfit || 0), color: (r.grossProfit ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                      {r.grossProfit !== null ? money(r.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                      {r.grossProfit !== null ? money(r.grossProfit, currency) : <span style={{ color: T.textLabel }}>-</span>}
                     </td>
                   )}
                   {hasMargin && (
                     <td style={{ ...cellStyle(0), color: (r.marginPct ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
-                      {r.marginPct !== null && r.marginPct !== undefined ? `${r.marginPct}%` : <span style={{ color: T.textLabel }}>—</span>}
+                      {r.marginPct !== null && r.marginPct !== undefined ? `${r.marginPct}%` : <span style={{ color: T.textLabel }}>-</span>}
                     </td>
                   )}
                 </tr>
@@ -597,19 +651,19 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                               <div>{money(m.revenue, currency)}</div>
                               {mm?.marginPct != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{mm.marginPct}%</div>}
                             </>
-                          ) : <span style={{ color: T.textLabel }}>—</span>}
+                          ) : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
                       );
                     })}
                     <td style={{ ...cellStyle(total), color: accent, fontWeight: 700, verticalAlign: "top" }}>{money(keep(total), currency)}</td>
                     {hasMargin && (
                       <td style={{ ...cellStyle(marg?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
-                        {marg?.grossProfit != null ? money(marg.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                        {marg?.grossProfit != null ? money(marg.grossProfit, currency) : <span style={{ color: T.textLabel }}>-</span>}
                       </td>
                     )}
                     {hasMargin && (
                       <td style={{ ...cellStyle(0), color: (marg?.marginPct ?? 0) >= 20 ? "#4ade80" : (marg?.marginPct ?? 0) >= 0 ? accent : "#f87171", fontWeight: 700 }}>
-                        {marg?.marginPct != null ? `${marg.marginPct}%` : <span style={{ color: T.textLabel }}>—</span>}
+                        {marg?.marginPct != null ? `${marg.marginPct}%` : <span style={{ color: T.textLabel }}>-</span>}
                       </td>
                     )}
                   </tr>
@@ -638,7 +692,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                             <div>{money(keep(colTotal), currency)}</div>
                             {colMargin != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{colMargin}%</div>}
                           </>
-                        ) : "—"}
+                        ) : "-"}
                       </td>
                     );
                   })}
@@ -651,8 +705,8 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     return (
                       <>
                         <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(grandTotal), currency)}</td>
-                        {hasMargin && <td style={{ ...cellStyle(totalGP || 0), color: "#C97C9E", fontWeight: 700 }}>{totalGP != null ? money(totalGP, currency) : "—"}</td>}
-                        {hasMargin && <td style={{ ...cellStyle(0), color: totalMarginPct != null ? (totalMarginPct >= 20 ? "#4ade80" : accent) : T.textLabel, fontWeight: 700 }}>{totalMarginPct != null ? `${totalMarginPct}%` : "—"}</td>}
+                        {hasMargin && <td style={{ ...cellStyle(totalGP || 0), color: "#C97C9E", fontWeight: 700 }}>{totalGP != null ? money(totalGP, currency) : "-"}</td>}
+                        {hasMargin && <td style={{ ...cellStyle(0), color: totalMarginPct != null ? (totalMarginPct >= 20 ? "#4ade80" : accent) : T.textLabel, fontWeight: 700 }}>{totalMarginPct != null ? `${totalMarginPct}%` : "-"}</td>}
                       </>
                     );
                   })()}
@@ -706,14 +760,14 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                         const wColor = wm?.marginPct != null ? (wm.marginPct >= 20 ? "#4ade80" : wm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
                         return (
                           <td key={wi} style={{ ...cellStyle(w.revenue), verticalAlign: "top" }}>
-                            {/* Negative weeks are shown, not hidden — see the monthly
+                            {/* Negative weeks are shown, not hidden, see the monthly
                                 cells above. A blank cell means no trade at all. */}
                             {w.revenue !== 0 ? (
                               <>
                                 <div>{money(w.revenue, currency)}</div>
                                 {wm?.marginPct != null && <div style={{ fontSize: 9, color: wColor, fontWeight: 700, marginTop: 2 }}>{wm.marginPct}%</div>}
                               </>
-                            ) : <span style={{ color: T.textLabel }}>—</span>}
+                            ) : <span style={{ color: T.textLabel }}>-</span>}
                           </td>
                         );
                       })}
@@ -723,16 +777,16 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                             <div>{money(rep.monthTotal, currency)}</div>
                             {mo?.marginPct != null && <div style={{ fontSize: 9, color: mo.marginPct >= 20 ? "#4ade80" : mo.marginPct >= 0 ? accent : "#f87171", fontWeight: 700, marginTop: 2 }}>{mo.marginPct}%</div>}
                           </>
-                        ) : "—"}
+                        ) : "-"}
                       </td>
                       {hasMargin && (
                         <td style={{ ...cellStyle(mo?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
-                          {mo?.grossProfit != null ? money(mo.grossProfit, currency) : <span style={{ color: T.textLabel }}>—</span>}
+                          {mo?.grossProfit != null ? money(mo.grossProfit, currency) : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
                       )}
                       {hasMargin && (
                         <td style={{ ...cellStyle(0), color: (mo?.marginPct ?? 0) >= 20 ? "#4ade80" : (mo?.marginPct ?? 0) >= 0 ? accent : "#f87171", fontWeight: 700 }}>
-                          {mo?.marginPct != null ? `${mo.marginPct}%` : <span style={{ color: T.textLabel }}>—</span>}
+                          {mo?.marginPct != null ? `${mo.marginPct}%` : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
                       )}
                     </tr>
@@ -752,7 +806,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                       fontSize: 11, color: T.textMuted, lineHeight: 1.6 }}>
           <strong style={{ color: T.textSub }}>Why some margins are blank.</strong>{" "}
           {withheld.map(w => w.name).join(", ")}{" "}
-          {withheld.length === 1 ? "invoices" : "invoice"} mostly things that were never bought —
+          {withheld.length === 1 ? "invoices" : "invoice"} mostly things that were never bought:
           pallet rent, freight recharges, expense reimbursements and supplier rebate claims, raised
           without a product on the line. Their invoicing is counted in full
           ({money(keep(withheld.reduce((s, w) => s + (w.revenue || 0), 0)), currency)} in total),
@@ -1030,7 +1084,7 @@ export default function EcommerceDashboard() {
     forceUpdate();
   };
 
-  // FIX 1: Parallel fetching — was sequential (await fetchYear x2 = 2× slower)
+  // FIX 1: Parallel fetching - was sequential (await fetchYear x2 = 2× slower)
   useEffect(() => {
     if (!restored) return; // wait for the URL to be read, or we fetch the wrong company first
     if (activeStore.id !== "worthy" && activeStore.id !== "luxe" && activeStore.id !== "nova") return;
@@ -1039,7 +1093,7 @@ export default function EcommerceDashboard() {
     const load = async () => {
       const advCacheKey = `adv:${storeId}:${advStartDate}:${advEndDate}:${channelTab}`;
 
-      // Restore from cache immediately — prevents blank tables on view/tab switches
+      // Restore from cache immediately - prevents blank tables on view/tab switches
       if (cacheRef.current[advCacheKey]) {
         setAdvancedData(cacheRef.current[advCacheKey]);
         setAdvLoading(false);
@@ -1048,7 +1102,7 @@ export default function EcommerceDashboard() {
         setAdvLoading(true);
       }
 
-      // Worthy Oceania — financial year only, no advanced analytics.
+      // Worthy Oceania - financial year only, no advanced analytics.
       if (storeId === "nova") {
         await fetchFYFor("nova", selectedYear);
         if (advStoreRef.current === storeId) setAdvLoading(false);
@@ -1070,7 +1124,7 @@ export default function EcommerceDashboard() {
       ]);
       // After main years load, fire non-blocking cost/margin + FY tail year
       // (sequential to avoid hammering Ostendo with concurrent header fetches)
-      // South is served entirely by the FY endpoint — no calendar-year stitching,
+      // South is served entirely by the FY endpoint - no calendar-year stitching,
       // no separate cost fetch, so no way for the two to disagree.
       if (advStoreRef.current !== storeId) return; // user switched store mid-fetch
       // Skip expensive fetch if already cached (set above)
@@ -1079,22 +1133,22 @@ export default function EcommerceDashboard() {
         let result;
         if (storeId === "luxe") {
           // One financial year, aggregated inside Firebird. Field names below are
-          // the ones the table column definitions expect — both spellings are
+          // the ones the table column definitions expect - both spellings are
           // supplied where two tables read the same list under different keys.
           const res  = await fetch(`/api/ostendo/advanced?fy=${selectedYear}`, { cache: "no-store" });
           const data = await res.json();
-          if (advStoreRef.current !== storeId) return; // stale — discard
+          if (advStoreRef.current !== storeId) return; // stale - discard
           if (data.error) throw new Error(data.error);
 
           const pick = (o, a) => o[a];
           const products = (data.products || []).map(p => ({
-            name: p.title, title: p.title, category: p.category || "—",
+            name: p.title, title: p.title, category: p.category || "-",
             qtySold: p.unitsSold, unitsSold: p.unitsSold,
             revenue: p.revenue, cost: p.cost,
             grossProfit: p.revenue - p.cost, margin: p.margin,
           }));
           const fastMoving = (data.fastMoving || []).map(p => ({
-            name: p.title, title: p.title, category: p.category || "—",
+            name: p.title, title: p.title, category: p.category || "-",
             qtySold: p.unitsSold, unitsSold: p.unitsSold,
             revenue: p.revenue, margin: p.margin,
           }));
@@ -1138,7 +1192,7 @@ export default function EcommerceDashboard() {
           const channelParam = channelTab !== "odoo" ? `&channel=${channelTab}` : "";
           const res  = await fetch(`/api/shopify/advanced?startDate=${advStartDate}&endDate=${advEndDate}${channelParam}`, { cache: "no-store" });
           const data = await res.json();
-          if (advStoreRef.current !== storeId) return; // stale — discard
+          if (advStoreRef.current !== storeId) return; // stale - discard
           result = { curr: { ...data, slowMoving: data.slowMoving || [], churned: data.churned || [] }, prev: {} };
         }
         // Only cache if result has meaningful data (don't cache empty failures)
@@ -1149,7 +1203,7 @@ export default function EcommerceDashboard() {
       } catch (e) {
         console.error(`[${storeId}] Advanced fetch failed:`, e);
         if (advStoreRef.current !== storeId) return;
-        // Don't cache failures — let the next load retry
+        // Don't cache failures - let the next load retry
         setAdvancedData({ curr: { topProducts: [], topCategories: [], topCustomers: [], slowMoving: [], churned: [], atRisk: [], clv: [], declining: [], metrics: {} }, prev: {} });
       }
       if (advStoreRef.current === storeId) setAdvLoading(false);
@@ -1157,7 +1211,7 @@ export default function EcommerceDashboard() {
     load();
   }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
 
-  // FIX 2: YoY — parallel load all years
+  // FIX 2: YoY - parallel load all years
   useEffect(() => {
     if (view === "yoy") {
       if (activeStore.id === "worthy" || activeStore.id === "luxe") {
@@ -1166,7 +1220,7 @@ export default function EcommerceDashboard() {
           : yearsForStore.map(yr => fetchYear(activeStore.id, yr)));
       }
       // YoY view: only revenue/order data needed for all years. Skip the
-      // expensive advanced fetch — it's tied to the currently selected year.
+      // expensive advanced fetch - it's tied to the currently selected year.
       if (activeStore.id === "worthy") {
         Promise.all(ALL_YEARS.map(yr => fetchOdoo(4, yr, { fireAdvanced: yr === selectedYear })));
       }
@@ -1218,7 +1272,7 @@ export default function EcommerceDashboard() {
     marginableRevenue: (m.started && m.cost != null && m.cost !== 0) ? basisOf(m).revenue : 0,
   });
 
-  // The "previous year" array is the matching slice of last year, day for day —
+  // The "previous year" array is the matching slice of last year, day for day  - 
   // so a month that is only half done is never compared against a whole month.
   // Last year has to be measured on the SAME basis as this year, or the growth
   // column compares a cleaned figure against an uncleaned one and understates it.
@@ -1272,7 +1326,7 @@ export default function EcommerceDashboard() {
       if (!d) return emptyFY;
       return d.months.map(year === selectedYear ? fyMonthRow : fyPriorRow);
     }
-    // Worthy Products South — April→March financial year, served whole.
+    // Worthy Products South - April→March financial year, served whole.
     // year === selectedYear     -> this financial year
     // year === selectedYear - 1 -> the SAME span last year, month for month
     if (activeStore.id === "luxe") {
@@ -1327,6 +1381,40 @@ export default function EcommerceDashboard() {
     const cid = currentOdooCid();
     return cid ? `odoo:${cid}:${year}` : null;
   };
+  /* The dates a table actually covers, written out, so no table has to be read
+     against the period selector to know what it shows.
+       period   the selected period
+       asat     customer status (at risk, lapsed): judged on the last day of the period
+       lifetime lifetime spend, counted up to the last day of the period
+     Odoo companies and Ostendo (luxe) are always a whole financial year here;
+     Shopify follows the same start and end dates the page requests. */
+  const tableRange = (kind = "period") => {
+    const fyBased = (activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova" || activeStore.id === "luxe";
+    const fy = fyBased ? fyPayload(selectedYear)?.range : null;
+    const start = fy?.start || (fyBased ? null : advStartDate);
+    const end   = fy?.end   || (fyBased ? null : advEndDate);
+    if (!start || !end) return null;
+    if (fyBased && kind === "asat")     return `As at ${fmtDay(end)}`;
+    if (fyBased && kind === "lifetime") return `Lifetime to ${fmtDay(end)}`;
+    return `${fmtDay(start)} to ${fmtDay(end)}`;
+  };
+  /* The calendar month the weekly table covers (a financial year runs Apr to Mar). */
+  const monthRange = () => {
+    const y = onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear;
+    const mm = String(weeklyMonth + 1).padStart(2, "0");
+    const last = new Date(Date.UTC(y, weeklyMonth + 1, 0)).getUTCDate();
+    const end = `${y}-${mm}-${String(last).padStart(2, "0")}`;
+    return `${fmtDay(`${y}-${mm}-01`)} to ${fmtDay(end > _todayStr ? _todayStr : end)}`;
+  };
+  /* The whole year the monthly table lists. */
+  const yearRange = () => {
+    if (onFYView()) {
+      const fy = fyPayload(selectedYear)?.range;
+      return fy ? `${fmtDay(fy.start)} to ${fmtDay(fy.end)}` : null;   // not shown until the year has loaded
+    }
+    return `${fmtDay(`${selectedYear}-01-01`)} to ${fmtDay(selectedYear >= _thisYear ? _todayStr : `${selectedYear}-12-31`)}`;
+  };
+
   const getOdooSalespeople = () => (fyPayload(selectedYear)?.reps || []).map(r => ({
     name: r.name, revenue: r.revenue, orders: r.invoices, aov: r.aov,
     returns: r.credits, returnValue: r.creditValue,
@@ -1414,7 +1502,7 @@ export default function EcommerceDashboard() {
     return cid ? !!loadingRef.current[`odoo:${cid}:${selectedYear}:adv`] : false;
   };
 
-  // Rep pivots. Both come straight from the FY payload — no stitching, so the
+  // Rep pivots. Both come straight from the FY payload - no stitching, so the
   // revenue column and the margin column describe the same period by construction.
   const getLuxeSalespeopleMonthlyFY = () =>
     (fyPayload(selectedYear)?.reps || []).map(r => ({
@@ -1533,7 +1621,7 @@ export default function EcommerceDashboard() {
   const totalDisc = curr.reduce((s, d) => s + (d.totalDiscounts || 0), 0);
   const totalRet  = curr.reduce((s, d) => s + (d.returns        || 0), 0);
   const isOstendo = activeStore.id === "luxe";
-  /* Show amounts to the cent wherever the figures ARE cent-accurate — which is
+  /* Show amounts to the cent wherever the figures ARE cent-accurate - which is
      every financial-year view, not just Ostendo's. Rounding each month to whole
      dollars for display meant the column on screen came to a dollar less than
      the total printed under it, even though the underlying cents reconciled
@@ -1606,7 +1694,7 @@ export default function EcommerceDashboard() {
   const ordG   = (prevLoaded && comparablePrior) ? calcGrowth(currComparableOrd, prevOrd) : null;
   const aovG   = (prevLoaded && comparablePrior) ? calcGrowth(avgAOV,   prevAOV) : null;
 
-  // ── Contextual KPIs — update based on active view ─────────────────────────
+  // ── Contextual KPIs - update based on active view ─────────────────────────
   // Weekly tab → show selected month totals; Monthly/YoY → show period totals
   const weeklyDataCtx = view === "weekly"
     ? getWeekly().filter(w => w.month === weeklyMonth && w.week === selectedWeek)
@@ -1667,7 +1755,7 @@ export default function EcommerceDashboard() {
   const prevGPMargin   = prevTrueMargin !== null ? Math.round(prevTrueMargin * 1000) / 10 : null;
   // Absolute percentage-point change in margin vs prior year (e.g. "▲ 2%" = improved 2pp)
   /* Round the DIFFERENCE, not just its parts. Two one-decimal margins subtract
-     to binary noise — 12.1 − 11.5 printed as "▲ 0.5999999999999996%" on the card. */
+     to binary noise - 12.1 − 11.5 printed as "▲ 0.5999999999999996%" on the card. */
   const ppChange = (a, b) => Math.round((a - b) * 10) / 10;
   const kpiMarginGrowth = view === "yoy" && prevLoaded && kpiGPMargin !== null && prevGPMargin !== null
     ? ppChange(kpiGPMargin, prevGPMargin)
@@ -1728,7 +1816,7 @@ export default function EcommerceDashboard() {
     { key: "name",    label: "Product",  color: T.text },
     { key: "qtySold", label: "Units",    align: "right" },
     { key: "revenue", label: "Revenue",  align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-    { key: "margin",  label: "Margin",   align: "right", format: v => v ? `${v}%` : "—" },
+    { key: "margin",  label: "Margin",   align: "right", format: v => v ? `${v}%` : "-" },
   ];
   const customerColumns = [
     { key: "name",       label: "Customer", color: T.text },
@@ -1740,7 +1828,7 @@ export default function EcommerceDashboard() {
     { key: "name",    label: "Category",   color: T.text },
     { key: "qty",     label: "Units Sold", align: "right" },
     { key: "revenue", label: "Revenue",    align: "right", color: accent,    format: (v, c) => fmtK(v, c) },
-    { key: "margin",  label: "Margin",     align: "right", color: "#C97C9E", format: v => v != null ? `${v}%` : "—" },
+    { key: "margin",  label: "Margin",     align: "right", color: "#C97C9E", format: v => v != null ? `${v}%` : "-" },
   ];
   const slowMovingColumns = [
     { key: "name",          label: "Product",      color: T.text },
@@ -1750,14 +1838,14 @@ export default function EcommerceDashboard() {
   ];
   const churnedColumns = [
     { key: "name",          label: "Customer",   color: T.text },
-    { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "—" },
+    { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "-" },
     { key: "revenue",       label: "Spend",      align: "right", color: accent, format: (v, c) => fmtK(v, c) },
     { key: "status",        label: "Risk",       align: "center", format: () => <span style={{ color: "#f87171", fontWeight: 700 }}>LAPSED</span> },
   ];
   const atRiskColumns = [
     { key: "name",          label: "Customer",    color: T.text },
     { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? "#f87171" : accent, fontWeight: 700 }}>{v}d</span> },
-    { key: "lastOrderDate", label: "Last Order",  align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
+    { key: "lastOrderDate", label: "Last Order",  align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "-" },
     { key: "revenue",       label: "Lifetime $",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
     { key: "orderCount",    label: "Orders",      align: "center", color: "#7C9EC9" },
   ];
@@ -1766,13 +1854,13 @@ export default function EcommerceDashboard() {
     { key: "lifetimeRevenue", label: "Lifetime $",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
     { key: "totalOrders",     label: "Orders",      align: "center", color: "#7C9EC9" },
     { key: "avgOrderValue",   label: "Avg Order",   align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-    { key: "firstOrderDate",  label: "First Order", align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "—" },
+    { key: "firstOrderDate",  label: "First Order", align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "-" },
   ];
   const decliningColumns = [
     { key: "name",        label: "Product",    color: T.text },
     { key: "revenue",     label: "This Period", align: "right", color: "#f87171",  format: (v, c) => fmtK(v, c) },
     { key: "prevRevenue", label: "Prior Year",  align: "right", color: "#8a9aaa",  format: (v, c) => fmtK(v, c) },
-    { key: "change",      label: "Change",      align: "center", format: v => v !== null ? <span style={{ color: "#f87171", fontWeight: 700 }}>▼ {Math.abs(v)}%</span> : "—" },
+    { key: "change",      label: "Change",      align: "center", format: v => v !== null ? <span style={{ color: "#f87171", fontWeight: 700 }}><Trend up={false} />{Math.abs(v)}%</span> : "-" },
     { key: "qtySold",     label: "Units Now",   align: "right", color: "#aa8a8a" },
     { key: "prevQtySold", label: "Units Prev",  align: "right", color: "#6a7a8a" },
   ];
@@ -1788,7 +1876,7 @@ export default function EcommerceDashboard() {
     aov: s.orders > 0 ? Math.round(s.revenue / s.orders) : 0,
   }));
 
-  // FIX 4: was [activeStore, selectedYear] — object reference caused potential infinite loop
+  // FIX 4: was [activeStore, selectedYear] - object reference caused potential infinite loop
   useEffect(() => {
     setAnimated(false);
     setTimeout(() => setAnimated(true), 50);
@@ -1810,7 +1898,7 @@ export default function EcommerceDashboard() {
       {/* HEADER */}
       <div style={{ borderBottom: `1px solid ${T.borderAccent}`, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, background: T.bgHeader, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* Logo — white on dark, black on light */}
+          {/* Logo, white on dark, black on light */}
           <img
             src={darkMode ? "/logo-white.png" : "/logo-black.png"}
             alt="Worthy Logo"
@@ -1844,17 +1932,17 @@ export default function EcommerceDashboard() {
         </div>
       </div>
 
-      {/* CHANNEL SUB-TABS — shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
+      {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
       {(activeStore.id === "worthy" || activeStore.id === "nova") && (
         <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4 }}>
           {(activeStore.id === "worthy"
             ? [
-                { id: "odoo",   label: "☁️  Odoo Sales" },
-                { id: "online", label: "🌐  Online Sales" },
-                { id: "pos",    label: "🏪  POS Sales" },
+                { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
+                { id: "online", label: "Online Sales", icon: "globe" },
+                { id: "pos",    label: "POS Sales",    icon: "store" },
               ]
             : [
-                { id: "odoo",   label: "☁️  Odoo Sales" },
+                { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
               ]
           ).map(tab => (
             <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
@@ -1863,7 +1951,7 @@ export default function EcommerceDashboard() {
               background: "transparent", color: channelTab === tab.id ? accent : T.textSub,
               cursor: "pointer", transition: "all 0.2s", marginBottom: -1,
             }}>
-              {tab.label}
+              <Icon name={tab.icon} size={15} style={{ marginRight: 8 }} />{tab.label}
             </button>
           ))}
           <div style={{ marginLeft: "auto", fontSize: 10, color: T.textLabel, paddingRight: 8 }}>
@@ -1888,8 +1976,8 @@ export default function EcommerceDashboard() {
           <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12.5, color: "#b45309", lineHeight: 1.7 }}>
             <strong>Some tables below are empty because Odoo could not return the data.</strong>{" "}
             {fyPayload(selectedYear).problems.some(p => /product/i.test(p))
-              ? <>Odoo cannot build a display name for at least one product in this company — a variant with an
-                 incomplete attribute — and the error stops the whole product query. Top Products and Top Categories
+              ? <>Odoo cannot build a display name for at least one product in this company (a variant with an
+                 incomplete attribute) and the error stops the whole product query. Top Products and Top Categories
                  stay empty until that product record is corrected. Sales, customers and every figure above are
                  unaffected.</>
               : fyPayload(selectedYear).problems.join(' ')}
@@ -1904,7 +1992,7 @@ export default function EcommerceDashboard() {
             <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, background: `${accent}0c`, border: `1px solid ${accent}28`, fontSize: 12.5, color: T.textSub, lineHeight: 1.7 }}>
               <strong style={{ color: T.textHead }}>{activeStore.name} · {selectedYear}</strong>{" "}
               reports a calendar year (January to December).{" "}
-              “Vs last year” covers <strong>{MONTH_NAMES[0]}–{MONTH_NAMES[lastCmp]}</strong> on both sides — complete
+              “Vs last year” covers <strong>{MONTH_NAMES[0]}–{MONTH_NAMES[lastCmp]}</strong> on both sides, complete
               months only. {isCurrentYear && `${MONTH_NAMES[nowRef.getMonth()]} is still in progress, so it is shown in the tables but left out of the year-on-year figure.`}
             </div>
           );
@@ -1912,11 +2000,11 @@ export default function EcommerceDashboard() {
 
         {/* Plain-English statement of exactly what is on screen. Every number
             below is for this period, and every comparison is against the
-            matching stretch of last year — not against a longer one. */}
+            matching stretch of last year, not against a longer one. */}
         {onFYView() && fyPayload(selectedYear) && (() => {
           const d   = fyPayload(selectedYear);
           const pretty = (isoStr) => {
-            if (!isoStr) return "—";
+            if (!isoStr) return "-";
             const [y, m, dd] = isoStr.split("-").map(Number);
             return `${dd} ${MONTH_NAMES[m - 1]} ${y}`;
           };
@@ -1945,7 +2033,7 @@ export default function EcommerceDashboard() {
                 <div>
                   Sales below are <strong>before rebates</strong> ({fmtExact(t.revenue, activeStore.currency)}), which is
                   the basis finance report on. Ostendo's own invoice total is{" "}
-                  <strong>{fmtExact(t.netSales, activeStore.currency)}</strong> — the same trading after{" "}
+                  <strong>{fmtExact(t.netSales, activeStore.currency)}</strong>, the same trading after{" "}
                   {fmtExact(Math.abs(t.rebates), activeStore.currency)} of rebates. Both describe the same trading;
                   the rebates are the whole difference, and almost all of them sit on Christchurch Office / Online.
                 </div>
@@ -1970,7 +2058,7 @@ export default function EcommerceDashboard() {
                       <strong>{c.code}</strong> ({c.documents.toLocaleString()})
                     </span>
                   ))}. Every figure here is stated in <strong>{d.currencies.company}</strong>, converted at the
-                  rate Odoo holds for each invoice — they are not added up at face value.
+                  rate Odoo holds for each invoice, they are not added up at face value.
                 </div>
               )}
               {d.excludedProducts && (
@@ -2000,7 +2088,7 @@ export default function EcommerceDashboard() {
                   <strong>{fmtExact(t.uncoveredRevenue, activeStore.currency)}</strong> of these sales
                   ({(100 - (t.costCoverage ?? 100)).toFixed(1)}%) carry no cost of sales.
                   {!d.nonStockExcluded && d.nonStockRevenue > 0 && <> {fmtExact(d.nonStockRevenue, activeStore.currency)} of that is
-                  invoiced with no product on the line — freight recharges, pallet rent, expense
+                  invoiced with no product on the line, freight recharges, pallet rent, expense
                   reimbursements and supplier rebate claims.</>} Odoo holds a cost price for practically every
                   product Worthy sells; this is income earned without buying anything, so there is no cost to
                   set against it and the margin above is flattering by that much. Where a rep invoices almost
@@ -2008,7 +2096,7 @@ export default function EcommerceDashboard() {
                 </div>
               )}
               {(() => {
-                // Only call out months where the mis-costing is material — above
+                // Only call out months where the mis-costing is material - above
                 // 1% of that month's sales. Below that it is ordinary trading.
                 const hit = d.months.filter(m => m.started && m.revenue > 0 && m.suspectCost > m.revenue * 0.01);
                 if (!hit.length) return null;
@@ -2017,11 +2105,11 @@ export default function EcommerceDashboard() {
                 return (
                   <div style={{ color: "#b45309" }}>
                     <strong>A unit-of-measure problem in Ostendo's costing affected {names}.</strong>{" "}
-                    Finance have confirmed it and it has been resolved — the most recent months are clean.
+                    Finance have confirmed it and it has been resolved, the most recent months are clean.
                     In {worst.label} it put {fmtExact(worst.suspectCost, activeStore.currency)} of cost against{" "}
                     {fmtExact(worst.suspectRevenue, activeStore.currency)} of sales, which is why that month reads{" "}
                     {worst.marginPct}% instead of about {worst.marginPctExSuspect}%.{" "}
-                    Sales are unaffected — this only touches cost, so it is the margin that reads low in those months,
+                    Sales are unaffected, this only touches cost, so it is the margin that reads low in those months,
                     not the revenue.
                   </div>
                 );
@@ -2035,7 +2123,7 @@ export default function EcommerceDashboard() {
               ) : (
                 <div>
                   Every “vs last year” figure compares {pretty(d.range.start)}–{pretty(d.range.end)} with{" "}
-                  <strong>{pretty(d.prior.start)}–{pretty(d.prior.end)}</strong> — the same {dayCount} days, so a
+                  <strong>{pretty(d.prior.start)}–{pretty(d.prior.end)}</strong>, the same {dayCount} days, so a
                   part-finished year is never measured against a whole one.
                 </div>
               )}
@@ -2066,16 +2154,16 @@ export default function EcommerceDashboard() {
           );
         })() : (
           <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
-            {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} — full year`
+            {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
            : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
-           : `${selectedYear} — year to date`}
+           : `${selectedYear} · year to date`}
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="◎" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
-          <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="▣" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
-          <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="◆" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
-          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGPGrowth} icon="◈" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />
+          <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="dollar" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
+          <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="bag" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
+          <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="percent" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />
+          <KPICard darkMode={darkMode} label={kpiHasCost && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={kpiHasCost ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />
         </div>
 
         {view === "monthly" ? (
@@ -2091,7 +2179,7 @@ export default function EcommerceDashboard() {
             <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} — {onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} · {onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}</div>
                   <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#5a5040" }}>
@@ -2138,13 +2226,13 @@ export default function EcommerceDashboard() {
               {/* Monthly table */}
               <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown<div style={{ marginTop: 6 }}><RangeTag text={yearRange()} theme={T} /></div></div>
                   <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
                     {activeStore.id === "luxe"
-                      ? <>✦ Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
+                      ? <><Icon name="sparkle" size={11} style={{ marginRight: 5 }} />Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
                       : onFYView()
-                        ? <>✦ {fyPayload(selectedYear)?.costBasis || "cost from Odoo"} · {activeStore.currency}</>
-                        : <>{hasCost ? "✦ Real cost from Shopify" : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
+                        ? <><Icon name="sparkle" size={11} style={{ marginRight: 5 }} />{fyPayload(selectedYear)?.costBasis || "cost from Odoo"} · {activeStore.currency}</>
+                        : <>{hasCost ? <><Icon name="sparkle" size={11} style={{ marginRight: 5 }} />Real cost from Shopify</> : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -2163,14 +2251,14 @@ export default function EcommerceDashboard() {
                           <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
                             <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
-                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (exactAmounts ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (exactAmounts ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (exactAmounts ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (exactAmounts ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>-</span>}</td>
                             <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
                           </tr>
                         );
@@ -2180,13 +2268,13 @@ export default function EcommerceDashboard() {
                       <tr style={{ borderTop: `1px solid ${T.border}` }}>
                         <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
                         <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{exactAmounts ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
-                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "—"}</td>
-                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "—"}</td>
+                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "-"}</td>
+                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "-"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
                         <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
                         <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{exactAmounts ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
-                        <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "—"}</td>
-                        <td style={{ padding: "10px 8px", color: "#aa8a8a", fontWeight: 700 }}>{totalRet || "—"}</td>
+                        <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "-"}</td>
+                        <td style={{ padding: "10px 8px", color: "#aa8a8a", fontWeight: 700 }}>{totalRet || "-"}</td>
                         <td style={{ padding: "10px 8px" }}><GrowthBadge value={revG} /></td>
                       </tr>
                     </tfoot>
@@ -2229,7 +2317,7 @@ export default function EcommerceDashboard() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                     <div>
                       <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>
-                        Weekly Revenue — {MONTH_NAMES[weeklyMonth]} {selectedYear}
+                        Weekly Revenue · {MONTH_NAMES[weeklyMonth]} {selectedYear}
                       </div>
                       <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>Week-by-week sales breakdown</div>
                     </div>
@@ -2268,7 +2356,8 @@ export default function EcommerceDashboard() {
                 <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
-                      Weekly Breakdown — {MONTH_NAMES[weeklyMonth]} {selectedYear}
+                      Weekly Breakdown · {MONTH_NAMES[weeklyMonth]} {onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}
+                      <div style={{ marginTop: 6 }}><RangeTag text={monthRange()} theme={T} /></div>
                     </div>
                     <div style={{ fontSize: 10, color: T.textMuted }}>{activeStore.currency}</div>
                   </div>
@@ -2297,13 +2386,13 @@ export default function EcommerceDashboard() {
                               onMouseEnter={() => setHoveredMonth(100 + i)} onMouseLeave={() => setHoveredMonth(null)}>
                               <td style={{ padding: "10px 8px", color: accent, fontWeight: 700, fontSize: 12 }}>Week {row.week}</td>
                               <td style={{ padding: "10px 8px", color: T.textSub, fontSize: 10 }}>{row.dateRange}</td>
-                              <td style={{ padding: "10px 8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px" }}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#aa8a6a" }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>—</span>}</td>
+                              <td style={{ padding: "10px 8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                              <td style={{ padding: "10px 8px" }}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>-</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#aa8a6a" }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                              <td style={{ padding: "10px 8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>-</span>}</td>
                               <td style={{ padding: "10px 8px" }}><GrowthBadge value={wGrowth} /></td>
                             </tr>
                           );
@@ -2314,12 +2403,12 @@ export default function EcommerceDashboard() {
                           <tr style={{ borderTop: `1px solid ${T.border}` }}>
                             <td colSpan={2} style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>MONTH TOTAL</td>
                             <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(wTotalRev, activeStore.currency)}</td>
-                            <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "—"}</td>
-                            <td style={{ padding: "10px 8px" }}>{wMarginPct != null ? <MarginBar value={wMarginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>—</span>}</td>
+                            <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "-"}</td>
+                            <td style={{ padding: "10px 8px" }}>{wMarginPct != null ? <MarginBar value={wMarginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
                             <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{wTotalOrd}</td>
                             <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{fmtK(wAvgAOV, activeStore.currency)}</td>
-                            <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{wTotalDisc > 0 ? fmtK(wTotalDisc, activeStore.currency) : "—"}</td>
-                            <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{wTotalNewC || "—"}</td>
+                            <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{wTotalDisc > 0 ? fmtK(wTotalDisc, activeStore.currency) : "-"}</td>
+                            <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{wTotalNewC || "-"}</td>
                             <td />
                           </tr>
                         </tfoot>
@@ -2387,7 +2476,7 @@ export default function EcommerceDashboard() {
                       <div style={{ marginBottom: 8 }}>
                         <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Gross Profit</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#C97C9E" }}>
-                          {yr.grossProfit !== null ? fmt(yr.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>—</span>}
+                          {yr.grossProfit !== null ? fmt(yr.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}
                           {yr.margin !== null && <span style={{ fontSize: 10, color: "#7a5a6a", marginLeft: 5 }}>{yr.margin}%</span>}
                         </div>
                       </div>
@@ -2414,7 +2503,8 @@ export default function EcommerceDashboard() {
               By Department
             </div>
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3, marginBottom: 16 }}>
-              Each part of the business, from the sales team on the invoice — {activeStore.currency}
+              Each part of the business, from the sales team on the invoice · {activeStore.currency}
+              <div style={{ marginTop: 8 }}><RangeTag text={yearRange()} theme={T} /></div>
             </div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -2434,7 +2524,7 @@ export default function EcommerceDashboard() {
                       <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>
                         {t.name}
                         {/* Where a department covers more than one Odoo sales team, name
-                            them — otherwise a reader who knows the teams wonders which
+                            them, otherwise a reader who knows the teams wonders which
                             one went missing. */}
                         {t.madeUpOf && (
                           <div style={{ fontSize: 10, fontWeight: 500, color: T.textMuted, marginTop: 2 }}>
@@ -2446,9 +2536,9 @@ export default function EcommerceDashboard() {
                         {fmtExact(t.revenue, activeStore.currency)}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.share}%</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.invoices.toLocaleString()}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.credits ? t.credits.toLocaleString() : "—"}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.credits ? t.credits.toLocaleString() : "-"}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", color: T.textMuted, whiteSpace: "nowrap" }}>
-                        {t.prior ? fmtExact(t.prior, activeStore.currency) : "—"}</td>
+                        {t.prior ? fmtExact(t.prior, activeStore.currency) : "-"}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}><GrowthBadge value={t.growthPct} /></td>
                     </tr>
                   ))}
@@ -2466,7 +2556,7 @@ export default function EcommerceDashboard() {
           </div>
         )}
 
-        {/* ODOO ADVANCED SECTION — Worthy North (Odoo tab) and Worthy Oceania (nova) */}
+        {/* ODOO ADVANCED SECTION, Worthy North (Odoo tab) and Worthy Oceania (nova) */}
         {((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <>
             {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
@@ -2476,11 +2566,11 @@ export default function EcommerceDashboard() {
 
             {/* Odoo: top customers, at-risk, lapsed */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
-              <AdvancedTable theme={T} title="🏆 Top Customers — Odoo" subtitle="Ranked by net invoice revenue (customers only — suppliers excluded)"
+              <AdvancedTable theme={T} icon="trophy" title="Top Customers" range={tableRange()} subtitle="Ranked by net invoice revenue (customers only, suppliers excluded)"
                 loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
                 columns={[
                   { key: "name",    label: "Customer", color: T.text },
-                  /* `orderCount`, not `orders` — the getter's own field name. Reading
+                  /* `orderCount`, not `orders` - the getter's own field name. Reading
                      the wrong key left this column blank on every row. */
                   { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
                   { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
@@ -2488,15 +2578,15 @@ export default function EcommerceDashboard() {
                   { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
                 ]}
                 aiContext="Odoo top customers"
-                aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status — call them this week."
+                aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status, call them this week."
               />
-              <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 days)" subtitle="Overdue for reorder — call before they lapse"
+              <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 days)" range={tableRange("asat")} subtitle="Overdue for reorder, call before they lapse"
                 loading={isLoading(selectedYear)} currency={activeStore.currency}
                 data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orderCount }))}
                 columns={atRiskColumns} aiContext="at-risk Odoo customers"
                 aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
               />
-              <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 days)" subtitle="Stopped ordering — win-back priority"
+              <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 days)" range={tableRange("asat")} subtitle="Stopped ordering, win-back priority"
                 loading={isLoading(selectedYear)} currency={activeStore.currency}
                 data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orderCount }))}
                 columns={churnedColumns} aiContext="lapsed Odoo customers"
@@ -2506,7 +2596,7 @@ export default function EcommerceDashboard() {
 
             {/* Odoo: top products + top categories */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} title="📂 Top Categories — Odoo" subtitle="Where the revenue actually comes from"
+              <AdvancedTable theme={T} icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
                 loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
                 data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
                 columns={[
@@ -2514,12 +2604,12 @@ export default function EcommerceDashboard() {
                   { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
                   { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
                   { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                  { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
                 ]}
                 aiContext="top Odoo categories"
-                aiExtra="Which categories drive the business? Flag any with margin < 15% — those need a price review."
+                aiExtra="Which categories drive the business? Flag any with margin < 15%, those need a price review."
               />
-              <AdvancedTable theme={T} title="🥇 Top Products — Odoo" subtitle="High performers by net revenue"
+              <AdvancedTable theme={T} icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
                 loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
                 data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
                 columns={[
@@ -2527,7 +2617,7 @@ export default function EcommerceDashboard() {
                   { key: "category", label: "Category", color: T.textMuted },
                   { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
                   { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                  { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
                 ]}
                 aiContext="top Odoo products"
                 aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
@@ -2536,7 +2626,7 @@ export default function EcommerceDashboard() {
 
             {/* Odoo: fast & slow movers */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs — Odoo" subtitle="Highest velocity — keep stocked & push wider"
+              <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
                 loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
                 columns={[
                   { key: "name",         label: "Product",     color: T.text },
@@ -2544,12 +2634,12 @@ export default function EcommerceDashboard() {
                   { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
                   { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
                   { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                  { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
                 ]}
                 aiContext="fast-moving Odoo SKUs"
                 aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
               />
-              <AdvancedTable theme={T} title="🐌 Slow-Moving SKUs — Odoo" subtitle="Capital sitting on the shelf — clear, bundle, or discontinue"
+              <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Capital sitting on the shelf, clear, bundle, or discontinue"
                 loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
                 columns={[
                   { key: "name",          label: "Product",       color: T.text },
@@ -2559,11 +2649,11 @@ export default function EcommerceDashboard() {
                   { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
                 ]}
                 aiContext="slow-moving Odoo SKUs"
-                aiExtra="Top 3 by capital tied — recommend specific clearance pricing or rep push. Anything with an expiry risk?"
+                aiExtra="Top 3 by capital tied, recommend specific clearance pricing or rep push. Anything with an expiry risk?"
               />
             </div>
 
-            {/* Odoo salesperson breakdown — single table with view toggle */}
+            {/* Odoo salesperson breakdown, single table with view toggle */}
             <SalesRepBreakdown
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
@@ -2574,13 +2664,14 @@ export default function EcommerceDashboard() {
               weeklyMonth={weeklyMonth}
               onWeeklyMonthChange={setWeeklyMonth}
               fyMonths={FY_MONTHS}
+              rangeLabel={yearRange()} monthRangeLabel={monthRange()}
               T={T} accent={accent}
               exact={exactAmounts}
             />
           </>
         )}
 
-        {/* ADVANCED ANALYTICS — not shown for Odoo tab (Shopify-based) or nova */}
+        {/* ADVANCED ANALYTICS, not shown for Odoo tab (Shopify-based) or nova */}
         {(activeStore.id === "luxe" || (activeStore.id === "worthy" && channelTab !== "odoo")) && (
           <>
             {/* Category drill-down modal */}
@@ -2594,13 +2685,13 @@ export default function EcommerceDashboard() {
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 40, marginBottom: 16, padding: "14px 20px", background: T.bgCard, border: `1px solid ${accent}30`, borderRadius: 12, flexWrap: "wrap", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 18 }}>📊</span>
+                <Icon name="chart" size={20} style={{ color: accent }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: T.textHead }}>
                     {view === "weekly"
                       ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
                       : view === "yoy"
-                      ? `All Years — Year on Year`
+                      ? `All Years · Year on Year`
                       : activeStore.id === "luxe"
                       ? `Financial year ${selectedYear}`
                       : latestMonth
@@ -2609,38 +2700,36 @@ export default function EcommerceDashboard() {
                   </div>
                   <div style={{ fontSize: 11, color: T.textMuted }}>
                     {activeStore.id === "luxe" && view !== "weekly"
-                      ? "Everything below covers the whole financial year so far — not just the latest month"
+                      ? "Everything below covers the whole financial year so far, not just the latest month"
                       : "Analytics for the selected period"}
                   </div>
                 </div>
               </div>
               <span style={{ fontSize: 10, color: T.textMuted, fontFamily: "monospace", background: T.bgTableHead, padding: "4px 10px", borderRadius: 8, border: `1px solid ${T.border}` }}>
-                {activeStore.id === "luxe" && view !== "weekly" && fyPayload(selectedYear)
-                  ? `${fyPayload(selectedYear).range.start} → ${fyPayload(selectedYear).range.end}`
-                  : `${advStartDate} → ${advEndDate}`}
+                {tableRange()}
               </span>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} title="Top Categories" subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
+              <AdvancedTable theme={T} title="Top Categories" range={tableRange()} subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
                 onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
                 aiContext="top revenue categories"
                 aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
-              <AdvancedTable theme={T} title="Top Products"    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
-                aiExtra="Note any imported products in the top list — these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
-              <AdvancedTable theme={T} title="Top Customers"   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
+              <AdvancedTable theme={T} title="Top Products" range={tableRange()}    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
+                aiExtra="Note any imported products in the top list, these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
+              <AdvancedTable theme={T} title="Top Customers" range={tableRange()}   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
                 aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
             </div>
 
-            {/* Salesperson table — POS only for Worthy North */}
+            {/* Salesperson table, POS only for Worthy North */}
             {activeStore.id !== "luxe" && channelTab === "pos" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                <AdvancedTable theme={T} title="👤 Sales by Rep" subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
                   aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
               </div>
             )}
 
-            {/* Salesperson breakdown — Worthy Products South (Ostendo) */}
+            {/* Salesperson breakdown, Worthy Products South (Ostendo) */}
             {activeStore.id === "luxe" && (
               <div style={{ marginBottom: 24 }}>
                 <SalesRepBreakdown
@@ -2653,6 +2742,7 @@ export default function EcommerceDashboard() {
                   weeklyMonth={weeklyMonth}
                   onWeeklyMonthChange={setWeeklyMonth}
                   fyMonths={FY_MONTHS}
+                  rangeLabel={yearRange()} monthRangeLabel={monthRange()}
                   T={T} accent={accent}
                   exact
                 />
@@ -2660,32 +2750,32 @@ export default function EcommerceDashboard() {
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} title="🚀 Fast-Moving SKUs" subtitle="Highest velocity by units sold — keep stocked & push wider"
+              <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
                 loading={advLoading} currency={activeStore.currency}
                 /* Read the fast-moving list the endpoint builds from EVERY product.
                    Re-sorting the top-by-revenue list by units cannot find a fast
                    mover that earns little: nine of these twenty rows were wrong,
-                   and the real leader — 4,676 units — was not on the page at all. */
+                   and the real leader - 4,676 units - was not on the page at all. */
                 data={(advancedData.curr?.fastMoving || []).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
                 columns={[
                   { key: "name",      label: "Product",    color: T.text },
                   { key: "category",  label: "Category",   color: T.textMuted },
                   { key: "unitsSold", label: "Units Sold", align: "right", color: "#16a34a" },
                   { key: "revenue",   label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",    label: "Margin",     align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "—" },
+                  { key: "margin",    label: "Margin",     align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
                 ]}
                 aiContext="fast-moving SKUs"
-                aiExtra="Ensure 6+ weeks of cover on these. Flag any close to stockout — these drive the business."
+                aiExtra="Ensure 6+ weeks of cover on these. Flag any close to stockout, these drive the business."
               />
-              <AdvancedTable theme={T} title="⚠️ Slow-Moving Inventory" subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
-                aiExtra="Pay special attention to imported products — slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
-              <AdvancedTable theme={T} title="🛑 Lapsed Customers (>90 Days)" subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
+              <AdvancedTable theme={T} icon="alert" title="Slow-Moving Inventory" range={tableRange()} subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
+                aiExtra="Pay special attention to imported products, slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
+              <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 Days)" range={tableRange("asat")} subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
                 aiExtra="These are likely dairies, gas stations or corner stores that may have switched to Gilmours, DKSH or Stock4Shop. Suggest which rep should personally visit and what offer might win them back." />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} title="🔶 At-Risk Customers (45–90 Days)" subtitle="Overdue for a reorder — act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
-              <AdvancedTable theme={T} title="💎 Customer Lifetime Value" subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
+              <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 Days)" range={tableRange("asat")} subtitle="Overdue for a reorder, act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
+              <AdvancedTable theme={T} icon="gem" title="Customer Lifetime Value" range={tableRange("lifetime")} subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
             </div>
           </>
         )}
@@ -2697,13 +2787,13 @@ export default function EcommerceDashboard() {
               ...(activeStore.id === "luxe" ? [["Rebates (already deducted)", (() => {
                 const r = view === "monthly" ? (latestMonth?.rebates ?? null)
                         : curr.reduce((a, m) => a + (m.rebates || 0), 0);
-                return r ? fmtExact(r, activeStore.currency) : "—";
+                return r ? fmtExact(r, activeStore.currency) : "-";
               })(), "#aa8a6a"]] : []),
-              ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "—", "#8aaa8a"],
+              ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "-", "#8aaa8a"],
               ["Total Discounts", kpiDisc != null && kpiDisc !== 0
                                     ? (exactAmounts ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
-                                    : "—", accent],
-              ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "—", "#C97C9E"],
+                                    : "-", accent],
+              ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "-", "#C97C9E"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.textLabel, marginBottom: 2 }}>{lbl}</div>

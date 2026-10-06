@@ -1,5 +1,5 @@
 /**
- * Worthy Products South (Dutch Rusk) — one financial year, fully resolved.
+ * Worthy Products South (Dutch Rusk) - one financial year, fully resolved.
  *
  * Replaces the old split of /api/ostendo (revenue, calendar year) plus
  * /api/ostendo/margins (cost, calendar year) plus client-side stitching of the
@@ -56,27 +56,27 @@ const firstOrderSql = () => `
  * REVENUE, cost, the discount given, the rebates, and a count of lines whose
  * cost cannot be right.
  *
- * REVENUE is the sum of the PRODUCT lines — sales before rebates. That is the
+ * REVENUE is the sum of the PRODUCT lines - sales before rebates. That is the
  * basis Worthy's finance team reports on: their June 2026 figure of
  * NZ$1,524,872.75 is exactly this. Ostendo's own invoice total
  * (INVOICENETTAMOUNT, NZ$1,500,723.78) is the same trading after
  * NZ$24,148.97 of rebates, and is reported alongside as `netSales` so both
  * figures can be found here and reconciled. Rebates are reported in their own
- * right rather than being silently deducted from sales — almost all of them
+ * right rather than being silently deducted from sales - almost all of them
  * (NZ$100,869 of NZ$100,923 in FY26) land on a single rep code, 450.
  * Credit-note lines carry negative quantities, so they reduce all three
  * exactly as they reduce revenue above.
  *
  * DISCOUNT: this business does not populate DISCOUNTAMOUNT (NZ$146.81 across a
  * whole year) or the header's LINEDISCOUNTAMOUNT (NZ$14,548.93). The discount
- * lives in the gap between CUSTOMERUNITPRICE — the customer's agreed price —
+ * lives in the gap between CUSTOMERUNITPRICE - the customer's agreed price  - 
  * and what was actually invoiced, and DISCOUNTPERCENT is populated on 97% of
  * lines to match. Measured that way FY26 comes to NZ$1.74m, and valuing it the
  * other way (qty x price x discount %) agrees to within 0.6%.
  * Only stock lines carry a customer price, so descriptor lines are excluded.
  *
  * SUSPECT COST: some lines carry an invoiced unit cost that cannot be a real
- * cost — a single Cadbury block at NZ$63.75 with NZ$6,362.40 of cost against
+ * cost - a single Cadbury block at NZ$63.75 with NZ$6,362.40 of cost against
  * it, and the same item costed anywhere from NZ$3.52 to NZ$183.78 across the
  * year. These are counted so the dashboard can say how much of the margin is
  * resting on cost data that needs fixing, rather than quietly restating it.
@@ -135,7 +135,7 @@ const present = (a) => {
     creditValue: toDollars(a.creditValue),
     // Rebates, reported rather than buried inside sales.
     rebates:     toDollars(a.rebates),
-    // Sales after rebates — Ostendo's own invoice total (INVOICENETTAMOUNT).
+    // Sales after rebates - Ostendo's own invoice total (INVOICENETTAMOUNT).
     netSales:    toDollars(a.revenue + a.rebates),
     discounts:   toDollars(a.discount),
     // What the margin would be if the lines with impossible cost were excluded.
@@ -160,7 +160,7 @@ const present = (a) => {
  * report: the rows have to add up to the total printed below them.
  *
  * Each part keeps its own correctly rounded value; the leftover cent is given to
- * the largest part, where it distorts least. Nothing is invented — the total is
+ * the largest part, where it distorts least. Nothing is invented - the total is
  * still the exact figure Ostendo holds.
  */
 function reconcile(parts, totalDollars, get, set) {
@@ -239,7 +239,7 @@ function indexDays(headerRows, costRows) {
 /**
  * Sum every day whose date falls in [from, to].
  * `codes` (a Set) narrows to one salesperson. It is a Set rather than a single
- * code because Ostendo issues legacy clearance accounts a "-1" suffix — 460 and
+ * code because Ostendo issues legacy clearance accounts a "-1" suffix - 460 and
  * 460-1 are both Chris, and must appear as one row, not two.
  */
 function sumRange(days, from, to, codes = null) {
@@ -283,7 +283,7 @@ export async function GET(request) {
 
     /* New customers by month. Ostendo's history starts part-way through, so every
      * customer that already existed then looks "new" in that first month (421 of
-     * them). Counts are withheld for that month and anything before it — the data
+     * them). Counts are withheld for that month and anything before it - the data
      * cannot tell a genuinely new customer from a pre-existing one. */
     const newCustByMonth = new Map();
     for (const r of firstOrders) {
@@ -321,7 +321,7 @@ export async function GET(request) {
 
       const curr = started ? sumRange(days, first, through) : blank();
 
-      // Same window, one year earlier — day for day.
+      // Same window, one year earlier - day for day.
       const shiftYear = (s) => `${Number(s.substring(0, 4)) - 1}${s.substring(4)}`;
       const priorSum  = started
         ? sumRange(daysPrior, shiftYear(first), shiftYear(through))
@@ -434,7 +434,7 @@ export async function GET(request) {
     reconcile(repRows,  toDollars(currTotal.discount), (r) => r.discounts, (r, v) => { r.discounts = v; });
 
     /* The suspect figures are subtracted from cost and revenue when the view is
-     * on the clean basis, so they have to add up too — otherwise the rounding
+     * on the clean basis, so they have to add up too - otherwise the rounding
      * that was just reconciled away reappears the moment the basis is switched. */
     reconcile(started, toDollars(currTotal.suspectCost),    (r) => r.suspectCost,    (r, v) => { r.suspectCost = v; });
     reconcile(started, toDollars(currTotal.suspectRevenue), (r) => r.suspectRevenue, (r, v) => { r.suspectRevenue = v; });
@@ -502,7 +502,7 @@ export async function GET(request) {
         growthPct:  priorComparable ? growth(currTotal.revenue, priorTotal.revenue) : null,
         priorComparable,
         comparable: !priorComparable
-          ? `no comparison shown — Ostendo's records start ${firstLoaded || 'later'}, so ${prior.start} to ${prior.end} is not fully on file`
+          ? `no comparison shown, Ostendo's records start ${firstLoaded || 'later'}, so ${prior.start} to ${prior.end} is not fully on file`
           : !range.complete
             ? `1 Apr – ${range.end} vs 1 Apr – ${prior.end}`
             : 'full financial year vs full financial year',

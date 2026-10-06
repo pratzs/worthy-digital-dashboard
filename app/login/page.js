@@ -29,7 +29,7 @@ export default function LoginPage() {
       router.replace('/');
       router.refresh();
     } catch (err) {
-      setError('Network error — please try again');
+      setError('Network error, please try again');
       setLoading(false);
     }
   };
