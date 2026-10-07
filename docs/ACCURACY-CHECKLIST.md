@@ -448,3 +448,16 @@ Teams, months, reps and the currency split each add up to the company total, and
       read and whether anything failed. Companies are not added together because
       North sells to South and Oceania. CSV exports exactly the rows a table shows,
       with the period in the file name.
+- [x] **43. South debtors match Ostendo, and "over 90" is defined.** Checked 7 Oct 2026
+      against totals computed inside Ostendo itself: unpaid invoices and credit
+      notes $2,184,278.16, less $29,397.95 of payments received and not applied,
+      gives $2,154,880.21 owed; overdue $231,393.50 over 394 documents; over 90
+      days late $11,903.17; Red Circle Wholesale $189,645.55 with $86,169.18
+      overdue. All agree with the page. Amounts include GST.
+      "Over 90" means more than 90 days past the DUE date, which is how Odoo ages
+      it. North measured that way is $61,557.76 (82 documents, confirmed from the
+      ledger lines too). Aged from invoice date instead, North would be $147,913.77
+      (146 invoices), because terms are 20th of the following month. If finance
+      age from invoice date, the buckets will not match theirs until that is changed.
+- [x] **44. Light theme only.** The dashboard no longer has a dark mode, including
+      when the browser or operating system is set to dark.

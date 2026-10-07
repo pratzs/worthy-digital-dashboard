@@ -431,7 +431,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
   return (
   <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
     <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
           {icon && <Icon name={icon} size={15} style={{ marginRight: 8, color: T.accent || "#3f7bdd" }} />}{title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
         </div>
@@ -477,18 +477,23 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
 
 /* Debtors: what customers owe and how overdue it is, as at today. The figure is
    Odoo's own receivable balance (checked against the ledger to the cent). */
-const DebtorsPanel = ({ companyId, theme, accent, currency = "NZD" }) => {
+const SectionTitle = ({ icon, accent, children }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>
+    <Icon name={icon} size={17} style={{ color: accent }} />{children}
+  </div>
+);
+const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
     let live = true;
     setD(null); setErr(null);
-    fetch(`/api/odoo/debtors?company=${companyId}`, { cache: "no-store" })
+    fetch(source, { cache: "no-store" })
       .then(r => r.json())
       .then(j => { if (!live) return; if (j.ok) setD(j); else setErr(j.error || "Could not load debtors"); })
       .catch(e => live && setErr(e.message));
     return () => { live = false; };
-  }, [companyId]);
+  }, [source]);
   const T = theme;
   const tile = (label, value, note, color) => (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
@@ -499,19 +504,19 @@ const DebtorsPanel = ({ companyId, theme, accent, currency = "NZD" }) => {
   );
   const t = d?.totals;
   const asAt = d ? `As at ${fmtDay(d.asOf)}` : null;
+  /* A nil bucket is a dash, so the buckets that hold money stand out. */
+  const owed = (v, bold) => (!v ? <span style={{ color: T.textLabel }}>-</span> : <span style={bold ? { fontWeight: 700 } : undefined}>{fmtExact(v, currency)}</span>);
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: T.textHead }}>
-          <Icon name="receipt" size={16} style={{ marginRight: 8, color: accent }} />Debtors
-        </div>
-        <RangeTag text={asAt} theme={T} />
+    <div style={{ marginTop: 28 }}>
+      <div style={{ color: T.textHead, marginBottom: 14 }}>
+        <SectionTitle icon="receipt" accent={accent}>Debtors</SectionTitle>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>What customers owe us, and how late it is. Amounts include GST. Lateness is counted from the due date</div>
       </div>
       {t && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 16 }}>
-          {tile("Owed to us", fmtExact(t.outstanding, currency), `${d.documents.toLocaleString()} open invoices`)}
+          {tile("Owed to us", fmtExact(t.outstanding, currency), `${d.documents.toLocaleString()} open invoices${d.unappliedPayments ? `, after ${fmtExact(d.unappliedPayments, currency)} received and not yet applied` : ""}`)}
           {tile("Overdue", fmtExact(t.overdue, currency), t.overduePct !== null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? "#dc2626" : undefined)}
-          {tile("Over 90 days", fmtExact(t.over90, currency), "Chase first", t.over90 > 0 ? "#dc2626" : undefined)}
+          {tile("Over 90 days late", fmtExact(t.over90, currency), "More than 90 days past the due date", t.over90 > 0 ? "#dc2626" : undefined)}
           {tile("Not yet due", fmtExact(t.current, currency), "Inside payment terms")}
         </div>
       )}
@@ -520,16 +525,16 @@ const DebtorsPanel = ({ companyId, theme, accent, currency = "NZD" }) => {
         loading={!d && !err} currency={currency} data={d?.customers || []}
         columns={[
           { key: "name", label: "Customer", color: T.text },
-          { key: "current", label: "Not Yet Due", align: "right", color: T.textSub, format: v => fmtExact(v, currency) },
-          { key: "d1to30", label: "1 to 30", align: "right", color: T.textSub, format: v => fmtExact(v, currency) },
-          { key: "d31to60", label: "31 to 60", align: "right", color: "#f59e0b", format: v => fmtExact(v, currency) },
-          { key: "d61to90", label: "61 to 90", align: "right", color: "#ea580c", format: v => fmtExact(v, currency) },
-          { key: "over90", label: "Over 90", align: "right", color: "#dc2626", format: v => fmtExact(v, currency) },
-          { key: "total", label: "Total Owed", align: "right", color: accent, format: v => fmtExact(v, currency) },
+          { key: "current", label: "Not Yet Due", align: "right", color: T.textSub, format: v => owed(v) },
+          { key: "d1to30", label: "1 to 30", align: "right", color: T.textSub, format: v => owed(v) },
+          { key: "d31to60", label: "31 to 60", align: "right", color: "#b45309", format: v => owed(v) },
+          { key: "d61to90", label: "61 to 90", align: "right", color: "#c2410c", format: v => owed(v) },
+          { key: "over90", label: "Over 90 Late", align: "right", color: "#b91c1c", format: v => owed(v) },
+          { key: "total", label: "Total Owed", align: "right", color: T.textHead, format: v => owed(v, true) },
         ]}
       />
       {d && d.customerCount > d.customers.length && (
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 10, lineHeight: 1.5 }}>
           Showing the {d.customers.length} customers with the most overdue, of {d.customerCount.toLocaleString()} who owe us money. The tiles above cover all of them.
         </div>
       )}
@@ -548,10 +553,10 @@ const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
     } catch { return ""; }
   };
   return (
-    <div style={{ padding: "20px 32px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, color: T.textHead }}>
-          <Icon name="building" size={15} style={{ marginRight: 8 }} />All companies, {fyLabel}
+    <div style={{ padding: "24px 32px 22px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ color: T.textHead }}>
+          <SectionTitle icon="building">All companies, {fyLabel}</SectionTitle>
         </div>
         <button onClick={() => window.location.reload()} title="Read everything again" aria-label="Refresh all data"
           style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, fontWeight: 600, borderRadius: 8,
@@ -598,7 +603,7 @@ const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
           );
         })}
       </div>
-      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: T.textMuted, marginTop: 14, lineHeight: 1.5 }}>
         Shown side by side, not added together: North sells to South and Oceania, so a group total would count that trade twice. Growth is against the same days last year.
       </div>
     </div>
@@ -632,13 +637,13 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 28 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: T.textHead }}>
-          <Icon name="forecast" size={16} style={{ marginRight: 8, color: accent }} />Year-end forecast, {fyLabel}
+        <div style={{ color: T.textHead }}>
+          <SectionTitle icon="forecast" accent={accent}>Year-end forecast, {fyLabel}</SectionTitle>
         </div>
         <RangeTag text={`${fmtDay(cur.range.start)} to ${fmtDay(cur.range.lastDay)}`} theme={T} />
       </div>
       {!ready ? (
-        <div style={{ fontSize: 12, color: T.textMuted }}>Waiting for last year's figures to load.</div>
+        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>Reading last year's figures. This can take up to a minute the first time.</div>
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
@@ -685,8 +690,8 @@ const KpiTargetsTable = ({ theme }) => {
       columns={[
         { key: "rep", label: "Rep", color: theme.text },
         { key: "group", label: "Customers", color: theme.textRow },
-        { key: "target", label: "Annual Target", align: "right", color: "#7C9EC9", format: KPI_DOLLAR },
-        { key: "ytd", label: "YTD Sales", align: "right", color: "#9EC97C", format: KPI_DOLLAR },
+        { key: "target", label: "Annual Target", align: "right", color: theme.textSub, format: KPI_DOLLAR },
+        { key: "ytd", label: "YTD Sales", align: "right", color: theme.textHead, format: v => <span style={{ fontWeight: 700 }}>{KPI_DOLLAR(v)}</span> },
         { key: "pctOfTarget", label: "% of Target", align: "left", format: v => (
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
             <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(128,128,128,0.2)", overflow: "hidden" }}>
@@ -694,7 +699,7 @@ const KpiTargetsTable = ({ theme }) => {
             </div>
             <span style={{ color: barColor(v), fontWeight: 600, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
           </div>) },
-        { key: "remaining", label: "Remaining", align: "right", color: "#C97C9E", format: v => (v <= 0 ? "Target met" : KPI_DOLLAR(v)) },
+        { key: "remaining", label: "Remaining", align: "right", color: theme.textSub, format: v => (v <= 0 ? "Target met" : KPI_DOLLAR(v)) },
         { key: "vsPace", label: "vs Pace", align: "right", format: v => (
           <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : ""}{KPI_DOLLAR(v)}</span>) },
         { key: "week", label: "Last Week", align: "right", color: theme.textRow, format: KPI_DOLLAR },
@@ -1059,7 +1064,7 @@ export default function EcommerceDashboard() {
   const [channelTab,     setChannelTab]     = useState("odoo");
   const [categoryModal,  setCategoryModal]  = useState(null);
   const [decliningMode,  setDecliningMode]  = useState("yoy");
-  const [darkMode,       setDarkMode]       = useState(false);
+  const [darkMode]                          = useState(false);   // the dashboard is always light
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
   const [selectedWeek,   setSelectedWeek]   = useState(Math.ceil(new Date().getDate() / 7));
@@ -1086,7 +1091,6 @@ export default function EcommerceDashboard() {
       if (mo >= 0 && mo <= 11) setWeeklyMonth(mo);
       const wk = parseInt(p.get("w") || "", 10);
       if (wk >= 1 && wk <= 5) setSelectedWeek(wk);
-      if (p.get("dark") === "1") setDarkMode(true);
     } catch { /* a malformed hash should never stop the dashboard loading */ }
     setRestored(true);
   }, []);
@@ -1116,7 +1120,7 @@ export default function EcommerceDashboard() {
     ? `${selectedYear}-04-01`                       // FY starts April 1
     : `${selectedYear}-01-01`;
   const advEndDate = view === "weekly"
-    ? new Date(selectedYear, weeklyMonth + 1, 0).toISOString().split('T')[0]
+    ? new Date(Date.UTC(selectedYear, weeklyMonth + 1, 0)).toISOString().split('T')[0]   // UTC, so a New Zealand clock cannot lose the last day
     : activeStore.id === "luxe"
     ? (selectedYear >= _thisYear ? _todayStr : `${selectedYear + 1}-03-31`) // FY ends March 31 of next cal year
     : (selectedYear === _thisYear ? _todayStr : `${selectedYear}-12-31`);
@@ -1648,7 +1652,8 @@ export default function EcommerceDashboard() {
     const fyBased = (activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova" || activeStore.id === "luxe";
     const fy = fyBased ? fyPayload(selectedYear)?.range : null;
     const start = fy?.start || (fyBased ? null : advStartDate);
-    const end   = fy?.end   || (fyBased ? null : advEndDate);
+    const rawEnd = fy?.end || (fyBased ? null : advEndDate);
+    const end = rawEnd && rawEnd > _todayStr ? _todayStr : rawEnd;   // never show dates that have not happened yet
     if (!start || !end) return null;
     if (fyBased && kind === "asat")     return `As at ${fmtDay(end)}`;
     if (fyBased && kind === "lifetime") return `Lifetime to ${fmtDay(end)}`;
@@ -2202,7 +2207,7 @@ export default function EcommerceDashboard() {
 
       {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
       {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-        <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
           {(activeStore.id === "worthy"
             ? [
                 { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
@@ -2214,7 +2219,7 @@ export default function EcommerceDashboard() {
               ]
           ).map(tab => (
             <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
-              padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
+              padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap",
               border: "none", borderBottom: channelTab === tab.id ? `2px solid ${accent}` : "2px solid transparent",
               background: "transparent", color: channelTab === tab.id ? accent : T.textSub,
               cursor: "pointer", transition: "all 0.2s", marginBottom: -1,
@@ -2837,7 +2842,7 @@ export default function EcommerceDashboard() {
               <div style={{ marginTop: 28 }}><KpiTargetsTable theme={T} /></div>
             )}
 
-            <DebtorsPanel companyId={activeStore.odooCompanyId} theme={T} accent={accent} currency={activeStore.currency} />
+            <DebtorsPanel source={`/api/odoo/debtors?company=${activeStore.odooCompanyId}`} theme={T} accent={accent} currency={activeStore.currency} />
 
             {/* Odoo: top customers, at-risk, lapsed */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
@@ -2957,6 +2962,10 @@ export default function EcommerceDashboard() {
               onClose={() => setCategoryModal(null)}
               accent={accent}
             />
+
+            {activeStore.id === "luxe" && (
+              <DebtorsPanel source="/api/ostendo/debtors" theme={T} accent={accent} currency={activeStore.currency} />
+            )}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 40, marginBottom: 16, padding: "14px 20px", background: T.bgCard, border: `1px solid ${accent}30`, borderRadius: 12, flexWrap: "wrap", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
