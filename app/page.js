@@ -513,9 +513,10 @@ const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>What customers owe us, and how late it is. Amounts include GST. Lateness is counted from the due date</div>
       </div>
       {t && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 16 }}>
           {tile("Owed to us", fmtExact(t.outstanding, currency), `${d.documents.toLocaleString()} open invoices${d.unappliedPayments ? `, after ${fmtExact(d.unappliedPayments, currency)} received and not yet applied` : ""}`)}
           {tile("Overdue", fmtExact(t.overdue, currency), t.overduePct !== null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? "#dc2626" : undefined)}
+          {tile("Over 60 days late", fmtExact(t.d61to90 + t.over90, currency), "More than 60 days past the due date", t.d61to90 + t.over90 > 0 ? "#dc2626" : undefined)}
           {tile("Over 90 days late", fmtExact(t.over90, currency), "More than 90 days past the due date", t.over90 > 0 ? "#dc2626" : undefined)}
           {tile("Not yet due", fmtExact(t.current, currency), "Inside payment terms")}
         </div>
