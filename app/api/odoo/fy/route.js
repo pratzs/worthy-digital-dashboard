@@ -33,7 +33,13 @@ import {
 import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+/* North's per-rep cost queries alone take ~20s against Odoo, on top of
+   everything else this route reads; measured at 28-42s end to end hitting
+   Odoo directly, which leaves little margin once Vercel's own network path to
+   the self-hosted Odoo server is added on top. Raised from 60s for headroom;
+   if the account's plan doesn't allow it, the deploy will say so rather than
+   silently doing nothing - see docs/ if this was dropped back down. */
+export const maxDuration = 90;
 
 const ODOO = {
   url: process.env.ODOO_URL, db: process.env.ODOO_DB,
@@ -320,30 +326,30 @@ export async function GET(request) {
       return { moves: [...moves, ...asMoveRows(adj)], prodMonth, discRows };
     };
 
-    const [curr, prev] = await Promise.all([pull(range.start, range.end), pull(prior.start, prior.end)]);
-
     /* Customers: what they spent in this period, and their whole history, so
-       lifetime value and "quiet since" mean what they say. */
+       lifetime value and "quiet since" mean what they say. None of these five
+       lookups (the two revenue pulls, both customer aggregates, first/last
+       invoice per customer) depend on each other's result, so they are fetched
+       together instead of two-then-three in series - same queries, same
+       `.catch(() => [])` fallbacks, just not waiting on each other first. */
     const custDomain = (start, end) => [...moveDomain(cid, start, end), ['partner_id', '!=', false]];
-    const [custPeriodRaw, custLifetimeRaw, npLifetime] = await Promise.all([
+    const [curr, prev, custPeriodRaw, custLifetimeRaw, npLifetime, firstSeen, lastSeen] = await Promise.all([
+      pull(range.start, range.end), pull(prior.start, prior.end),
       exec('account.move', 'read_group', [custDomain(range.start, range.end),
         ['amount_untaxed_signed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
       exec('account.move', 'read_group',
         [[...allPosted, ['partner_id', '!=', false]],
          ['amount_untaxed_signed:sum'], ['partner_id', 'move_type']], { lazy: false }).catch(() => []),
       nonProduct(null, null),
-    ]);
-    const custAdj = (adj) => adj.filter((m) => m.partner_id).map((m) => ({ ...m }));
-    const inRange = (m) => dayOf(m.invoice_date) >= range.start && dayOf(m.invoice_date) <= range.end;
-    const custPeriod = [...custPeriodRaw, ...custAdj(npLifetime.filter(inRange))];
-    const custLifetime = [...custLifetimeRaw, ...custAdj(npLifetime)];
-    // First and last invoice per customer, for new-customer counts and lapse.
-    const [firstSeen, lastSeen] = await Promise.all([
       exec('account.move', 'read_group', [[...allPosted, ['move_type', '=', 'out_invoice']],
         ['invoice_date:min'], ['partner_id']], { lazy: false }).catch(() => []),
       exec('account.move', 'read_group', [[...allPosted, ['move_type', '=', 'out_invoice']],
         ['invoice_date:max'], ['partner_id']], { lazy: false }).catch(() => []),
     ]);
+    const custAdj = (adj) => adj.filter((m) => m.partner_id).map((m) => ({ ...m }));
+    const inRange = (m) => dayOf(m.invoice_date) >= range.start && dayOf(m.invoice_date) <= range.end;
+    const custPeriod = [...custPeriodRaw, ...custAdj(npLifetime.filter(inRange))];
+    const custLifetime = [...custLifetimeRaw, ...custAdj(npLifetime)];
 
     // Product costs, once, for everything either period touched.
     const productIds = [...new Set([...curr.prodMonth, ...prev.prodMonth]
@@ -723,180 +729,207 @@ export async function GET(request) {
        "Fashion" team - and they are told apart by the sales team on the invoice.
        North is split the same way (Route, Online, Direct), so this is offered for
        any company that uses teams rather than being special-cased to Oceania. */
-    let teams = null;
-    try {
-      const pull = (from, to) => exec('account.move', 'read_group',
-        [moveDomain(cid, from, to), ['amount_untaxed_signed:sum'],
-         ['team_id', 'invoice_date:month', 'move_type']], { lazy: false });
-      const [nowRaw, beforeRaw, npNow, npBefore] = await Promise.all([
-        pull(range.start, range.end), pull(prior.start, prior.end).catch(() => []),
-        nonProduct(range.start, range.end), nonProduct(prior.start, prior.end),
-      ]);
-      const monthRows_ = (adj) => adj.map((m) => ({ ...m, ...dayRange(m, 'invoice_date:month') }));
-      const now = [...nowRaw, ...monthRows_(npNow)];
-      const before = [...beforeRaw, ...monthRows_(npBefore)];
-      const fold = (rows) => {
-        const m = new Map();
-        for (const r of rows) {
-          const team = r.team_id ? r.team_id[1] : 'Unassigned';
-          const name = departmentOf(team);
-          const key = rangeStart(r, 'invoice_date:month').substring(0, 7);
-          const cents = toCents(r.amount_untaxed_signed ?? 0);
-          const n = Number(r.__count) || 0;
-          if (!m.has(name)) m.set(name, { revenue: 0, invoices: 0, credits: 0, months: new Map(), teams: new Set() });
-          const t = m.get(name);
-          t.teams.add(team);
-          t.revenue += cents;
-          if (r.move_type === 'out_refund') t.credits += n; else t.invoices += n;
-          if (key) t.months.set(key, (t.months.get(key) || 0) + cents);
+    /* Teams, the unrenderable-variant gap, currencies and non-stock revenue are
+       four independent lookups that each catch their own errors into `problems`
+       - none of them can throw past its own try/catch. They used to run one
+       after another, which only adds their round-trip times together for no
+       reason. North alone carries enough of these that the serial total pushed
+       the whole route past Vercel's 60s function limit while the exact same
+       work, run against Odoo directly, finished in under 30s - the requests
+       were real, just needlessly queued behind each other. Running them
+       together (and running the excluded-variant loop's own four lookups
+       together too) changes nothing about what is returned, only how long it
+       takes to get there. */
+    let teams = null, excludedProducts = null, currencies = null, nonStockRevenue = null;
+    await Promise.all([
+      (async () => {
+        try {
+          const pull = (from, to) => exec('account.move', 'read_group',
+            [moveDomain(cid, from, to), ['amount_untaxed_signed:sum'],
+             ['team_id', 'invoice_date:month', 'move_type']], { lazy: false });
+          const [nowRaw, beforeRaw, npNow, npBefore] = await Promise.all([
+            pull(range.start, range.end), pull(prior.start, prior.end).catch(() => []),
+            nonProduct(range.start, range.end), nonProduct(prior.start, prior.end),
+          ]);
+          const monthRows_ = (adj) => adj.map((m) => ({ ...m, ...dayRange(m, 'invoice_date:month') }));
+          const now = [...nowRaw, ...monthRows_(npNow)];
+          const before = [...beforeRaw, ...monthRows_(npBefore)];
+          const fold = (rows) => {
+            const m = new Map();
+            for (const r of rows) {
+              const team = r.team_id ? r.team_id[1] : 'Unassigned';
+              const name = departmentOf(team);
+              const key = rangeStart(r, 'invoice_date:month').substring(0, 7);
+              const cents = toCents(r.amount_untaxed_signed ?? 0);
+              const n = Number(r.__count) || 0;
+              if (!m.has(name)) m.set(name, { revenue: 0, invoices: 0, credits: 0, months: new Map(), teams: new Set() });
+              const t = m.get(name);
+              t.teams.add(team);
+              t.revenue += cents;
+              if (r.move_type === 'out_refund') t.credits += n; else t.invoices += n;
+              if (key) t.months.set(key, (t.months.get(key) || 0) + cents);
+            }
+            return m;
+          };
+          const cur = fold(now), prev = fold(before);
+          teams = [...cur].map(([name, t]) => ({
+            name,
+            // The Odoo teams behind this department, when it is more than one.
+            madeUpOf: t.teams.size > 1 ? [...t.teams].sort() : null,
+            revenue: toDollars(t.revenue), invoices: t.invoices, credits: t.credits,
+            share: pct1(t.revenue, [...cur.values()].reduce((a, x) => a + x.revenue, 0)),
+            prior: toDollars(prev.get(name)?.revenue || 0),
+            growthPct: priorComparable && prev.get(name)?.revenue > 0
+              ? growth(t.revenue, prev.get(name).revenue) : null,
+            months: monthRows.filter((m) => m.started)
+              .map((m) => ({ key: m.key, label: m.label, revenue: toDollars(t.months.get(m.key) || 0) })),
+          })).sort((a, b) => b.revenue - a.revenue);
+          /* The teams must come to the company total, or the split is telling a
+             different story from the headline. */
+          reconcile(teams, present(total, hasCost).revenue, (t) => t.revenue, (t, v) => { t.revenue = v; });
+        } catch (e) {
+          problems.push(`sales teams could not be read (${e.message.slice(0, 80)})`);
         }
-        return m;
-      };
-      const cur = fold(now), prev = fold(before);
-      teams = [...cur].map(([name, t]) => ({
-        name,
-        // The Odoo teams behind this department, when it is more than one.
-        madeUpOf: t.teams.size > 1 ? [...t.teams].sort() : null,
-        revenue: toDollars(t.revenue), invoices: t.invoices, credits: t.credits,
-        share: pct1(t.revenue, [...cur.values()].reduce((a, x) => a + x.revenue, 0)),
-        prior: toDollars(prev.get(name)?.revenue || 0),
-        growthPct: priorComparable && prev.get(name)?.revenue > 0
-          ? growth(t.revenue, prev.get(name).revenue) : null,
-        months: monthRows.filter((m) => m.started)
-          .map((m) => ({ key: m.key, label: m.label, revenue: toDollars(t.months.get(m.key) || 0) })),
-      })).sort((a, b) => b.revenue - a.revenue);
-      /* The teams must come to the company total, or the split is telling a
-         different story from the headline. */
-      reconcile(teams, present(total, hasCost).revenue, (t) => t.revenue, (t, v) => { t.revenue = v; });
-    } catch (e) {
-      problems.push(`sales teams could not be read (${e.message.slice(0, 80)})`);
-    }
+      })(),
 
-    /* What was left out, and what it is worth - so the gap is a stated figure
-       rather than a silent omission. Queried by id, and named from the template,
-       because it is only the VARIANT name Odoo cannot build. */
-    let excludedProducts = null;
-    try {
-      const hits = [];
-      for (const pid of UNRENDERABLE_VARIANTS) {
-        const rows = await exec('account.move.line', 'read_group',
-          [[...lineDomain(cid, range.start, range.end), ['product_id', '=', pid]],
-           ['balance:sum', 'quantity:sum'], []], { lazy: false }).catch(() => []);
-        const revenue = rows.reduce((a, r) => a + subOf(r), 0);
-        const units = rows.reduce((a, r) => a + (Number(r.quantity) || 0), 0);
-        if (!rows.length || (revenue === 0 && units === 0)) continue;
-        const info = await exec('product.product', 'read', [[pid]],
-          { fields: ['default_code', 'product_tmpl_id'] }).catch(() => []);
-        hits.push({
-          id: pid, code: info[0]?.default_code || String(pid),
-          title: info[0]?.product_tmpl_id ? info[0].product_tmpl_id[1] : String(pid),
-          revenue: toDollars(toCents(revenue)), unitsSold: Math.round(units),
-        });
-      }
-      if (hits.length) {
-        excludedProducts = {
-          reason: 'Odoo cannot build a name for these variants, which stops it grouping ANY product for this company. They are left out of the product and category tables; their sales are still counted in every total.',
-          revenue: Math.round(hits.reduce((a, h) => a + h.revenue, 0) * 100) / 100,
-          products: hits,
-        };
-      }
-    } catch (e) { problems.push(`could not measure the excluded variants (${e.message.slice(0, 80)})`); }
+      /* What was left out, and what it is worth - so the gap is a stated figure
+         rather than a silent omission. Queried by id, and named from the template,
+         because it is only the VARIANT name Odoo cannot build. The four ids used
+         to be looked up one after another; they are independent, so they now run
+         together. */
+      (async () => {
+        try {
+          const hits = (await Promise.all(UNRENDERABLE_VARIANTS.map(async (pid) => {
+            const rows = await exec('account.move.line', 'read_group',
+              [[...lineDomain(cid, range.start, range.end), ['product_id', '=', pid]],
+               ['balance:sum', 'quantity:sum'], []], { lazy: false }).catch(() => []);
+            const revenue = rows.reduce((a, r) => a + subOf(r), 0);
+            const units = rows.reduce((a, r) => a + (Number(r.quantity) || 0), 0);
+            if (!rows.length || (revenue === 0 && units === 0)) return null;
+            const info = await exec('product.product', 'read', [[pid]],
+              { fields: ['default_code', 'product_tmpl_id'] }).catch(() => []);
+            return {
+              id: pid, code: info[0]?.default_code || String(pid),
+              title: info[0]?.product_tmpl_id ? info[0].product_tmpl_id[1] : String(pid),
+              revenue: toDollars(toCents(revenue)), unitsSold: Math.round(units),
+            };
+          }))).filter(Boolean);
+          if (hits.length) {
+            excludedProducts = {
+              reason: 'Odoo cannot build a name for these variants, which stops it grouping ANY product for this company. They are left out of the product and category tables; their sales are still counted in every total.',
+              revenue: Math.round(hits.reduce((a, h) => a + h.revenue, 0) * 100) / 100,
+              products: hits,
+            };
+          }
+        } catch (e) { problems.push(`could not measure the excluded variants (${e.message.slice(0, 80)})`); }
+      })(),
 
-    /* Which currencies the invoices were actually raised in. Everything above is
-       stated in the company's own currency; saying so, with the split, stops a
-       reader wondering whether a USD invoice was counted at face value. */
-    let currencies = null;
-    try {
-      const grouped = await exec('account.move', 'read_group',
-        [moveDomain(cid, range.start, range.end), ['amount_untaxed_signed:sum'], ['currency_id']],
-        { lazy: false });
-      /* Fold the non-product adjustments INTO the matching currency row. They are
-         one row per excluded line, so listing them as rows would print the same
-         currency hundreds of times. */
-      const byCurrency = new Map(grouped.map((r) => [r.currency_id ? r.currency_id[0] : null, { ...r }]));
-      for (const a of await nonProduct(range.start, range.end)) {
-        const t = byCurrency.get(a.currency_id ? a.currency_id[0] : null);
-        if (t) t.amount_untaxed_signed = (Number(t.amount_untaxed_signed) || 0) + a.amount_untaxed_signed;
-      }
-      const rows = [...byCurrency.values()];
-      const home = (await exec('res.company', 'read', [[cid]], { fields: ['currency_id'] }))[0]?.currency_id?.[1];
-      currencies = {
-        company: home,
-        raisedIn: rows.map((r) => ({ code: r.currency_id ? r.currency_id[1] : '(none)',
-          documents: Number(r.__count) || 0,
-          revenueInCompanyCurrency: toDollars(toCents(r.amount_untaxed_signed ?? 0)) }))
-          .sort((a, b) => b.revenueInCompanyCurrency - a.revenueInCompanyCurrency),
-      };
-    } catch (e) { problems.push(`currencies could not be read (${e.message.slice(0, 80)})`); }
+      /* Which currencies the invoices were actually raised in. Everything above is
+         stated in the company's own currency; saying so, with the split, stops a
+         reader wondering whether a USD invoice was counted at face value. */
+      (async () => {
+        try {
+          const grouped = await exec('account.move', 'read_group',
+            [moveDomain(cid, range.start, range.end), ['amount_untaxed_signed:sum'], ['currency_id']],
+            { lazy: false });
+          /* Fold the non-product adjustments INTO the matching currency row. They are
+             one row per excluded line, so listing them as rows would print the same
+             currency hundreds of times. */
+          const byCurrency = new Map(grouped.map((r) => [r.currency_id ? r.currency_id[0] : null, { ...r }]));
+          for (const a of await nonProduct(range.start, range.end)) {
+            const t = byCurrency.get(a.currency_id ? a.currency_id[0] : null);
+            if (t) t.amount_untaxed_signed = (Number(t.amount_untaxed_signed) || 0) + a.amount_untaxed_signed;
+          }
+          const rows = [...byCurrency.values()];
+          const home = (await exec('res.company', 'read', [[cid]], { fields: ['currency_id'] }))[0]?.currency_id?.[1];
+          currencies = {
+            company: home,
+            raisedIn: rows.map((r) => ({ code: r.currency_id ? r.currency_id[1] : '(none)',
+              documents: Number(r.__count) || 0,
+              revenueInCompanyCurrency: toDollars(toCents(r.amount_untaxed_signed ?? 0)) }))
+              .sort((a, b) => b.revenueInCompanyCurrency - a.revenueInCompanyCurrency),
+          };
+        } catch (e) { problems.push(`currencies could not be read (${e.message.slice(0, 80)})`); }
+      })(),
 
-    let nonStockRevenue = null;
-    try {
-      const rows = await exec('account.move.line', 'read_group',
-        [[...lineDomain(cid, range.start, range.end), ['product_id', '=', false]],
-         ['balance:sum'], []], { lazy: false });
-      // `balance` is already signed, so invoices and credit notes add together.
-      nonStockRevenue = toDollars(toCents(rows.reduce((a, r) => a + subOf(r), 0)));
-    } catch (e) {
-      problems.push(`non-stock revenue could not be split out (${e.message.slice(0, 80)})`);
-    }
+      (async () => {
+        try {
+          const rows = await exec('account.move.line', 'read_group',
+            [[...lineDomain(cid, range.start, range.end), ['product_id', '=', false]],
+             ['balance:sum'], []], { lazy: false });
+          // `balance` is already signed, so invoices and credit notes add together.
+          nonStockRevenue = toDollars(toCents(rows.reduce((a, r) => a + subOf(r), 0)));
+        } catch (e) {
+          problems.push(`non-stock revenue could not be split out (${e.message.slice(0, 80)})`);
+        }
+      })(),
+    ]);
 
     const topProducts = productRows.slice(0, 50);
     const topMoving = [...productRows].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 25);
     const showIds = [...new Set([...topProducts, ...topMoving].map((r) => Number(r.code)))];
-    if (showIds.length) {
-      try {
-        const stock = await exec('product.product', 'read', [showIds],
-          { fields: ['qty_available'], context: { allowed_company_ids: [cid], company_id: cid } });
-        const onHand = new Map(stock.map((r) => [r.id, Number(r.qty_available) || 0]));
-        for (const r of [...topProducts, ...topMoving]) {
-          const q = onHand.get(Number(r.code));
-          r.onHand = q === undefined ? null : Math.round(q);
-        }
-      } catch (e) {
-        problems.push(`stock on hand unavailable (${e.message.slice(0, 80)})`);
-      }
-    }
-
-    /* Slow movers: stock held today against what sold in the period.
-       On hand comes from stock.quant (internal locations, this company) summed
-       inside Odoo in one call. Asking product.product for qty_available on every
-       product is what costs ~13s, so it is not used here. Capital tied up is
-       on hand x today's standard cost, the same cost basis as the margins. A
-       product ranks by capital x the share of its stock that did NOT sell.
-       The variants Odoo cannot name are left out of the query, because grouping
-       by product asks Odoo to name every one and the whole call fails on them. */
+    /* Stock on hand (per visible product) and slow-moving stock (its own
+       stock.quant aggregate) are two more independent lookups - same reasoning
+       as the four above, run together rather than one after another. */
     let slowMoving = [];
-    try {
-      const quants = await exec('stock.quant', 'read_group',
-        [[['location_id.usage', '=', 'internal'], ['company_id', '=', cid], ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
-         ['quantity:sum'], ['product_id']],
-        { lazy: false }, 60000);
-      const held = quants.map((q) => ({ id: q.product_id && q.product_id[0], qty: Number(q.quantity) || 0 }))
-        .filter((h) => h.id && h.qty > 0);
-      if (held.length) {
-        const info = await exec('product.product', 'read', [held.map((h) => h.id)],
-          { fields: ['name', 'default_code', 'categ_id', 'standard_price'],
-            context: { allowed_company_ids: [cid], company_id: cid } }, 60000);
-        const meta = new Map(info.map((r) => [r.id, r]));
-        slowMoving = held.map((h) => {
-          const m = meta.get(h.id) || {};
-          const sold = prodAgg.get(h.id)?.qty || 0;
-          const unit = Number(m.standard_price) || 0;
-          const tied = hasCost ? Math.round(h.qty * unit) : null;
-          const unsold = 1 - Math.min(sold / h.qty, 1);
-          return {
-            code: m.default_code || String(h.id), title: m.name || String(h.id),
-            category: m.categ_id ? m.categ_id[1] : 'Uncategorised',
-            onHand: Math.round(h.qty), unitsSold: Math.round(sold), lockedCapital: tied,
-            score: (tied === null ? h.qty : tied) * unsold,
-          };
-        }).filter((r) => r.score > 0 && (r.lockedCapital === null || r.lockedCapital > 0))
-          .sort((a, b) => b.score - a.score).slice(0, 30)
-          .map(({ score, ...rest }) => rest);
-      }
-    } catch (e) {
-      problems.push(`slow-moving stock could not be read (${e.message.slice(0, 80)})`);
-    }
+    await Promise.all([
+      (async () => {
+        if (!showIds.length) return;
+        try {
+          const stock = await exec('product.product', 'read', [showIds],
+            { fields: ['qty_available'], context: { allowed_company_ids: [cid], company_id: cid } });
+          const onHand = new Map(stock.map((r) => [r.id, Number(r.qty_available) || 0]));
+          for (const r of [...topProducts, ...topMoving]) {
+            const q = onHand.get(Number(r.code));
+            r.onHand = q === undefined ? null : Math.round(q);
+          }
+        } catch (e) {
+          problems.push(`stock on hand unavailable (${e.message.slice(0, 80)})`);
+        }
+      })(),
+
+      /* Slow movers: stock held today against what sold in the period.
+         On hand comes from stock.quant (internal locations, this company) summed
+         inside Odoo in one call. Asking product.product for qty_available on every
+         product is what costs ~13s, so it is not used here. Capital tied up is
+         on hand x today's standard cost, the same cost basis as the margins. A
+         product ranks by capital x the share of its stock that did NOT sell.
+         The variants Odoo cannot name are left out of the query, because grouping
+         by product asks Odoo to name every one and the whole call fails on them. */
+      (async () => {
+        try {
+          const quants = await exec('stock.quant', 'read_group',
+            [[['location_id.usage', '=', 'internal'], ['company_id', '=', cid], ['product_id', 'not in', UNRENDERABLE_VARIANTS]],
+             ['quantity:sum'], ['product_id']],
+            { lazy: false }, 60000);
+          const held = quants.map((q) => ({ id: q.product_id && q.product_id[0], qty: Number(q.quantity) || 0 }))
+            .filter((h) => h.id && h.qty > 0);
+          if (held.length) {
+            const info = await exec('product.product', 'read', [held.map((h) => h.id)],
+              { fields: ['name', 'default_code', 'categ_id', 'standard_price'],
+                context: { allowed_company_ids: [cid], company_id: cid } }, 60000);
+            const meta = new Map(info.map((r) => [r.id, r]));
+            slowMoving = held.map((h) => {
+              const m = meta.get(h.id) || {};
+              const sold = prodAgg.get(h.id)?.qty || 0;
+              const unit = Number(m.standard_price) || 0;
+              const tied = hasCost ? Math.round(h.qty * unit) : null;
+              const unsold = 1 - Math.min(sold / h.qty, 1);
+              return {
+                code: m.default_code || String(h.id), title: m.name || String(h.id),
+                category: m.categ_id ? m.categ_id[1] : 'Uncategorised',
+                onHand: Math.round(h.qty), unitsSold: Math.round(sold), lockedCapital: tied,
+                score: (tied === null ? h.qty : tied) * unsold,
+              };
+            }).filter((r) => r.score > 0 && (r.lockedCapital === null || r.lockedCapital > 0))
+              .sort((a, b) => b.score - a.score).slice(0, 30)
+              .map(({ score, ...rest }) => rest);
+          }
+        } catch (e) {
+          problems.push(`slow-moving stock could not be read (${e.message.slice(0, 80)})`);
+        }
+      })(),
+    ]);
 
     const byRev = (a, b) => b.revenue - a.revenue;
     return NextResponse.json({
