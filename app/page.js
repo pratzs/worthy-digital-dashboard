@@ -6,6 +6,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, ReferenceLine
 } from "recharts";
+import { bankTargetFor } from "@/lib/bankTargets";
 
 // Brand palettes
 const BRAND = {
@@ -543,6 +544,108 @@ const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
   );
 };
 
+/* Credit notes: who got one, and for how much, for the period on screen.
+   Two views of the same documents - every note (who it went to) and the same
+   notes rolled up by rep (same shape as Sales by Rep), both with a TOTAL row. */
+const CreditsPanel = ({ source, theme, accent, currency = "NZD", rangeLabel = null }) => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setD(null); setErr(null);
+    fetch(source, { cache: "no-store" })
+      .then(r => r.json())
+      .then(j => { if (!live) return; if (j.ok) setD(j); else setErr(j.error || "Could not load credit notes"); })
+      .catch(e => live && setErr(e.message));
+    return () => { live = false; };
+  }, [source]);
+  const T = theme;
+  const headStyle = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
+  const tile = (label, value, note) => (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: T.textHead, marginTop: 6 }}>{value}</div>
+      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
+    </div>
+  );
+  const loading = !d && !err;
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ color: T.textHead, marginBottom: 14 }}>
+        <SectionTitle icon="receipt" accent={accent}>Credit Notes</SectionTitle>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>Every credit note raised this period, who it went to, and the rep it sits under</div>
+      </div>
+      {rangeLabel && <div style={{ marginBottom: 14 }}><RangeTag text={rangeLabel} theme={T} /></div>}
+      {err && <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 14 }}>Could not load: {err}</div>}
+
+      {d?.totals && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
+          {tile("Credit Notes", d.totals.count.toLocaleString(), "Raised this period")}
+          {tile("Total Credited", fmtExact(d.totals.value, currency), "Across every rep and customer")}
+        </div>
+      )}
+
+      {/* By rep - same shape as the Sales by Rep table, with a TOTAL row */}
+      <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 14 }}>
+          <Icon name="user" size={15} style={{ marginRight: 8, color: accent }} />By Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ ...headStyle, textAlign: "left" }}>Sales Rep</th>
+                <th style={headStyle}>Credit Notes</th>
+                <th style={headStyle}>Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!d?.reps?.length ? (
+                <tr><td colSpan={3} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                  {loading ? "Loading…" : "No credit notes in this period"}
+                </td></tr>
+              ) : d.reps.map((r, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                  <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>{r.rep}</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{r.count.toLocaleString()}</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#dc2626", fontWeight: 700 }}>{fmtExact(r.value, currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {d?.reps?.length > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                  <td style={{ padding: "10px 12px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", color: T.textHead, fontWeight: 700 }}>{d.totals.count.toLocaleString()}</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#dc2626", fontWeight: 700 }}>{fmtExact(d.totals.value, currency)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+
+      {/* Every note - who it went to */}
+      <AdvancedTable theme={T} icon="receipt" title="Every Credit Note" range={rangeLabel}
+        subtitle="Most recent first" loading={loading} currency={currency} data={d?.notes || []}
+        columns={[
+          { key: "date",      label: "Date",     color: T.textSub },
+          { key: "docNumber", label: "Doc #",    color: T.textMuted },
+          { key: "customer",  label: "Customer", color: T.text },
+          { key: "rep",       label: "Rep",      color: T.textSub },
+          { key: "amount",    label: "Amount",   align: "right", color: "#dc2626", format: (v, c) => fmtExact(v, c) },
+        ]}
+      />
+      {d?.notes?.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, paddingRight: 8, fontSize: 12, color: T.textHead, fontWeight: 700 }}>
+          TOTAL&nbsp;CREDITED:&nbsp;<span style={{ color: "#dc2626", marginLeft: 4 }}>{fmtExact(d.totals.value, currency)}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* The three companies side by side, with when each was last read and whether
    anything went wrong reading it. Shown next to each other and NOT added up:
    North sells to South and Oceania, so a group total would count that twice. */
@@ -1063,6 +1166,9 @@ export default function EcommerceDashboard() {
   const [advancedData, setAdvancedData] = useState({});
   const [advLoading,   setAdvLoading]   = useState(false);
   const [channelTab,     setChannelTab]     = useState("odoo");
+  // Which table group is on screen for the active company: reps first, then
+  // products/categories, movers, customers, credits, debtors last.
+  const [advTab,         setAdvTab]         = useState("reps");
   const [categoryModal,  setCategoryModal]  = useState(null);
   const [decliningMode,  setDecliningMode]  = useState("yoy");
   const [darkMode]                          = useState(false);   // the dashboard is always light
@@ -1512,6 +1618,7 @@ export default function EcommerceDashboard() {
 
   const fyMonthRow = (m) => ({
     month:             m.label,
+    key:               m.key,
     ...basisOf(m),
     totalCost:         m.cost,
     rebates:           m.rebates,
@@ -2151,6 +2258,42 @@ export default function EcommerceDashboard() {
     else setSalespeopleData([]);
   }, [activeStore.id, selectedYear]);
 
+  /* One pill bar for every per-company table group below. Sales by Rep comes
+     first, Debtors always last, Credits sits right before it - the order Pratham
+     asked for. Switching company/channel resets to "reps" so nobody lands on an
+     empty tab for a group the new company doesn't have. */
+  const ADV_TABS = [
+    { id: "reps",       label: "Sales by Rep",        icon: "user" },
+    { id: "products",   label: "Top Categories & Products", icon: "award" },
+    { id: "movers",     label: "Fast & Slow Movers",  icon: "zap" },
+    { id: "customers",  label: "Customers",           icon: "trophy" },
+    { id: "credits",    label: "Credit Notes",        icon: "receipt" },
+    { id: "debtors",    label: "Debtors",             icon: "receipt" },
+  ];
+  const renderAdvTabs = (tabs = ADV_TABS) => (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 24, marginTop: 28 }}>
+      {tabs.map(t => (
+        <button key={t.id} onClick={() => setAdvTab(t.id)} style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "8px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
+          border: advTab === t.id ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
+          background: advTab === t.id ? `${accent}18` : "transparent",
+          color: advTab === t.id ? accent : T.textMuted, transition: "all 0.15s",
+        }}>
+          <Icon name={t.icon} size={13} />{t.label}
+        </button>
+      ))}
+    </div>
+  );
+  /* Top Categories/Products can only ever see sales each company invoiced
+     directly - a sale from North to South (or any other inter-company trade)
+     shows up as revenue on the SELLING company's side and a cost on the buyer's,
+     never as a line in either company's product/category breakdown. So these two
+     tables are real for what each company sold, but cannot be added across
+     companies to get a true group total - same caveat as the figures used to
+     carry at the top of the page. */
+  const INTERCOMPANY_NOTE = "Doesn't include inter-company sales (e.g. North selling to South or Oceania) for products or categories — those trades aren't visible to either side's product breakdown, so this can't be measured here.";
+
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", color: T.text, paddingBottom: 40, transition: "background 0.3s, color 0.3s" }}>
       <style>{`
@@ -2196,15 +2339,6 @@ export default function EcommerceDashboard() {
           })}
         </div>
       </div>
-
-      <CompanySummary theme={T} activeId={activeStore.id} fyLabel={`FY${String(selectedYear).slice(2)}`}
-        onSelect={(id) => { const st = STORES.find(x => x.id === id); if (st) setActiveStore(st); }}
-        items={STORES.map(st => ({
-          store: st,
-          d: fyPayload(selectedYear, st.id),
-          loading: !!loadingRef.current[fyKey(st.id, selectedYear)],
-          failed: cacheRef.current[fyKey(st.id, selectedYear)]?.failed || null,
-        }))} />
 
       {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
       {(activeStore.id === "worthy" || activeStore.id === "nova") && (
@@ -2485,23 +2619,7 @@ export default function EcommerceDashboard() {
               </ResponsiveContainer>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2.2fr", gap: 20, marginBottom: 24 }}>
-              {/* YoY bar chart */}
-              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 6 }}>YoY Revenue Growth</div>
-                <div style={{ fontSize: 11, color: T.textSub, marginBottom: 18 }}>% vs same month {selectedYear - 1}</div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={momData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
-                    <XAxis dataKey="month" interval={0} tick={{ fontSize: 10, fill: "#4a4030" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: darkMode ? "#3a3020" : "#9090b0" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-                    <Tooltip content={<CustomTooltip accent={accent} />} />
-                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
-                    <Bar dataKey="momGrowth" name="Growth" radius={[4, 4, 0, 0]} fill={accent} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
+            <div style={{ marginBottom: 24 }}>
               {/* Monthly table */}
               <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -2518,7 +2636,7 @@ export default function EcommerceDashboard() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr>
-                        {["Month","Revenue","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
+                        {["Month","Revenue","Bank Target","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
                           <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -2526,11 +2644,22 @@ export default function EcommerceDashboard() {
                     <tbody>
                       {momData.map((row, i) => {
                         const has = row.revenue > 0;
+                        const monthKey = row.key || `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+                        const target = bankTargetFor(activeStore.id, monthKey);
+                        const vsTarget = (target && has) ? Math.round(((row.revenue - target) / target) * 1000) / 10 : null;
                         return (
                           <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
                             onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
                             <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
                             <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (exactAmounts ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
+                            <td style={{ padding: "8px", color: T.textSub }}>
+                              {target ? (
+                                <>
+                                  <div>{exactAmounts ? fmtExact(target, activeStore.currency) : fmtK(target, activeStore.currency)}</div>
+                                  {vsTarget !== null && <div style={{ fontSize: 9, color: vsTarget >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700, marginTop: 2 }}>{vsTarget >= 0 ? "+" : ""}{vsTarget}%</div>}
+                                </>
+                              ) : <span style={{ color: T.textLabel }}>-</span>}
+                            </td>
                             <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
                             <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
                             <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
@@ -2547,6 +2676,15 @@ export default function EcommerceDashboard() {
                       <tr style={{ borderTop: `1px solid ${T.border}` }}>
                         <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
                         <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{exactAmounts ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
+                        <td style={{ padding: "10px 8px", color: T.textSub, fontWeight: 700 }}>
+                          {(() => {
+                            const totalTarget = momData.reduce((s, row, i) => {
+                              const mk = row.key || `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+                              return s + (bankTargetFor(activeStore.id, mk) || 0);
+                            }, 0);
+                            return totalTarget > 0 ? (exactAmounts ? fmtExact(totalTarget, activeStore.currency) : fmtK(totalTarget, activeStore.currency)) : "-";
+                          })()}
+                        </td>
                         <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "-"}</td>
                         <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "-"}</td>
                         <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
@@ -2772,187 +2910,140 @@ export default function EcommerceDashboard() {
           </>
         )}
 
-        {/* Two businesses inside one Odoo company. Worthy Oceania sells fabric
-            under "Textiles" and the Worthy range under "WOL Products"; North is
-            split by trading route. The invoice's sales team is what separates
-            them, so the same panel serves both. */}
-        {onFYView() && (fyPayload(selectedYear)?.teams || []).length > 1 && (
-          <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginTop: 28 }}>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: T.textHead, fontWeight: 700 }}>
-              By Department
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3, marginBottom: 16 }}>
-              Each part of the business, from the sales team on the invoice · {activeStore.currency}
-              <div style={{ marginTop: 8 }}><RangeTag text={yearRange()} theme={T} /></div>
-            </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    {["Department", "Revenue", "Share", "Invoices", "Credits", "Last year", "Change"].map((h, i) => (
-                      <th key={h} style={{ padding: "10px 12px", textAlign: i === 0 ? "left" : "right",
-                        color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                        letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`,
-                        background: T.bgTableHead }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {fyPayload(selectedYear).teams.map((t) => (
-                    <tr key={t.name} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                      <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>
-                        {t.name}
-                        {/* Where a department covers more than one Odoo sales team, name
-                            them, otherwise a reader who knows the teams wonders which
-                            one went missing. */}
-                        {t.madeUpOf && (
-                          <div style={{ fontSize: 10, fontWeight: 500, color: T.textMuted, marginTop: 2 }}>
-                            includes {t.madeUpOf.join(" + ")}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: accent, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {fmtExact(t.revenue, activeStore.currency)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.share}%</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.invoices.toLocaleString()}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{t.credits ? t.credits.toLocaleString() : "-"}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: T.textMuted, whiteSpace: "nowrap" }}>
-                        {t.prior ? fmtExact(t.prior, activeStore.currency) : "-"}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right" }}><GrowthBadge value={t.growthPct} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                    <td style={{ padding: "10px 12px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: accent, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {fmtExact(fyPayload(selectedYear).teams.reduce((a, t) => a + t.revenue, 0), activeStore.currency)}</td>
-                    <td colSpan={5} />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ODOO ADVANCED SECTION, Worthy North (Odoo tab) and Worthy Oceania (nova) */}
+        {/* ODOO ADVANCED SECTION, Worthy North (Odoo tab) and Worthy Oceania (nova) - one tab per table group, Sales by Rep first, Debtors last */}
         {((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <>
-            {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
-            {activeStore.id === "worthy" && (
-              <div style={{ marginTop: 28 }}><KpiTargetsTable theme={T} /></div>
+            {renderAdvTabs()}
+
+            {advTab === "reps" && (
+              <>
+                {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
+                {activeStore.id === "worthy" && <KpiTargetsTable theme={T} />}
+                <SalesRepBreakdown
+                  salespeople={getOdooSalespeople()}
+                  salespeopleMonthly={getOdooSalespeopleMonthly()}
+                  salespeopleWeekly={getOdooSalespeopleWeekly()}
+                  repMargins={getOdooRepMargins()}
+                  loading={isLoading(selectedYear)}
+                  currency={activeStore.currency}
+                  weeklyMonth={weeklyMonth}
+                  onWeeklyMonthChange={setWeeklyMonth}
+                  fyMonths={FY_MONTHS}
+                  rangeLabel={yearRange()} monthRangeLabel={monthRange()}
+                  T={T} accent={accent}
+                  exact={exactAmounts}
+                />
+              </>
             )}
 
-            <DebtorsPanel source={`/api/odoo/debtors?company=${activeStore.odooCompanyId}`} theme={T} accent={accent} currency={activeStore.currency} />
+            {advTab === "products" && (
+              <>
+                <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
+                  <Icon name="alert" size={13} style={{ marginRight: 6 }} />{INTERCOMPANY_NOTE}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                  <AdvancedTable theme={T} icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
+                    loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
+                    data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
+                    columns={[
+                      { key: "name",         label: "Category",     color: T.text },
+                      { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
+                      { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
+                      { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                      { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                    ]}
+                    aiContext="top Odoo categories"
+                    aiExtra="Which categories drive the business? Flag any with margin < 15%, those need a price review."
+                  />
+                  <AdvancedTable theme={T} icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
+                    loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
+                    data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                    columns={[
+                      { key: "name",     label: "Product",  color: T.text },
+                      { key: "category", label: "Category", color: T.textMuted },
+                      { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
+                      { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                      { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                    ]}
+                    aiContext="top Odoo products"
+                    aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
+                  />
+                </div>
+              </>
+            )}
 
-            {/* Odoo: top customers, at-risk, lapsed */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24, marginTop: 28 }}>
-              <AdvancedTable theme={T} icon="trophy" title="Top Customers" range={tableRange()} subtitle="Ranked by net invoice revenue (customers only, suppliers excluded)"
-                loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
-                columns={[
-                  { key: "name",    label: "Customer", color: T.text },
-                  /* `orderCount`, not `orders` - the getter's own field name. Reading
-                     the wrong key left this column blank on every row. */
-                  { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
-                  { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
-                  { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
-                ]}
-                aiContext="Odoo top customers"
-                aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status, call them this week."
-              />
-              <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 days)" range={tableRange("asat")} subtitle="Overdue for reorder, call before they lapse"
-                loading={isLoading(selectedYear)} currency={activeStore.currency}
-                data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orderCount }))}
-                columns={atRiskColumns} aiContext="at-risk Odoo customers"
-                aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
-              />
-              <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 days)" range={tableRange("asat")} subtitle="Stopped ordering, win-back priority"
-                loading={isLoading(selectedYear)} currency={activeStore.currency}
-                data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orderCount }))}
-                columns={churnedColumns} aiContext="lapsed Odoo customers"
-                aiExtra="Likely lost to DKSH, Gilmours, or Stock4Shop. Recommend a visit + offer for the top 5 by revenue."
-              />
-            </div>
+            {advTab === "movers" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
+                  loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
+                  columns={[
+                    { key: "name",         label: "Product",     color: T.text },
+                    { key: "category",     label: "Category",    color: T.textMuted },
+                    { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
+                    { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
+                    { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                    { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                  ]}
+                  aiContext="fast-moving Odoo SKUs"
+                  aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
+                />
+                <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period. Clear, bundle or discontinue"
+                  loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
+                  columns={[
+                    { key: "name",          label: "Product",       color: T.text },
+                    { key: "category",      label: "Category",      color: T.textMuted },
+                    { key: "currentStock",  label: "On Hand",       align: "right", color: T.textSub },
+                    { key: "qtySold",       label: "Units Sold",    align: "right", color: T.textMuted },
+                    { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
+                  ]}
+                  aiContext="slow-moving Odoo SKUs"
+                  aiExtra="Top 3 by capital tied, recommend specific clearance pricing or rep push. Anything with an expiry risk?"
+                />
+              </div>
+            )}
 
-            {/* Odoo: top products + top categories */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
-                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
-                data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
-                columns={[
-                  { key: "name",         label: "Category",     color: T.text },
-                  { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
-                  { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
-                  { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
-                ]}
-                aiContext="top Odoo categories"
-                aiExtra="Which categories drive the business? Flag any with margin < 15%, those need a price review."
-              />
-              <AdvancedTable theme={T} icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
-                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
-                data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
-                columns={[
-                  { key: "name",     label: "Product",  color: T.text },
-                  { key: "category", label: "Category", color: T.textMuted },
-                  { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
-                  { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
-                ]}
-                aiContext="top Odoo products"
-                aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
-              />
-            </div>
+            {advTab === "customers" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                <AdvancedTable theme={T} icon="trophy" title="Top Customers" range={tableRange()} subtitle="Ranked by net invoice revenue (customers only, suppliers excluded)"
+                  loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
+                  columns={[
+                    { key: "name",    label: "Customer", color: T.text },
+                    /* `orderCount`, not `orders` - the getter's own field name. Reading
+                       the wrong key left this column blank on every row. */
+                    { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
+                    { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
+                    { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+                    { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
+                  ]}
+                  aiContext="Odoo top customers"
+                  aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status, call them this week."
+                />
+                <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 days)" range={tableRange("asat")} subtitle="Overdue for reorder, call before they lapse"
+                  loading={isLoading(selectedYear)} currency={activeStore.currency}
+                  data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orderCount }))}
+                  columns={atRiskColumns} aiContext="at-risk Odoo customers"
+                  aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
+                />
+                <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 days)" range={tableRange("asat")} subtitle="Stopped ordering, win-back priority"
+                  loading={isLoading(selectedYear)} currency={activeStore.currency}
+                  data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orderCount }))}
+                  columns={churnedColumns} aiContext="lapsed Odoo customers"
+                  aiExtra="Likely lost to DKSH, Gilmours, or Stock4Shop. Recommend a visit + offer for the top 5 by revenue."
+                />
+              </div>
+            )}
 
-            {/* Odoo: fast & slow movers */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
-                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
-                columns={[
-                  { key: "name",         label: "Product",     color: T.text },
-                  { key: "category",     label: "Category",    color: T.textMuted },
-                  { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
-                  { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
-                  { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
-                ]}
-                aiContext="fast-moving Odoo SKUs"
-                aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
-              />
-              <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period. Clear, bundle or discontinue"
-                loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
-                columns={[
-                  { key: "name",          label: "Product",       color: T.text },
-                  { key: "category",      label: "Category",      color: T.textMuted },
-                  { key: "currentStock",  label: "On Hand",       align: "right", color: T.textSub },
-                  { key: "qtySold",       label: "Units Sold",    align: "right", color: T.textMuted },
-                  { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
-                ]}
-                aiContext="slow-moving Odoo SKUs"
-                aiExtra="Top 3 by capital tied, recommend specific clearance pricing or rep push. Anything with an expiry risk?"
-              />
-            </div>
+            {advTab === "credits" && (
+              <CreditsPanel source={`/api/odoo/credits?company=${activeStore.odooCompanyId}`} theme={T} accent={accent} currency={activeStore.currency} rangeLabel={yearRange()} />
+            )}
 
-            {/* Odoo salesperson breakdown, single table with view toggle */}
-            <SalesRepBreakdown
-              salespeople={getOdooSalespeople()}
-              salespeopleMonthly={getOdooSalespeopleMonthly()}
-              salespeopleWeekly={getOdooSalespeopleWeekly()}
-              repMargins={getOdooRepMargins()}
-              loading={isLoading(selectedYear)}
-              currency={activeStore.currency}
-              weeklyMonth={weeklyMonth}
-              onWeeklyMonthChange={setWeeklyMonth}
-              fyMonths={FY_MONTHS}
-              rangeLabel={yearRange()} monthRangeLabel={monthRange()}
-              T={T} accent={accent}
-              exact={exactAmounts}
-            />
+            {advTab === "debtors" && (
+              <DebtorsPanel source={`/api/odoo/debtors?company=${activeStore.odooCompanyId}`} theme={T} accent={accent} currency={activeStore.currency} />
+            )}
           </>
         )}
 
-        {/* ADVANCED ANALYTICS, not shown for Odoo tab (Shopify-based) or nova */}
+        {/* ADVANCED ANALYTICS, not shown for Odoo tab (Shopify-based) or nova - one tab per table group, Sales by Rep first, Debtors last */}
         {(activeStore.id === "luxe" || (activeStore.id === "worthy" && channelTab !== "odoo")) && (
           <>
             {/* Category drill-down modal */}
@@ -2964,11 +3055,7 @@ export default function EcommerceDashboard() {
               accent={accent}
             />
 
-            {activeStore.id === "luxe" && (
-              <DebtorsPanel source="/api/ostendo/debtors" theme={T} accent={accent} currency={activeStore.currency} />
-            )}
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 40, marginBottom: 16, padding: "14px 20px", background: T.bgCard, border: `1px solid ${accent}30`, borderRadius: 12, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28, marginBottom: 0, padding: "14px 20px", background: T.bgCard, border: `1px solid ${accent}30`, borderRadius: 12, flexWrap: "wrap", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <Icon name="chart" size={20} style={{ color: accent }} />
                 <div>
@@ -2995,28 +3082,10 @@ export default function EcommerceDashboard() {
               </span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} title="Top Categories" range={tableRange()} subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
-                onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
-                aiContext="top revenue categories"
-                aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
-              <AdvancedTable theme={T} title="Top Products" range={tableRange()}    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
-                aiExtra="Note any imported products in the top list, these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
-              <AdvancedTable theme={T} title="Top Customers" range={tableRange()}   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
-                aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
-            </div>
+            {renderAdvTabs(activeStore.id === "luxe" ? ADV_TABS : ADV_TABS.filter(t => !["credits", "debtors"].includes(t.id)))}
 
-            {/* Salesperson table, POS only for Worthy North */}
-            {activeStore.id !== "luxe" && channelTab === "pos" && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-                <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
-                  aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
-              </div>
-            )}
-
-            {/* Salesperson breakdown, Worthy Products South (Ostendo) */}
-            {activeStore.id === "luxe" && (
-              <div style={{ marginBottom: 24 }}>
+            {advTab === "reps" && (
+              activeStore.id === "luxe" ? (
                 <SalesRepBreakdown
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
@@ -3031,37 +3100,76 @@ export default function EcommerceDashboard() {
                   T={T} accent={accent}
                   exact
                 />
+              ) : channelTab === "pos" ? (
+                <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                  aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
+              ) : (
+                <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0" }}>Online sales aren't broken down by rep - switch to the POS tab for rep figures.</div>
+              )
+            )}
+
+            {advTab === "products" && (
+              <>
+                <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
+                  <Icon name="alert" size={13} style={{ marginRight: 6 }} />{INTERCOMPANY_NOTE}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                  <AdvancedTable theme={T} title="Top Categories" range={tableRange()} subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
+                    onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
+                    aiContext="top revenue categories"
+                    aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
+                  <AdvancedTable theme={T} title="Top Products" range={tableRange()}    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
+                    aiExtra="Note any imported products in the top list, these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
+                </div>
+              </>
+            )}
+
+            {advTab === "movers" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
+                  loading={advLoading} currency={activeStore.currency}
+                  /* Read the fast-moving list the endpoint builds from EVERY product.
+                     Re-sorting the top-by-revenue list by units cannot find a fast
+                     mover that earns little: nine of these twenty rows were wrong,
+                     and the real leader - 4,676 units - was not on the page at all. */
+                  data={(advancedData.curr?.fastMoving || []).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                  columns={[
+                    { key: "name",      label: "Product",    color: T.text },
+                    { key: "category",  label: "Category",   color: T.textMuted },
+                    { key: "unitsSold", label: "Units Sold", align: "right", color: "#16a34a" },
+                    { key: "revenue",   label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
+                    { key: "margin",    label: "Margin",     align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                  ]}
+                  aiContext="fast-moving SKUs"
+                  aiExtra="Ensure 6+ weeks of cover on these. Flag any close to stockout, these drive the business."
+                />
+                <AdvancedTable theme={T} icon="alert" title="Slow-Moving Inventory" range={tableRange()} subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
+                  aiExtra="Pay special attention to imported products, slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
-                loading={advLoading} currency={activeStore.currency}
-                /* Read the fast-moving list the endpoint builds from EVERY product.
-                   Re-sorting the top-by-revenue list by units cannot find a fast
-                   mover that earns little: nine of these twenty rows were wrong,
-                   and the real leader - 4,676 units - was not on the page at all. */
-                data={(advancedData.curr?.fastMoving || []).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
-                columns={[
-                  { key: "name",      label: "Product",    color: T.text },
-                  { key: "category",  label: "Category",   color: T.textMuted },
-                  { key: "unitsSold", label: "Units Sold", align: "right", color: "#16a34a" },
-                  { key: "revenue",   label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                  { key: "margin",    label: "Margin",     align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
-                ]}
-                aiContext="fast-moving SKUs"
-                aiExtra="Ensure 6+ weeks of cover on these. Flag any close to stockout, these drive the business."
-              />
-              <AdvancedTable theme={T} icon="alert" title="Slow-Moving Inventory" range={tableRange()} subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
-                aiExtra="Pay special attention to imported products, slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
-              <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 Days)" range={tableRange("asat")} subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
-                aiExtra="These are likely dairies, gas stations or corner stores that may have switched to Gilmours, DKSH or Stock4Shop. Suggest which rep should personally visit and what offer might win them back." />
-            </div>
+            {advTab === "customers" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 20 }}>
+                  <AdvancedTable theme={T} title="Top Customers" range={tableRange()}   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
+                    aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
+                  <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 Days)" range={tableRange("asat")} subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
+                    aiExtra="These are likely dairies, gas stations or corner stores that may have switched to Gilmours, DKSH or Stock4Shop. Suggest which rep should personally visit and what offer might win them back." />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                  <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 Days)" range={tableRange("asat")} subtitle="Overdue for a reorder, act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
+                  <AdvancedTable theme={T} icon="gem" title="Customer Lifetime Value" range={tableRange("lifetime")} subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
+                </div>
+              </>
+            )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 Days)" range={tableRange("asat")} subtitle="Overdue for a reorder, act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
-              <AdvancedTable theme={T} icon="gem" title="Customer Lifetime Value" range={tableRange("lifetime")} subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
-            </div>
+            {advTab === "credits" && activeStore.id === "luxe" && (
+              <CreditsPanel source="/api/ostendo/credits" theme={T} accent={accent} currency={activeStore.currency} rangeLabel={yearRange()} />
+            )}
+
+            {advTab === "debtors" && activeStore.id === "luxe" && (
+              <DebtorsPanel source="/api/ostendo/debtors" theme={T} accent={accent} currency={activeStore.currency} />
+            )}
           </>
         )}
 
