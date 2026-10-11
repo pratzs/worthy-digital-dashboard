@@ -1157,6 +1157,16 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
 
 export default function EcommerceDashboard() {
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
+  const [stockValue,   setStockValue]   = useState(null);
+  useEffect(() => {
+    let live = true;
+    setStockValue(null);
+    fetch(`/api/stock-value?store=${activeStore.id}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(j => { if (live && j.ok) setStockValue(j.value); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [activeStore.id]);
   const [selectedYear, setSelectedYear] = useState(2026);
 
   const [view,         setView]         = useState("monthly");
@@ -2406,145 +2416,6 @@ export default function EcommerceDashboard() {
           );
         })()}
 
-        {/* Plain-English statement of exactly what is on screen. Every number
-            below is for this period, and every comparison is against the
-            matching stretch of last year, not against a longer one. */}
-        {onFYView() && fyPayload(selectedYear) && (() => {
-          const d   = fyPayload(selectedYear);
-          const pretty = (isoStr) => {
-            if (!isoStr) return "-";
-            const [y, m, dd] = isoStr.split("-").map(Number);
-            return `${dd} ${MONTH_NAMES[m - 1]} ${y}`;
-          };
-          const dayCount = Math.round(
-            (new Date(d.range.end) - new Date(d.range.start)) / 86400000
-          ) + 1;
-          const t = d.totals;
-          return (
-            <div style={{ marginBottom: 20, padding: "14px 18px", borderRadius: 12, background: `${accent}0c`, border: `1px solid ${accent}28`, fontSize: 12.5, color: T.textSub, lineHeight: 1.75 }}>
-              <div style={{ fontWeight: 700, color: T.textHead, marginBottom: 2 }}>
-                Financial year {d.fy} · {pretty(d.range.start)} to {pretty(d.range.end)}
-                {!d.range.complete && <span style={{ fontWeight: 500, color: T.textMuted }}> · still in progress ({dayCount} days so far)</span>}
-              </div>
-              {/* Ostendo feeds this dashboard from its nightly backup, so the
-                  figures are always complete to the close of the last night that
-                  ran. Stating it plainly stops a hand-run query on the live
-                  database looking like a disagreement. */}
-              <div>
-                {activeStore.id === "luxe"
-                  ? <>Figures are complete to the <strong>close of business on {pretty(d.range.end)}</strong>, which is
-                     the most recent day in Ostendo’s nightly backup. Trading entered since then appears after
-                     tonight’s run.</>
-                  : <>Figures are live from Odoo, complete to <strong>{pretty(d.range.end)}</strong>.</>}
-              </div>
-              {activeStore.id === "luxe" && typeof t.rebates === "number" && t.rebates !== 0 && (
-                <div>
-                  Sales below are <strong>before rebates</strong> ({fmtExact(t.revenue, activeStore.currency)}), which is
-                  the basis finance report on. Ostendo's own invoice total is{" "}
-                  <strong>{fmtExact(t.netSales, activeStore.currency)}</strong>, the same trading after{" "}
-                  {fmtExact(Math.abs(t.rebates), activeStore.currency)} of rebates. Both describe the same trading;
-                  the rebates are the whole difference, and almost all of them sit on Christchurch Office / Online.
-                </div>
-              )}
-              <div>
-                <strong>{t.invoices.toLocaleString()}</strong> invoices
-                {t.credits > 0 && <> · <strong>{t.credits.toLocaleString()}</strong> credit notes worth {fmtExact(t.creditValue, activeStore.currency)}, already taken off the revenue below</>}
-                {" "}· sales are counted without GST{activeStore.id === "luxe"
-                  ? ", and cost is what each item cost on the day it was invoiced."
-                  : d.hasCost ? ", and cost is each product's standard cost as it stands today."
-                              : ". Odoo holds no product costs for this company, so no margin is shown."}
-              </div>
-              {/* Worthy Oceania bills in three currencies. Say so, and say what
-                  each is worth once converted, so nobody assumes a USD invoice
-                  was counted at face value. */}
-              {d.currencies && d.currencies.raisedIn.length > 1 && (
-                <div>
-                  Invoices are raised in{" "}
-                  {d.currencies.raisedIn.map((c, i) => (
-                    <span key={c.code}>
-                      {i > 0 ? (i === d.currencies.raisedIn.length - 1 ? " and " : ", ") : ""}
-                      <strong>{c.code}</strong> ({c.documents.toLocaleString()})
-                    </span>
-                  ))}. Every figure here is stated in <strong>{d.currencies.company}</strong>, converted at the
-                  rate Odoo holds for each invoice, they are not added up at face value.
-                </div>
-              )}
-              {d.excludedProducts && (
-                <div style={{ color: "#b45309" }}>
-                  <strong>{d.excludedProducts.products.length} product{d.excludedProducts.products.length === 1 ? "" : "s"} are
-                  missing from the product and category tables below.</strong>{" "}
-                  Odoo cannot build a name for {d.excludedProducts.products.map(p => p.code).join(" and ")}, and
-                  that stops it grouping any product for this company at all. Their{" "}
-                  {fmtExact(d.excludedProducts.revenue, activeStore.currency)} of sales is still counted in every total
-                  above. Fixing those records in Odoo puts them back on the page.
-                </div>
-              )}
-              {/* Be up front about the sales that carry no cost. It is a small share
-                  company-wide, but it is the whole reason a handful of reps show no
-                  margin at all, and a reader who spots the blanks deserves the size
-                  of it rather than a guess. */}
-              {d.nonStockExcluded && d.nonStockRevenue != null && d.nonStockRevenue !== 0 && (
-                <div>
-                  Sales here are <strong>product lines only</strong>, the same basis as finance's report.{" "}
-                  <strong>{fmtExact(d.nonStockRevenue, activeStore.currency)}</strong> invoiced with no product on the line
-                  (freight recharges, pallet and parking rent, expense reimbursements, supplier rebates and
-                  discount lines) is left out of sales and of margin.
-                </div>
-              )}
-              {activeStore.id !== "luxe" && d.hasCost && t.uncoveredRevenue > 0 && (
-                <div>
-                  <strong>{fmtExact(t.uncoveredRevenue, activeStore.currency)}</strong> of these sales
-                  ({(100 - (t.costCoverage ?? 100)).toFixed(1)}%) carry no cost of sales.
-                  {!d.nonStockExcluded && d.nonStockRevenue > 0 && <> {fmtExact(d.nonStockRevenue, activeStore.currency)} of that is
-                  invoiced with no product on the line, freight recharges, pallet rent, expense
-                  reimbursements and supplier rebate claims.</>} Odoo holds a cost price for practically every
-                  product Worthy sells; this is income earned without buying anything, so there is no cost to
-                  set against it and the margin above is flattering by that much. Where a rep invoices almost
-                  nothing else, the margin is left blank rather than shown as 100%.
-                </div>
-              )}
-              {(() => {
-                // Only call out months where the mis-costing is material - above
-                // 1% of that month's sales. Below that it is ordinary trading.
-                const hit = d.months.filter(m => m.started && m.revenue > 0 && m.suspectCost > m.revenue * 0.01);
-                if (!hit.length) return null;
-                const names = hit.map(m => m.label).join(", ");
-                const worst = hit.reduce((a, b) => (b.suspectCost > a.suspectCost ? b : a));
-                return (
-                  <div style={{ color: "#b45309" }}>
-                    <strong>A unit-of-measure problem in Ostendo's costing affected {names}.</strong>{" "}
-                    Finance have confirmed it and it has been resolved, the most recent months are clean.
-                    In {worst.label} it put {fmtExact(worst.suspectCost, activeStore.currency)} of cost against{" "}
-                    {fmtExact(worst.suspectRevenue, activeStore.currency)} of sales, which is why that month reads{" "}
-                    {worst.marginPct}% instead of about {worst.marginPctExSuspect}%.{" "}
-                    Sales are unaffected, this only touches cost, so it is the margin that reads low in those months,
-                    not the revenue.
-                  </div>
-                );
-              })()}
-              {t.priorComparable === false ? (
-                <div style={{ color: "#b45309" }}>
-                  <strong>No “vs last year” figures are shown for this year.</strong> Ostendo’s records only start{" "}
-                  {pretty(d.dataAvailable?.first)}, so {pretty(d.prior.start)}–{pretty(d.prior.end)} is not fully on
-                  file and any growth number would be measuring missing history, not trade.
-                </div>
-              ) : (
-                <div>
-                  Every “vs last year” figure compares {pretty(d.range.start)}–{pretty(d.range.end)} with{" "}
-                  <strong>{pretty(d.prior.start)}–{pretty(d.prior.end)}</strong>, the same {dayCount} days, so a
-                  part-finished year is never measured against a whole one.
-                </div>
-              )}
-              {d.dataAvailable?.coversWholeYear === false && (
-                <div style={{ color: "#b45309" }}>
-                  Note: Ostendo’s records begin {pretty(d.dataAvailable?.first)}, part-way through this financial
-                  year, so the totals below cover only the part of the year that is on file.
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
         {/* KPIs */}
         {view === "weekly" ? (() => {
           const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
@@ -3187,6 +3058,7 @@ export default function EcommerceDashboard() {
                                     ? (exactAmounts ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
                                     : "-", accent],
               ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "-", "#C97C9E"],
+              ["Stock Valuation", stockValue != null ? fmtExact(stockValue, activeStore.currency) : "-", "#7C9EC9"],
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.textLabel, marginBottom: 2 }}>{lbl}</div>
