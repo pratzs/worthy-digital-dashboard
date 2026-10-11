@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
+import { ROLES, signRole, homeFor } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
+
+// Constant-time string compare to avoid trivial timing leaks.
+function same(a, b) {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
 
 export async function POST(request) {
   let body;
@@ -11,22 +20,21 @@ export async function POST(request) {
   }
 
   const submitted = String(body?.password || '');
-  const expected  = process.env.DASHBOARD_PASSWORD || 'Worthy-Insights-2026';
+  // Management keeps the original password and its built-in default; the other
+  // departments only exist once their password is set on the server.
+  const expected = {
+    mgmt:  process.env.DASHBOARD_PASSWORD || 'Worthy-Insights-2026',
+    bdm:   process.env.DASHBOARD_PASSWORD_BDM || '',
+    purch: process.env.DASHBOARD_PASSWORD_PURCHASING || '',
+  };
+  let role = null;
+  for (const r of Object.keys(ROLES)) {
+    if (expected[r] && same(submitted, expected[r])) role = r;
+  }
+  if (!role) return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
 
-  // Constant-time string compare to avoid trivial timing leaks.
-  if (submitted.length !== expected.length) {
-    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
-  }
-  let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= submitted.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  if (mismatch !== 0) {
-    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
-  }
-
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set('worthy_auth', 'ok', {
+  const res = NextResponse.json({ ok: true, role, home: homeFor(role) });
+  res.cookies.set('worthy_auth', await signRole(role), {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',

@@ -26,7 +26,8 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      router.replace('/');
+      const data = await res.json().catch(() => ({}));
+      router.replace(data?.home || '/');
       router.refresh();
     } catch (err) {
       setError('Network error, please try again');

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { verifyRole, apiAllowed, pageAllowed, homeFor } from '@/lib/auth';
 
 // Routes that don't require auth (the login screen itself, login API,
 // static assets the login page needs, and Next.js internals).
@@ -10,7 +11,7 @@ const PUBLIC_PATHS = [
   '/favicon.ico',
 ];
 
-export function middleware(request) {
+export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths and all Next.js internals straight through.
@@ -22,9 +23,14 @@ export function middleware(request) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get('worthy_auth')?.value;
-  if (token === 'ok') {
-    return NextResponse.next();
+  const role = await verifyRole(request.cookies.get('worthy_auth')?.value);
+  if (role) {
+    if (pathname.startsWith('/api/')) {
+      if (apiAllowed(role, pathname)) return NextResponse.next();
+      return NextResponse.json({ error: 'Not available to your department' }, { status: 403 });
+    }
+    if (pageAllowed(role, pathname)) return NextResponse.next();
+    return NextResponse.redirect(new URL(homeFor(role), request.url));
   }
 
   // For API calls, return 401 instead of an HTML redirect so client fetches

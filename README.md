@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Pages and department logins
+
+Each table group is its own page: `/` (Overview), `/reps`, `/products`, `/movers`, `/customers`, `/credits`, `/debtors`. One shared password per department, set as Vercel environment variables:
+
+| Department | Env var | Pages |
+|---|---|---|
+| Management | `DASHBOARD_PASSWORD` | all |
+| Business Development & Marketing | `DASHBOARD_PASSWORD_BDM` | overview, reps, products, customers |
+| Purchasing & Stock | `DASHBOARD_PASSWORD_PURCHASING` | products, movers (plus stock valuation) |
+
+A department with no password set cannot log in. `AUTH_SECRET` (optional) signs the login cookie. Access is enforced in `middleware.js` using `lib/auth.js`, for both pages and `/api/*` data. Margin and cost columns inside the tables are not yet hidden for non-management; only the Gross Profit / Margin tiles and footer figures are.
