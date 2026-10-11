@@ -2290,7 +2290,22 @@ export default function EcommerceDashboard({ section = "overview" }) {
     { id: "credits",    label: "Credit Notes",        icon: "receipt" },
     { id: "debtors",    label: "Debtors",             icon: "receipt" },
   ];
-  const renderAdvTabs = () => null;
+  const renderAdvTabs = () => {
+    const subs = (me?.sections || []).filter(x => ["products", "movers", "customers"].includes(x.id));
+    if (!["products", "movers", "customers"].includes(section) || subs.length < 2) return null;
+    return (
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 24, marginTop: 4 }}>
+        {subs.map(t => (
+          <Link key={t.id} href={t.path} style={{
+            padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, textDecoration: "none",
+            border: section === t.id ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
+            background: section === t.id ? `${accent}18` : "transparent",
+            color: section === t.id ? accent : T.textMuted,
+          }}>{t.label}</Link>
+        ))}
+      </div>
+    );
+  };
   /* Top Categories/Products can only ever see sales each company invoiced
      directly - a sale from North to South (or any other inter-company trade)
      shows up as revenue on the SELLING company's side and a cost on the buyer's,
@@ -2379,16 +2394,28 @@ export default function EcommerceDashboard({ section = "overview" }) {
       <div style={{ padding: "32px 32px 0" }}>
         {/* Page navigation: only the pages this department may open */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
-          {(me?.sections || []).map(sec => {
-            const on = sec.path === (section === "overview" ? "/" : "/" + section);
-            return (
-              <Link key={sec.id} href={sec.path} style={{
-                padding: "8px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, textDecoration: "none",
-                border: on ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
-                background: on ? `${accent}18` : "transparent", color: on ? accent : T.textMuted,
-              }}>{sec.label}</Link>
-            );
-          })}
+          {(() => {
+            // Categories & Products, Fast & Slow Movers and Customers share one tab.
+            const GROUP = ["products", "movers", "customers"];
+            const mine = me?.sections || [];
+            const grouped = mine.filter(x => GROUP.includes(x.id));
+            const tabs = mine.filter(x => !GROUP.includes(x.id));
+            if (grouped.length) {
+              const at = Math.max(0, tabs.findIndex(x => x.id === "credits" || x.id === "debtors"));
+              tabs.splice(tabs.some(x => x.id === "credits" || x.id === "debtors") ? at : tabs.length, 0,
+                { id: "analytics", path: grouped[0].path, label: "Analytics" });
+            }
+            return tabs.map(sec => {
+              const on = sec.id === "analytics" ? GROUP.includes(section) : sec.id === section;
+              return (
+                <Link key={sec.id} href={sec.path} style={{
+                  padding: "8px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, textDecoration: "none",
+                  border: on ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
+                  background: on ? `${accent}18` : "transparent", color: on ? accent : T.textMuted,
+                }}>{sec.label}</Link>
+              );
+            });
+          })()}
           <span style={{ flex: 1 }} />
           {me && <span style={{ fontSize: 11, color: T.textMuted }}>{me.label}</span>}
           <button onClick={async () => { await fetch("/api/auth/login", { method: "DELETE" }); window.location.href = "/login"; }}

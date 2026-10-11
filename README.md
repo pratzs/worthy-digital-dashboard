@@ -37,7 +37,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Pages and department logins
 
-Each table group is its own page: `/` (Overview), `/reps`, `/products`, `/movers`, `/customers`, `/credits`, `/debtors`. One shared password per department, set as Vercel environment variables:
+Each table group is its own page (Categories & Products, Fast & Slow Movers and Customers share one "Analytics" tab with sub-pills): `/` (Overview), `/reps`, `/products`, `/movers`, `/customers`, `/credits`, `/debtors`. One shared password per department, set as Vercel environment variables:
 
 | Department | Env var | Pages |
 |---|---|---|
