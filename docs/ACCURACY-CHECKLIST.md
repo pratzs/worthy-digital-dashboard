@@ -531,3 +531,9 @@ Teams, months, reps and the currency split each add up to the company total, and
       lines uncosted); FY26 to date 13.1% / $1,173,399.83. Verified against an
       independent calculation from Odoo to the cent. Dropship lines in October:
       revenue $66,306.24, cost $66,298.88.
+- [x] **52. Sales by Rep also shows on the Overview page (13 Oct 2026).** For North,
+      Oceania and South, under the monthly table. Same component and same figures as
+      the Sales by Rep page. Checked on North: the rep revenue and gross profit rows
+      add up to the table total exactly within one load. Between two loads minutes
+      apart the figures can move by tens of dollars because cost is the product's
+      cost today and Odoo updates it as stock is received.

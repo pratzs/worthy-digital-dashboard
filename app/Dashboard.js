@@ -2909,6 +2909,46 @@ export default function EcommerceDashboard({ section = "overview" }) {
         )}
         </>)}
 
+        {/* SALES BY REP on the Overview page, for North, Oceania and South. The same table as
+            the Sales by Rep page, fed by the same figures, so the two can never disagree. */}
+        {section === "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
+          <div style={{ marginTop: 8 }}>
+            {activeStore.id === "worthy" && <KpiTargetsTable theme={T} />}
+            <SalesRepBreakdown
+              salespeople={getOdooSalespeople()}
+              salespeopleMonthly={getOdooSalespeopleMonthly()}
+              salespeopleWeekly={getOdooSalespeopleWeekly()}
+              repMargins={getOdooRepMargins()}
+              loading={isLoading(selectedYear)}
+              currency={activeStore.currency}
+              weeklyMonth={weeklyMonth}
+              onWeeklyMonthChange={setWeeklyMonth}
+              fyMonths={FY_MONTHS}
+              rangeLabel={yearRange()} monthRangeLabel={monthRange()}
+              T={T} accent={accent}
+              exact={exactAmounts}
+            />
+          </div>
+        )}
+        {section === "overview" && activeStore.id === "luxe" && (
+          <div style={{ marginTop: 8 }}>
+            <SalesRepBreakdown
+              salespeople={getSalespeople()}
+              salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
+              salespeopleWeekly={getLuxeSalespeopleWeekly()}
+              repMargins={getLuxeFYRepMargins()}
+              loading={isLoading(selectedYear)}
+              currency={activeStore.currency}
+              weeklyMonth={weeklyMonth}
+              onWeeklyMonthChange={setWeeklyMonth}
+              fyMonths={FY_MONTHS}
+              rangeLabel={yearRange()} monthRangeLabel={monthRange()}
+              T={T} accent={accent}
+              exact
+            />
+          </div>
+        )}
+
         {/* ODOO ADVANCED SECTION, Worthy North (Odoo tab) and Worthy Oceania (nova) - one tab per table group, Sales by Rep first, Debtors last */}
         {section !== "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <>
