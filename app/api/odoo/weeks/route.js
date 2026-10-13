@@ -9,6 +9,7 @@
  */
 import { cachedAuth } from '@/lib/odooAuth';
 import { loadUnitCosts } from '@/lib/odooCost';
+import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
 import { NextResponse } from 'next/server';
 import { toCents, toDollars, pct1 } from '@/lib/ostendo';
 
@@ -62,12 +63,21 @@ export async function GET(request) {
         ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end]],
        ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false });
 
-    const repIds = new Map();
-    const revenue = new Map();   // "rep|week" -> cents
+    /* North reports like finance does: the eight field reps one by one and everyone
+       else (including invoices with no salesperson) as "Direct", and sales are
+       PRODUCT LINES only. So here a group is a set of users, and its revenue comes
+       from the same product lines its cost does. Other companies keep one row per
+       user and the invoice total. */
+    const financeBasis = usesFinanceBasis(cid);
+    const groups = new Map();    // group name -> user ids (false = no salesperson)
+    const revenue = new Map();   // "group|week" -> cents
     for (const r of moves) {
       const d = dayOf(r.__range?.['invoice_date:day']?.from); if (!d) continue;
-      const name = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
-      if (r.invoice_user_id) repIds.set(name, r.invoice_user_id[0]);
+      const raw = r.invoice_user_id ? r.invoice_user_id[1] : 'Unassigned';
+      const name = repGroup(cid, raw);
+      const ids = groups.get(name) || new Set();
+      ids.add(r.invoice_user_id ? r.invoice_user_id[0] : false); groups.set(name, ids);
+      if (financeBasis) continue;
       const sign = r.move_type === 'out_refund' ? -1 : 1;
       const k = `${name}|${weekOf(d)}`;
       revenue.set(k, (revenue.get(k) || 0) + toCents(r.amount_untaxed ?? 0) * sign);
@@ -76,10 +86,10 @@ export async function GET(request) {
     // Cost per rep per day, from that rep's lines grouped by product and day.
     const cost = new Map();
     const costedRev = new Map();   // "rep|week" -> cents of revenue that HAS a cost behind it
-    const entries = [...repIds];
-    const runOne = async ([name, id]) => {
+    const entries = [...groups].map(([name, ids]) => [name, [...ids]]);
+    const runOne = async ([name, ids]) => {
       const fetchSide = (type, sign) => exec('account.move.line', 'read_group',
-        [[...lineDom(type), ['move_id.invoice_user_id', '=', id]],
+        [[...lineDom(type), ['move_id.invoice_user_id', 'in', ids]],
          ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:day']], { lazy: false })
         .then((rows) => rows.map((r) => ({ ...r, _sign: sign })));
       const [inv, ref] = await Promise.all([fetchSide('out_invoice', 1), fetchSide('out_refund', -1)]);
@@ -89,6 +99,7 @@ export async function GET(request) {
         const d = dayOf(r.__range?.['date:day']?.from); if (!d) continue;
         const unit = std.get(r.product_id && r.product_id[0]) || 0;
         const k = `${name}|${weekOf(d)}`;
+        if (financeBasis) revenue.set(k, (revenue.get(k) || 0) + toCents(r.price_subtotal ?? 0) * r._sign);
         cost.set(k, (cost.get(k) || 0) + toCents((Number(r.quantity) || 0) * unit) * r._sign);
         /* Only a product that carries a standard cost can back its own revenue.
            Freight and service lines sell for real money at cost zero, and

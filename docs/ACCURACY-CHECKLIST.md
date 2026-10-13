@@ -610,3 +610,11 @@ Teams, months, reps and the currency split each add up to the company total, and
       revenue and GP match. Discounts: counted product lines only for North from now on, like
       sales and margin (12 no-product lines in October netted -$22.34); October $101,055.52
       matches an independent line-by-line calculation.
+- [x] **63. Sales by Rep Monthly and Weekly views audited against Odoo (14 Oct 2026).** North, rep x
+      month Apr-Oct: all 63 cells match an independent Odoo calculation on revenue, gross profit and
+      margin. Rep x week for September and October: all 63 revenue cells match, and after the fix
+      below all 63 weekly gross profit and margin cells match. Fix: /api/odoo/weeks built its own
+      revenue from whole invoices (freight and discount lines included, so up to $458 a week too
+      high for one rep) and had no "Direct" group, so Direct's weekly margin could not show. It now
+      groups reps like finance does (eight field reps and Direct, unassigned included) and takes
+      revenue from product lines. Direct's weekly margins now show (October W1 7.3%, W2 3.9%).
