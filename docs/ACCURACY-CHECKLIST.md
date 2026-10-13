@@ -587,3 +587,10 @@ Teams, months, reps and the currency split each add up to the company total, and
       the GP % of it. Every amount in the table is shown to the cent, as the sheet prints it. The
       sheet's "Avg. Monthly Budget" is a rounded figure and is not used. Rubin's sales checked from
       Odoo: Apr-Sep match the dashboard to the cent (Sep $281,329.92).
+- [x] **60. Nimesh Darjee's FY26 budget added (14 Oct 2026).** Apr nil (new rep, started May), May 50k,
+      Jun 50k, Jul 50k, Aug 75k, Sep 75k, Oct 75k, Nov 100k, Dec 100k, Jan 80k, Feb 80k, Mar 100k =
+      $835,000; target GP 18% = $150,300 (both agree with the budget sheet). Measured exactly like the
+      other reps: invoices he raised, no special basis. He raised no invoices before August
+      ($0 Apr-Jul), so he reads behind budget to date; his Aug $7,603.55, Sep $68,247.03 match the
+      dashboard to the cent. (For information: customers assigned to him bought $374,674.57 Apr-Oct.
+      Not used, by decision.)
