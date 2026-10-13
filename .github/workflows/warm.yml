@@ -1,0 +1,12 @@
+name: Keep dashboard figures warm
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fill the shared figures for this slot and the next
+        run: curl -fsS --max-time 420 https://worthy-digital-dashboard.vercel.app/api/cron/warm
