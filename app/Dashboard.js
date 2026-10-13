@@ -2540,7 +2540,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
           );
         })() : (
           <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
-            {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
+            {view === "yoy" && onFYView() && activeStore.id !== "luxe" && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete
+              ? `FY${String(selectedYear).slice(2)} · 1 Apr to ${fmtDay(fyPayload(selectedYear).range.end)} vs same period FY${String(selectedYear - 1).slice(2)}`
+            : view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
            : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
            : `${selectedYear} · year to date`}
           </div>
@@ -3184,7 +3186,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                                     ? (exactAmounts ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
                                     : "-", accent],
               ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "-", "#C97C9E"]] : []),
-              ...(canSeeStock ? [["Stock Valuation", stockValue != null ? fmtExact(stockValue, activeStore.currency) : "-", "#7C9EC9"]] : []),
+              ...(canSeeStock ? [["Stock Valuation (today, at cost)", stockValue != null ? fmtExact(stockValue, activeStore.currency) : "-", "#7C9EC9"]] : []),
             ].map(([lbl, val, clr]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.textLabel, marginBottom: 2 }}>{lbl}</div>
@@ -3196,7 +3198,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {(() => {
               const scope = view === "weekly"  ? `WEEK ${selectedWeek} OF ${MONTH_NAMES[weeklyMonth].toUpperCase()}`
                           : view === "monthly" ? (latestMonth ? `${latestMonth.month.toUpperCase()} ONLY` : "")
-                          : activeStore.id === "luxe" ? `FULL FY${String(selectedYear).slice(2)}` : `FULL ${selectedYear}`;
+                          : activeStore.id === "luxe" ? `FULL FY${String(selectedYear).slice(2)}`
+                          : (onFYView() && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete) ? `FY${String(selectedYear).slice(2)} TO DATE`
+                          : `FULL ${selectedYear}`;
               const who = activeStore.id === "luxe"
                 ? `WORTHY PRODUCTS SOUTH · FY${String(selectedYear).slice(2)}`
                 : activeStore.name?.toUpperCase();
