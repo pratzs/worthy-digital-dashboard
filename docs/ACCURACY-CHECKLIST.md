@@ -554,3 +554,13 @@ Teams, months, reps and the currency split each add up to the company total, and
 - [x] **54. One tab: "Overview and Sales" (14 Oct 2026).** The separate Sales by Rep tab is
       gone. The rep table sits on the Overview and Sales page for North (Odoo, POS and
       Online), Oceania and South. The old /reps address redirects to the Overview.
+- [x] **55. Sales vs Target is now the financial-year rep budget (14 Oct 2026).** The old
+      calendar-year table (Rubin, Savan, Naitik, from the Odoo KPI emails) is removed,
+      with its /api/odoo/kpi route. The new table works to the business's monthly
+      budget per rep for the financial year April to March (lib/repTargets.js).
+      Savan Patel FY26: budget $2,568,000 (Apr 199k, May 232k, Jun 184k, Jul 221k,
+      Aug 216k, Sep 190k, Oct 220k, Nov 214k, Dec 248k, Jan 204k, Feb 212k, Mar 228k),
+      target GP 18% = $462,240. Sales are the same figures as Sales by Rep. Vs budget
+      to date = sales less (finished months in full + the elapsed share of this month).
+      Checked by hand on 14 Oct: pace $1,341,355, sales $1,301,794, behind $39,561.
+      Other reps are added one at a time as their budgets are supplied.

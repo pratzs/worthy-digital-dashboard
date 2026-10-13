@@ -1,5 +1,6 @@
 "use client";
 
+import { REP_TARGETS, fyTargetOf } from "@/lib/repTargets";
 import { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
 import {
@@ -459,7 +460,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
               {columns.map((col, j) => (
                 <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || T.textRow }}>
-                  {col.format ? col.format(row[col.key], currency) : row[col.key]}
+                  {col.format ? col.format(row[col.key], currency, row) : row[col.key]}
                 </td>
               ))}
             </tr>
@@ -774,30 +775,49 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
    scheduled actions (ir.cron 107, 110, 111). Calendar year, ex GST, to the last
    completed Sunday. */
 const KPI_DOLLAR = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
-const KpiTargetsTable = ({ theme }) => {
-  const [kpi, setKpi] = useState(null);
-  const [err, setErr] = useState(null);
-  useEffect(() => {
-    let live = true;
-    fetch("/api/odoo/kpi", { cache: "no-store" })
-      .then(r => r.json())
-      .then(j => { if (!live) return; if (j.ok) setKpi(j); else setErr(j.error || "Could not load sales vs target"); })
-      .catch(e => live && setErr(e.message));
-    return () => { live = false; };
-  }, []);
-  const subtitle = err ? `Could not load: ${err}` : "Annual targets as set in Odoo, ex GST";
-  const range = kpi ? `${fmtDay(kpi.period.from)} to ${fmtDay(kpi.period.to)}` : null;
-  const rows = (kpi?.reps || []).map(r => ({ ...r, repLabel: r.rep }));
-  const barColor = (p) => (p > 75 ? "#16a34a" : p > 40 ? "#f59e0b" : "#dc2626");
+/* Sales vs Target, financial year (April to March), ex GST. The targets are the
+   business's own monthly budgets per rep (lib/repTargets.js). Sales are the rep's
+   invoiced product lines in the SAME payload as the Sales by Rep table, so the two
+   always agree. "vs pace" compares sales with what the budget says should have been
+   sold by now: every finished month in full, plus the part of the current month
+   that has passed. */
+const SalesVsTargetTable = ({ theme, payload }) => {
+  const year = payload?.fy;
+  const targets = REP_TARGETS.filter(t => t.fy === year);
+  const barColor = (p) => (p >= 100 ? "#16a34a" : p >= 90 ? "#65a30d" : p >= 75 ? "#f59e0b" : "#dc2626");
+  const rows = !payload ? [] : targets.map(t => {
+    const rep = (payload.reps || []).find(r => r.name === t.rep);
+    const fyTarget = fyTargetOf(t);
+    let pace = 0, monthTarget = 0, monthSales = 0, monthLabel = "";
+    for (const m of payload.months || []) {
+      const bud = t.monthly[m.key] || 0;
+      if (!m.started) continue;
+      const frac = m.complete ? 1 : Math.min(1, (Number(String(m.through).slice(8, 10)) || 0) / (m.daysInMonth || 30));
+      pace += bud * frac;
+      if (!m.complete) {
+        monthTarget = bud; monthLabel = m.label;
+        monthSales = rep?.months?.find(x => x.key === m.key)?.revenue || 0;
+      }
+    }
+    const ytd = rep?.revenue || 0;
+    return {
+      rep: t.rep, fyTarget, ytd, pct: fyTarget ? (ytd / fyTarget) * 100 : 0,
+      remaining: Math.max(0, fyTarget - ytd), vsPace: ytd - pace,
+      monthLabel, monthTarget, monthSales,
+      gpPct: rep?.marginPct ?? null, targetGpPct: t.targetGpPct,
+      gpYtd: rep?.grossProfit ?? null, gpTarget: fyTarget * (t.targetGpPct / 100),
+    };
+  });
+  const range = payload?.range ? `${fmtDay(payload.range.start)} to ${fmtDay(payload.range.end)}` : null;
   return (
-    <AdvancedTable theme={theme} icon="target" title="Sales vs Target" subtitle={subtitle} range={range}
-      loading={!kpi && !err} currency="NZD" data={rows}
+    <AdvancedTable theme={theme} icon="target" title="Sales vs Target"
+      subtitle="Financial year targets (April to March), ex GST. Sales are the same figures as Sales by Rep." range={range}
+      loading={!payload} currency="NZD" data={rows}
       columns={[
         { key: "rep", label: "Rep", color: theme.text },
-        { key: "group", label: "Customers", color: theme.textRow },
-        { key: "target", label: "Annual Target", align: "right", color: theme.textSub, format: KPI_DOLLAR },
-        { key: "ytd", label: "YTD Sales", align: "right", color: theme.textHead, format: v => <span style={{ fontWeight: 700 }}>{KPI_DOLLAR(v)}</span> },
-        { key: "pctOfTarget", label: "% of Target", align: "left", format: v => (
+        { key: "fyTarget", label: "FY Target", align: "right", color: theme.textSub, format: KPI_DOLLAR },
+        { key: "ytd", label: "FY Sales to Date", align: "right", color: theme.textHead, format: v => <span style={{ fontWeight: 700 }}>{KPI_DOLLAR(v)}</span> },
+        { key: "pct", label: "% of FY Target", align: "left", format: v => (
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
             <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(128,128,128,0.2)", overflow: "hidden" }}>
               <div style={{ width: `${Math.min(100, Math.max(0, v))}%`, height: "100%", background: barColor(v) }} />
@@ -805,9 +825,14 @@ const KpiTargetsTable = ({ theme }) => {
             <span style={{ color: barColor(v), fontWeight: 600, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
           </div>) },
         { key: "remaining", label: "Remaining", align: "right", color: theme.textSub, format: v => (v <= 0 ? "Target met" : KPI_DOLLAR(v)) },
-        { key: "vsPace", label: "vs Pace", align: "right", format: v => (
-          <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : ""}{KPI_DOLLAR(v)}</span>) },
-        { key: "week", label: "Last Week", align: "right", color: theme.textRow, format: KPI_DOLLAR },
+        { key: "vsPace", label: "vs Budget to Date", align: "right", format: v => (
+          <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : "-"}{KPI_DOLLAR(Math.abs(v))}</span>) },
+        { key: "monthSales", label: "This Month", align: "right", color: theme.textRow, format: (v, _cur, row) => row.monthLabel
+          ? <span>{KPI_DOLLAR(v)} <span style={{ color: theme.textSub }}>of {KPI_DOLLAR(row.monthTarget)}</span></span> : "-" },
+        { key: "gpPct", label: "GP % (target)", align: "right", color: theme.textRow, format: (v, _cur, row) => v == null ? "-"
+          : <span><span style={{ fontWeight: 600, color: v >= row.targetGpPct ? "#16a34a" : "#dc2626" }}>{v.toFixed(1)}%</span> <span style={{ color: theme.textSub }}>({row.targetGpPct.toFixed(1)}%)</span></span> },
+        { key: "gpYtd", label: "GP $ to Date (FY target)", align: "right", color: theme.textRow, format: (v, _cur, row) => v == null ? "-"
+          : <span>{KPI_DOLLAR(v)} <span style={{ color: theme.textSub }}>({KPI_DOLLAR(row.gpTarget)})</span></span> },
       ]}
     />
   );
@@ -2942,7 +2967,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             the Sales by Rep page, fed by the same figures, so the two can never disagree. */}
         {section === "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <div style={{ marginTop: 8 }}>
-            {activeStore.id === "worthy" && <KpiTargetsTable theme={T} />}
+            {activeStore.id === "worthy" && <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} />}
             <SalesRepBreakdown
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
@@ -2996,7 +3021,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {advTab === "reps" && (
               <>
                 {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
-                {activeStore.id === "worthy" && <KpiTargetsTable theme={T} />}
+                {activeStore.id === "worthy" && <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} />}
                 <SalesRepBreakdown
                   salespeople={getOdooSalespeople()}
                   salespeopleMonthly={getOdooSalespeopleMonthly()}
