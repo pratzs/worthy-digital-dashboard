@@ -9,7 +9,7 @@
  */
 import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
-import { toCents, toDollars, pct1, costCovered } from '@/lib/ostendo';
+import { toCents, toDollars, pct1 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -105,15 +105,15 @@ export async function GET(request) {
       const [name, week] = k.split('|');
       const rev = revenue.get(k) || 0, cst = cost.get(k);
       const cr = costedRev.get(k) || 0;
-      /* Same rule as the financial-year figures: quote a margin only where Odoo
-         holds a cost for nearly everything sold in that week. */
-      const covered = hasCost && cst != null && costCovered(rev, cr);
+      /* Same rule as the financial-year figures: margin on the sales that have a cost. */
+      const covered = hasCost && cst != null && cr > 0;
       return {
         name, week: Number(week),
         revenue: toDollars(rev),
         cost: hasCost && cst != null ? toDollars(cst) : null,
-        grossProfit: covered ? toDollars(rev - cst) : null,
-        marginPct: covered ? pct1(rev - cst, rev) : null,
+        // On the sales that have a cost: dropship / inter-company lines carry none.
+        grossProfit: covered ? toDollars(cr - cst) : null,
+        marginPct: covered ? pct1(cr - cst, cr) : null,
         costCoverage: hasCost && cst != null ? pct1(cr, rev) : null,
         marginWithheld: hasCost && cst != null && !covered,
       };

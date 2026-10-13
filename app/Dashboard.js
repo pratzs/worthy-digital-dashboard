@@ -1692,7 +1692,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     costCoverage:      m.costCoverage,
     costedRevenue:     m.costedRevenue,
     hasCostData:       Boolean(m.started && m.cost != null && m.cost !== 0 && !m.marginWithheld),
-    marginableRevenue: (m.started && m.cost != null && m.cost !== 0) ? basisOf(m).revenue : 0,
+    marginableRevenue: (m.started && m.cost != null && m.cost !== 0) ? (m.costedRevenue ?? basisOf(m).revenue) : 0,
   });
 
   // The "previous year" array is the matching slice of last year, day for day  - 
@@ -1711,7 +1711,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     newCustomers:      null,
     aov:               m.prior.aov,
     hasCostData:       Boolean(m.started && m.prior.cost != null && m.prior.cost !== 0 && !m.prior.marginWithheld),
-    marginableRevenue: (m.started && m.prior.cost != null && m.prior.cost !== 0) ? m.prior.revenue : 0,
+    marginableRevenue: (m.started && m.prior.cost != null && m.prior.cost !== 0) ? (m.prior.costedRevenue ?? m.prior.revenue) : 0,
   });
 
   const MONTH_IDX = Object.fromEntries(MONTH_NAMES.map((m, i) => [m, i]));
@@ -1951,7 +1951,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       name: r.name,
       ...basisOf(r),
       cost: basisOf(r).cost,
-      marginableRevenue: basisOf(r).revenue,
+      marginableRevenue: r.costedRevenue ?? basisOf(r).revenue,
       priorRevenue: basisOf(r.prior).revenue, growthPct: r.growthPct,
       months: r.months.map(m => ({
         month: m.label, ...basisOf(m), cost: basisOf(m).cost, started: m.started,
@@ -2060,7 +2060,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const totalMargRev = curr.reduce((s, d) => s + (d.marginableRevenue || 0), 0);
   const trueMargin   = totalMargRev > 0 ? (totalMargRev - totalCost) / totalMargRev : null;
   // FIX 3: Fall back to simple rev-cost GP when marginableRevenue is 0
-  const gp       = trueMargin !== null ? (exactAmounts ? round2(totalRev * trueMargin) : Math.round(totalRev * trueMargin))
+  /* North and Oceania: gross profit is the profit on the sales that have a cost, not
+     the margin stretched over sales that have none. South keeps its own basis. */
+  const costedBasis = onFYView() && activeStore.id !== "luxe";
+  const gp       = trueMargin !== null ? (costedBasis ? (exactAmounts ? round2(totalMargRev - totalCost) : Math.round(totalMargRev - totalCost))
+                                                      : (exactAmounts ? round2(totalRev * trueMargin) : Math.round(totalRev * trueMargin)))
                  : hasCost    ? totalRev - totalCost
                  : null;
   const gpMargin = trueMargin !== null ? Math.round(trueMargin * 1000) / 10 : null;
@@ -2150,21 +2154,23 @@ export default function EcommerceDashboard({ section = "overview" }) {
                    : view === "monthly" ? (latestMonth?.hasCostData || false)
                    : hasCost;
   const kpiAOV     = kpiOrd ? (exactAmounts ? round2(kpiRev / kpiOrd) : Math.round(kpiRev / kpiOrd)) : 0;
-  /* A month whose cost is only partly on file (a few products with no cost in Odoo):
-     the margin is worked out on the sales that DO have a cost, and the card says so.
-     Sales with no cost are left out of both sides, so they cannot inflate the margin.
-     Only when most of the month is costed - below that a margin on a small slice
-     would mislead, so the card stays blank. */
-  const partCost = (view === "monthly" && latestMonth?.marginWithheld
-                    && latestMonth.costedRevenue > 0 && latestMonth.costCoverage >= 80 && latestMonth.totalCost != null)
-    ? { rev: latestMonth.costedRevenue, cost: latestMonth.totalCost, cover: latestMonth.costCoverage } : null;
+  /* North and Oceania: margin and gross profit rest on the sales that have a cost in
+     Odoo, and only those. Dropship and inter-company products carry no cost by
+     design; counting their sales at a cost of zero would inflate the margin, and
+     leaving the margin blank would hide a real one. Revenue stays the full figure
+     and the card says what share of it the margin rests on. */
+  const partCost = (costedBasis && view === "monthly" && latestMonth?.marginableRevenue > 0 && latestMonth.totalCost != null)
+    ? { rev: latestMonth.marginableRevenue, cost: latestMonth.totalCost, cover: latestMonth.costCoverage } : null;
+  const yearCostedOK = costedBasis && view === "yoy" && gp !== null;
   const kpiGP      = partCost
     ? (exactAmounts ? round2(partCost.rev - partCost.cost) : Math.round(partCost.rev - partCost.cost))
+    : yearCostedOK ? gp
     : kpiHasCost
     ? (exactAmounts ? round2(kpiRev - kpiCost) : Math.round(kpiRev - kpiCost))
     : (view === "yoy" ? gp : null);
   const kpiGPMargin = partCost
     ? marginPct1(partCost.rev - partCost.cost, partCost.rev)
+    : yearCostedOK ? gpMargin
     : kpiHasCost && kpiRev > 0
     ? marginPct1(kpiRev - kpiCost, kpiRev)
     : (view === "yoy" ? gpMargin : null);
@@ -2211,10 +2217,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const cmpOrd      = yoyCompare ? `${cmpYear}: ${prevOrd.toLocaleString()} orders` : null;
   /* A month whose cost is incomplete shows no margin, and the card says why. The
      margin on the part that does have a cost is quoted, and labelled as such. */
-  const partCostNote = partCost
-    ? `On the ${partCost.cover}% of sales that have a cost in Odoo. Products with no cost are left out.`
-    : (view === "monthly" && latestMonth?.marginWithheld ? "Too little of this month's sales has a cost in Odoo to quote a margin." : null);
-  const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : partCostNote;
+  const coverNote = (() => {
+    const cover = partCost ? partCost.cover : (yearCostedOK && totalRev > 0 ? Math.round((totalMargRev / totalRev) * 1000) / 10 : null);
+    return cover != null && cover < 99.5
+      ? `Margin is on the ${cover}% of sales that have a cost in Odoo. Sales with no cost (dropship, inter-company) are left out.`
+      : null;
+  })();
+  const cmpMgn      = [yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null, coverNote].filter(Boolean).join(" · ") || null;
   const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;
 
   // Gross profit has its own growth. It was previously showing revenue growth,
@@ -2227,12 +2236,14 @@ export default function EcommerceDashboard({ section = "overview" }) {
     const rev = d.reduce((s, x) => s + (x.revenue   || 0), 0);
     const ord = d.reduce((s, x) => s + (x.orders    || 0), 0);
     const cst = d.reduce((s, x) => s + (x.totalCost || 0), 0);
-    const gpY = d.some(x => x.hasCostData) ? rev - cst : null;
+    /* North and Oceania: profit and margin on the sales that have a cost. */
+    const mrev = costedBasis ? d.reduce((s, x) => s + (x.marginableRevenue || 0), 0) : rev;
+    const gpY = d.some(x => x.hasCostData) ? mrev - cst : null;
     return {
       year: String(yr), revenue: rev, orders: ord,
       aov: ord ? Math.round(rev / ord) : 0,
       grossProfit: gpY,
-      margin: (gpY !== null && rev > 0) ? marginPct1(gpY, rev) : null,
+      margin: (gpY !== null && mrev > 0) ? marginPct1(gpY, mrev) : null,
       loaded: hasData(yr),
     };
   });
@@ -2556,7 +2567,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
           <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="dollar" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
           <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="bag" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
           {isMgmt && <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="percent" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />}
-          {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP || (partCost ? "On the same costed sales" : null)} />}
+          {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP || (coverNote ? "On the same costed sales" : null)} />}
         </div>
 
         {onFYView() && view !== "weekly" && (

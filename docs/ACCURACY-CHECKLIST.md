@@ -507,3 +507,14 @@ Teams, months, reps and the currency split each add up to the company total, and
       dash for such a month. Examples with no standard cost in Odoo company 4 in
       October: Allen's Frogs Alive Peg Bag 190G (A0148), Nesquik Milkshakes (A0152),
       Ripe Raspberries (A0158), Pineapples (A0153), Mountain Dew (A0154).
+- [x] **50. Margin and gross profit are on sales that have a cost, everywhere (13 Oct 2026).**
+      Dropship and inter-company products carry no cost in Odoo by design (confirmed
+      by Pratham). Margin = (sales that have a cost - their cost) / sales that have a
+      cost; gross profit = the same top line less cost; revenue stays the full
+      figure and cost coverage is printed. Applied in the API (/api/odoo/fy rows,
+      totals, reps, /api/odoo/weeks) and in every North/Oceania card and table.
+      Reconciles: the twelve monthly gross profits sum to the year's exactly. Effect
+      on FY26 to date: gross profit $1,173,392.47, margin 13.2% on 99.2% of sales
+      (the earlier 13.9% / $1,242,810.53 counted $69.6k of no-cost sales as pure
+      profit). October: 15.5% / $77,689.23 on 88.3% of sales. Revenue - Cost will not
+      equal Gross Profit in a month with no-cost sales, and the table note says so.
