@@ -537,3 +537,17 @@ Teams, months, reps and the currency split each add up to the company total, and
       add up to the table total exactly within one load. Between two loads minutes
       apart the figures can move by tens of dollars because cost is the product's
       cost today and Odoo updates it as stock is received.
+- [x] **53. South margin leaves out invoice lines with impossible costs (13 Oct 2026).**
+      Ostendo has invoice lines whose recorded cost is more than twice the price the
+      line sold at (a Cadbury block costed at $63.75 against a sale of about a dollar).
+      FY26 to 13 Oct has 2,164 such lines across 128 items; 1,546 of them fell in
+      June, which showed 5.1% against 16-20% for every other month. Gross profit and
+      margin are now worked out without those lines (lib: app/api/ostendo/fy, present
+      and restate); revenue and cost stay the full Ostendo figures, `marginRevenue`
+      and `marginCost` carry what the margin rests on. Result FY26: 18.0% /
+      $1,682,335.82 (was 15.2%); June 16.1%; October 20.0%. Verified: the June bad-line
+      count (1,546), sales ($52,803.58) and recorded cost ($212,289.01) match an
+      independent Ostendo query exactly; the monthly and rep gross profits add up to
+      the year to the cent. The cards say "Margin leaves out N invoice lines whose
+      recorded cost in Ostendo cannot be right". The item list for finance is in
+      south-bad-cost-items-FY26.csv.

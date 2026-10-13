@@ -124,12 +124,23 @@ const add = (t, s) => {
 
 /** Turn an accumulator into the dollars shape the UI renders, rounding once. */
 const present = (a) => {
-  const grossProfit = a.revenue - a.cost;
+  /* MARGIN BASIS: gross profit and margin are worked out WITHOUT the invoice lines
+     whose recorded cost cannot be real (cost more than twice the price the line
+     sold at). One such line (a Cadbury block costed at $63.75 against a sale of
+     about a dollar) drags a whole month down - June read 5.1% against 16-20% for
+     every other month, because 1,546 of them landed in it. Revenue and cost are
+     still the full, Ostendo-true figures; marginRevenue / marginCost are what the
+     margin rests on, and suspectLines says how many lines were left out. */
+  const marginRev  = a.revenue - a.suspectRevenue;
+  const marginCost = a.cost - a.suspectCost;
+  const grossProfit = marginRev - marginCost;
   return {
     revenue:     toDollars(a.revenue),
     cost:        toDollars(a.cost),
     grossProfit: toDollars(grossProfit),
-    marginPct:   pct1(grossProfit, a.revenue),
+    marginPct:   pct1(grossProfit, marginRev),
+    marginRevenue: toDollars(marginRev),
+    marginCost:    toDollars(marginCost),
     invoices:    a.invoices,
     credits:     a.credits,
     creditValue: toDollars(a.creditValue),
@@ -179,9 +190,13 @@ function reconcile(parts, totalDollars, get, set) {
 
 /** Re-derive gross profit and margin after a cost has been nudged. */
 function restate(row) {
-  row.grossProfit = Math.round((row.revenue - row.cost) * 100) / 100;
-  row.marginPct   = row.revenue > 0
-    ? Math.round((row.grossProfit / row.revenue) * 1000) / 10 : null;
+  // Same basis as present(): without the lines whose recorded cost cannot be real.
+  const rev = Math.round((row.revenue - (row.suspectRevenue || 0)) * 100) / 100;
+  const cst = Math.round((row.cost - (row.suspectCost || 0)) * 100) / 100;
+  row.marginRevenue = rev;
+  row.marginCost    = cst;
+  row.grossProfit = Math.round((rev - cst) * 100) / 100;
+  row.marginPct   = rev > 0 ? Math.round((row.grossProfit / rev) * 1000) / 10 : null;
 }
 
 const growth = (curr, prior) =>
@@ -455,6 +470,7 @@ export async function GET(request) {
       const rev = Math.round((r.revenue - r.suspectRevenue) * 100) / 100;
       const cst = Math.round((r.cost - r.suspectCost) * 100) / 100;
       r.marginPctExSuspect = rev > 0 ? Math.round(((rev - cst) / rev) * 1000) / 10 : null;
+      restate(r); // suspect figures are final now, so settle the margin on them
     };
     started.forEach(restateClean);
     repRows.forEach(restateClean);
@@ -472,6 +488,12 @@ export async function GET(request) {
       reconcile(ms, r.cost, (m) => m.cost, (m, v) => { m.cost = v; restate(m); });
       ms.forEach(restate);
     }
+
+    /* Settle the last cent: months and reps each add up to the year's gross profit
+       exactly, as revenue and cost already do. */
+    const gpTotal = toDollars((currTotal.revenue - currTotal.suspectRevenue) - (currTotal.cost - currTotal.suspectCost));
+    reconcile(started, gpTotal, (r) => r.grossProfit, (r, v) => { r.grossProfit = v; });
+    reconcile(repRows, gpTotal, (r) => r.grossProfit, (r, v) => { r.grossProfit = v; });
 
     const firstSeen = bounds?.[0]?.FIRSTD ? dayKey(bounds[0].FIRSTD) : null;
     const lastSeen  = bounds?.[0]?.LASTD  ? dayKey(bounds[0].LASTD)  : null;
