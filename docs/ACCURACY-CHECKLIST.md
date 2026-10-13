@@ -594,3 +594,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       ($0 Apr-Jul), so he reads behind budget to date; his Aug $7,603.55, Sep $68,247.03 match the
       dashboard to the cent. (For information: customers assigned to him bought $374,674.57 Apr-Oct.
       Not used, by decision.)
+- [x] **61. Albert Lee's FY26 budget added (14 Oct 2026).** Target GP is 20% for Albert, not 18%.
+      Apr 108.8k, May 133.3k, Jun 121.0k, Jul 132.8k, Aug 136.3k, Sep 125.8k, Oct 138.5k, Nov 140.0k,
+      Dec 149.9k, Jan 132.1k, Feb 135.0k, Mar 146.5k = $1,600,000; GP 20% = $320,000 (both agree
+      with the sheet). Sales checked from Odoo: Apr-Sep match the dashboard to the cent (Sep
+      $131,898.18). June is $272,887.69, well above his June budget of $121,000.
