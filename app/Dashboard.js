@@ -1297,7 +1297,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   };
   const fyKey = (storeId, year) => `fy:${storeId}:${year}`;
 
-  const fetchFYFor = async (storeId, year) => {
+  const fetchFYFor = async (storeId, year, { fresh = false } = {}) => {
     const key = fyKey(storeId, year);
     if (cacheRef.current[key] || loadingRef.current[key]) return;
     loadingRef.current[key] = true;
@@ -1306,7 +1306,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
        requested at once; the same request a few seconds later goes through. */
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetch(FY_SOURCE[storeId](year), { cache: "no-store" });
+        /* A retry goes to Odoo directly (fresh=1) rather than to the shared copy. */
+        const src = FY_SOURCE[storeId](year) + ((fresh || attempt > 0) && storeId !== "luxe" ? "&fresh=1" : "");
+        const r = await fetch(src, { cache: "no-store" });
         const json = await r.json();
         cacheRef.current[key] = json?.error ? { failed: json.error } : json;
       } catch (e) {
@@ -2512,6 +2514,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
            : `${selectedYear} · year to date`}
           </div>
         )}
+        {(() => {
+          /* Say when these figures were read, so nobody has to wonder how fresh they are. */
+          const at = fyPayload(selectedYear)?.generatedAt;
+          if (!at || activeStore.id === "luxe") return null;
+          const t = new Date(at).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
+          return <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>Odoo figures as of {t} NZ, refreshed every few minutes</div>;
+        })()}
         {onFY() && cacheRef.current[fyKey(activeStore.id, selectedYear)]?.failed && (
           /* A failed read must say so. Without this the cards drew NZ$0.00 and a dash,
              which reads as a quiet month, not as "the figures did not load". */
@@ -2519,7 +2528,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                  background: "rgba(220,80,60,0.10)", border: "1px solid rgba(220,80,60,0.45)", color: T.textHead,
                  display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <span><strong>These figures did not load</strong> - the zeros below are not real. Odoo was too slow to answer.</span>
-            <button onClick={() => { delete cacheRef.current[fyKey(activeStore.id, selectedYear)]; fetchFYFor(activeStore.id, selectedYear); }}
+            <button onClick={() => { delete cacheRef.current[fyKey(activeStore.id, selectedYear)]; fetchFYFor(activeStore.id, selectedYear, { fresh: true }); }}
               style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid currentColor", background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600 }}>Try again</button>
           </div>
         )}

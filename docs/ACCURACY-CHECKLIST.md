@@ -484,3 +484,15 @@ Teams, months, reps and the currency split each add up to the company total, and
       at once: the selected year goes first, then older years one at a time. Stock
       value and weekly rep cost wait for the year's own figures. A failed figures
       load now shows a red "did not load" banner with Try again, instead of NZ$0.00.
+- [x] **48. North and Oceania main figures are shared in five-minute slots (13 Oct 2026).**
+      /api/odoo/fy takes 35-45s against Odoo and was timing out on Vercel (90s) when
+      Odoo was busy, leaving the page on NZ$0.00. The result is now worked out once
+      per five-minute slot and shared (lib/odooFyCache.js). Accuracy rules: the slot
+      is in the cache key, so nothing older than the slot is ever served; only
+      COMPLETE results are stored (any `problems` and the result is returned but not
+      kept); failures are never stored; `?fresh=1` skips the cache (the page's Try
+      again uses it). The page prints "Odoo figures as of HH:MM NZ". A scheduled
+      warm-up (vercel.json, /api/cron/warm, needs the CRON_SECRET env var) fills the
+      next slot at :03, :08, :13... so people rarely wait. Tested: cached, fresh and
+      warm-up results identical (revenue 8,944,455.47, margin 13.9%); cached reads
+      20-60ms; the warm-up refuses requests without the secret.

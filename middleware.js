@@ -6,6 +6,7 @@ import { verifyRole, apiAllowed, pageAllowed, homeFor } from '@/lib/auth';
 const PUBLIC_PATHS = [
   '/login',
   '/api/auth/login',
+  '/api/cron/warm', // protected by CRON_SECRET inside the route, not by the login cookie
   '/logo-black.png',
   '/logo-white.png',
   '/favicon.ico',
