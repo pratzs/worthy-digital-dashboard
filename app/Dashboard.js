@@ -774,6 +774,8 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
    Same targets and year-to-date figures as the weekly emails sent by the Odoo
    scheduled actions (ir.cron 107, 110, 111). Calendar year, ex GST, to the last
    completed Sunday. */
+/* Whole money to the cent, as the finance sheet prints it: $2,568,000.00 */
+const KPI_CENTS = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const KPI_DOLLAR = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
 /* Sales vs Target, financial year (April to March), ex GST. The targets are the
    business's own monthly budgets per rep (lib/repTargets.js). Sales are the rep's
@@ -805,7 +807,7 @@ const SalesVsTargetTable = ({ theme, payload }) => {
       remaining: Math.max(0, fyTarget - ytd), vsPace: ytd - pace,
       monthLabel, monthTarget, monthSales,
       gpPct: rep?.marginPct ?? null, targetGpPct: t.targetGpPct,
-      gpYtd: rep?.grossProfit ?? null, gpTarget: fyTarget * (t.targetGpPct / 100),
+      gpYtd: rep?.grossProfit ?? null, gpTarget: t.sheetGp,
     };
   });
   const range = payload?.range ? `${fmtDay(payload.range.start)} to ${fmtDay(payload.range.end)}` : null;
@@ -815,8 +817,8 @@ const SalesVsTargetTable = ({ theme, payload }) => {
       loading={!payload} currency="NZD" data={rows}
       columns={[
         { key: "rep", label: "Rep", color: theme.text },
-        { key: "fyTarget", label: "FY Target", align: "right", color: theme.textSub, format: KPI_DOLLAR },
-        { key: "ytd", label: "FY Sales to Date", align: "right", color: theme.textHead, format: v => <span style={{ fontWeight: 700 }}>{KPI_DOLLAR(v)}</span> },
+        { key: "fyTarget", label: "FY Target", align: "right", color: theme.textSub, format: KPI_CENTS },
+        { key: "ytd", label: "FY Sales to Date", align: "right", color: theme.textHead, format: v => <span style={{ fontWeight: 700 }}>{KPI_CENTS(v)}</span> },
         { key: "pct", label: "% of FY Target", align: "left", format: v => (
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
             <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(128,128,128,0.2)", overflow: "hidden" }}>
@@ -824,15 +826,15 @@ const SalesVsTargetTable = ({ theme, payload }) => {
             </div>
             <span style={{ color: barColor(v), fontWeight: 600, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
           </div>) },
-        { key: "remaining", label: "Remaining", align: "right", color: theme.textSub, format: v => (v <= 0 ? "Target met" : KPI_DOLLAR(v)) },
+        { key: "remaining", label: "Remaining", align: "right", color: theme.textSub, format: v => (v <= 0 ? "Target met" : KPI_CENTS(v)) },
         { key: "vsPace", label: "vs Budget to Date", align: "right", format: v => (
-          <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : "-"}{KPI_DOLLAR(Math.abs(v))}</span>) },
+          <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : "-"}{KPI_CENTS(Math.abs(v))}</span>) },
         { key: "monthSales", label: "This Month", align: "right", color: theme.textRow, format: (v, _cur, row) => row.monthLabel
-          ? <span>{KPI_DOLLAR(v)} <span style={{ color: theme.textSub }}>of {KPI_DOLLAR(row.monthTarget)}</span></span> : "-" },
+          ? <span>{KPI_CENTS(v)} <span style={{ color: theme.textSub }}>of {KPI_CENTS(row.monthTarget)}</span></span> : "-" },
         { key: "gpPct", label: "GP % (target)", align: "right", color: theme.textRow, format: (v, _cur, row) => v == null ? "-"
           : <span><span style={{ fontWeight: 600, color: v >= row.targetGpPct ? "#16a34a" : "#dc2626" }}>{v.toFixed(1)}%</span> <span style={{ color: theme.textSub }}>({row.targetGpPct.toFixed(1)}%)</span></span> },
         { key: "gpYtd", label: "GP $ to Date (FY target)", align: "right", color: theme.textRow, format: (v, _cur, row) => v == null ? "-"
-          : <span>{KPI_DOLLAR(v)} <span style={{ color: theme.textSub }}>({KPI_DOLLAR(row.gpTarget)})</span></span> },
+          : <span>{KPI_CENTS(v)} <span style={{ color: theme.textSub }}>({KPI_CENTS(row.gpTarget)})</span></span> },
       ]}
     />
   );

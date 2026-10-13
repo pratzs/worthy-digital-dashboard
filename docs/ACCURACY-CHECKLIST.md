@@ -579,3 +579,11 @@ Teams, months, reps and the currency split each add up to the company total, and
       Mar 216k = $2,448,000; average $204,000; target GP 18% = $440,640 (all agree with the budget
       sheet). Sales checked from Odoo directly: every month Apr-Oct matches the dashboard to the
       cent (Sep $244,340.36).
+- [x] **59. Rubin Monpara's FY26 budget added; Sales vs Target shows cents (14 Oct 2026).** Rubin: Apr 241k,
+      May 284k, Jun 243k, Jul 324k, Aug 308k, Sep 262k, Oct 301k, Nov 300k, Dec 336k, Jan 275k,
+      Feb 290k, Mar 298k = $3,462,000; target GP 18% = $623,160. All five reps (Savan, Hari, Nayan,
+      Naitik, Rubin) now carry the sheet's own total and GP $ (lib/repTargets.js), and the page
+      refuses to build if the twelve months do not add to the sheet total or the GP $ is not exactly
+      the GP % of it. Every amount in the table is shown to the cent, as the sheet prints it. The
+      sheet's "Avg. Monthly Budget" is a rounded figure and is not used. Rubin's sales checked from
+      Odoo: Apr-Sep match the dashboard to the cent (Sep $281,329.92).
