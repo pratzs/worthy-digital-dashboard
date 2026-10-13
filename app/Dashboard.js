@@ -2220,7 +2220,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const coverNote = (() => {
     const cover = partCost ? partCost.cover : (yearCostedOK && totalRev > 0 ? Math.round((totalMargRev / totalRev) * 1000) / 10 : null);
     return cover != null && cover < 99.5
-      ? `Margin is on the ${cover}% of sales that have a cost in Odoo. Sales with no cost (dropship, inter-company) are left out.`
+      ? `Margin is on the ${cover}% of sales that have a cost in Odoo. Sales of products with no cost at all are left out.`
       : null;
   })();
   const cmpMgn      = [yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null, coverNote].filter(Boolean).join(" · ") || null;

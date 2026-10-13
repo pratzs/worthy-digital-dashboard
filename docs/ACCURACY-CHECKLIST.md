@@ -518,3 +518,16 @@ Teams, months, reps and the currency split each add up to the company total, and
       (the earlier 13.9% / $1,242,810.53 counted $69.6k of no-cost sales as pure
       profit). October: 15.5% / $77,689.23 on 88.3% of sales. Revenue - Cost will not
       equal Gross Profit in a month with no-cost sales, and the table note says so.
+- [x] **51. Dropshipped products use the cost booked on the dropship receipt (13 Oct 2026).**
+      A dropship (vendor straight to customer) never enters the warehouse, so the
+      product's own cost stays 0. For a North product with no standard cost, the
+      unit cost is now the quantity-weighted average of the stock valuation layers
+      on its vendor->customer receipts (lib/odooCost.js). It is taken from the layer,
+      in NZD, NOT from the purchase order: the Allen's POs are in AUD ($27.60 AUD =
+      NZD 34.32, and they are sold at NZD 34.32, so about 0% margin). A product with
+      no standard cost and no dropship receipt stays uncosted and is left out of
+      margin. North only; Oceania unchanged. Supersedes the October figures in item
+      49/50: October 13.7% / $77,696.59 on 100% of sales (only $190.86 of freight
+      lines uncosted); FY26 to date 13.1% / $1,173,399.83. Verified against an
+      independent calculation from Odoo to the cent. Dropship lines in October:
+      revenue $66,306.24, cost $66,298.88.

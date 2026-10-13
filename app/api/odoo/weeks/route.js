@@ -8,6 +8,7 @@
  * and nothing more.
  */
 import { cachedAuth } from '@/lib/odooAuth';
+import { loadUnitCosts } from '@/lib/odooCost';
 import { NextResponse } from 'next/server';
 import { toCents, toDollars, pct1 } from '@/lib/ostendo';
 
@@ -83,8 +84,7 @@ export async function GET(request) {
         .then((rows) => rows.map((r) => ({ ...r, _sign: sign })));
       const [inv, ref] = await Promise.all([fetchSide('out_invoice', 1), fetchSide('out_refund', -1)]);
       const pids = [...new Set([...inv, ...ref].map((r) => r.product_id && r.product_id[0]).filter(Boolean))];
-      const prods = pids.length ? await exec('product.product', 'read', [pids], { fields: ['standard_price'] }) : [];
-      const std = new Map(prods.map((x) => [x.id, Number(x.standard_price) || 0]));
+      const { costOf: std } = pids.length ? await loadUnitCosts(exec, cid, pids, { dropship: cid === NORTH }) : { costOf: new Map() };
       for (const r of [...inv, ...ref]) {
         const d = dayOf(r.__range?.['date:day']?.from); if (!d) continue;
         const unit = std.get(r.product_id && r.product_id[0]) || 0;
