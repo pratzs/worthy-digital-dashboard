@@ -574,3 +574,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       Mar 168k = $1,898,000; target GP 18% = $341,640 (both agree with the budget sheet). Sales
       checked from Odoo directly: Apr-Sep match the dashboard to the cent (Sep $140,469.18);
       October moves as invoices are posted.
+- [x] **58. Naitik Trivedi's FY26 budget added to Sales vs Target (14 Oct 2026).** Apr 177k, May 197k,
+      Jun 172k, Jul 204k, Aug 219k, Sep 201k, Oct 235k, Nov 212k, Dec 228k, Jan 193k, Feb 194k,
+      Mar 216k = $2,448,000; average $204,000; target GP 18% = $440,640 (all agree with the budget
+      sheet). Sales checked from Odoo directly: every month Apr-Oct matches the dashboard to the
+      cent (Sep $244,340.36).
