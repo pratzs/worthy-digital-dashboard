@@ -630,3 +630,16 @@ Teams, months, reps and the currency split each add up to the company total, and
       products, two contacts share the name "CSB Groups 3 Ltd, Caltex Makaraka") and my own matching
       method. Slow movers are ranked by capital sitting idle (capital x share unsold), now stated in
       the subtitle. Worthy South and Worthy Oceania appear as inter-company customers; a note says so.
+- [x] **65. Credit Notes tab rebuilt and reconciled (14 Oct 2026).** The tab said North had credited
+      $79,666.59 across 587 notes while the Overview showed $48,162.69 for the same 587: 189 notes
+      (a further $31,503.90) have no product on them (volume discounts, supplier rebates, rent
+      reversals, sales adjustments), and the Overview counts product sales only. The tab now shows
+      both and their sum: product credits $48,162.69 (the Overview figure, matching month by month),
+      discounts / rebates / adjustments $31,503.90, total $79,666.59; each note splits into the two
+      and the parts add to the note's value. New: by month, by sales rep, who raised each note
+      (create user: Rashmi 579, Pooja 3, Bansri 5), what the credits were for, customers with the most
+      credits, and a searchable list with filters (month, type, rep, raised by) and CSV, showing the
+      reason the team logged in Odoo (internal log notes, OdooBot and tracking messages left out;
+      498 notes have one; the credit note's own reference is shown when there is none, which is
+      where Oceania keeps it). Worthy South (Dutch Rusk) and Oceania are inter-company customers and
+      appear in the customer list. Oceania loads through the same screen.

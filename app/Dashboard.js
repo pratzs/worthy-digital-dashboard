@@ -549,6 +549,177 @@ const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
 /* Credit notes: who got one, and for how much, for the period on screen.
    Two views of the same documents - every note (who it went to) and the same
    notes rolled up by rep (same shape as Sales by Rep), both with a TOTAL row. */
+/* Credit Notes for the Odoo companies. Everything the team needs to see on one page:
+   how much was credited and why, month by month, who raised each note, which rep it
+   sits under, and the reason the team logged in Odoo. The same two totals as the
+   Overview: credits against product sales, and discounts / rebates / adjustments that
+   carry no product, which together are the full value of the notes. */
+const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null }) => {
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState("All");
+  const [rep, setRep] = useState("All");
+  const [month, setMonth] = useState("All");
+  const [by, setBy] = useState("All");
+  const [open, setOpen] = useState(null);
+  const monthLabel = (k) => `${MONTH_NAMES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
+  const money = (v) => fmtExact(v, currency);
+  const needle = q.trim().toLowerCase();
+  const rows = d.notes.filter(n =>
+    (kind === "All" || n.kind === kind) && (rep === "All" || n.rep === rep) &&
+    (month === "All" || String(n.date).slice(0, 7) === month) && (by === "All" || n.raisedBy === by) &&
+    (!needle || [n.customer, n.docNumber, n.reason, n.about, n.rep, n.raisedBy, n.kind].join(" ").toLowerCase().includes(needle)));
+  const shown = rows.reduce((s, n) => s + n.amount, 0);
+  const filtered = rows.length !== d.notes.length;
+
+  const cell = { padding: "9px 12px", fontSize: 12, color: T.textRow };
+  const head = (align = "right") => ({ padding: "9px 12px", textAlign: align, color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` });
+  const card = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 };
+  const title = (icon, text) => (
+    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 14 }}>
+      <Icon name={icon} size={15} style={{ marginRight: 8, color: accent }} />{text}
+    </div>);
+  const tile = (label, value, note, color) => (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: color || T.textHead, marginTop: 6 }}>{value}</div>
+      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, lineHeight: 1.45 }}>{note}</div>}
+    </div>);
+  const red = "#dc2626";
+  // One small summary table: first column text, then count, product, other, total.
+  const summary = (label, list, keyOf, labelOf) => (
+    <div style={{ ...card, overflowX: "auto" }}>
+      {title(label[0], label[1])}
+      {label[3] && <div style={{ fontSize: 11, color: T.textMuted, margin: "-8px 0 10px" }}>{label[3]}</div>}
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>
+          <th style={head("left")}>{label[2]}</th><th style={head()}>Credit notes</th>
+          <th style={head()}>Product credits</th><th style={head()}>Discounts &amp; adjustments</th><th style={head()}>Total</th>
+        </tr></thead>
+        <tbody>
+          {list.map(r => (
+            <tr key={keyOf(r)} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+              <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{labelOf(r)}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{money(r.product)}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{money(r.other)}</td>
+              <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700 }}>{money(r.value)}</td>
+            </tr>))}
+        </tbody>
+        <tfoot><tr style={{ borderTop: `1px solid ${T.border}` }}>
+          <td style={{ ...cell, fontSize: 10, fontWeight: 700, color: T.textMuted }}>TOTAL</td>
+          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{d.totals.count.toLocaleString()}</td>
+          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(d.totals.productValue)}</td>
+          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(d.totals.otherValue)}</td>
+          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: red }}>{money(d.totals.value)}</td>
+        </tr></tfoot>
+      </table>
+    </div>);
+
+  const csv = () => {
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const hdr = ["Date", "Credit note", "Customer", "Sales rep", "Raised by", "Type", "About", "Reason logged in Odoo", "Product credit", "Discount / adjustment", "Total"];
+    const lines = rows.map(n => [n.date, n.docNumber, n.customer, n.rep, n.raisedBy, n.kind, n.about, n.reason, n.productAmount.toFixed(2), n.otherAmount.toFixed(2), n.amount.toFixed(2)].map(esc).join(","));
+    const blob = new Blob([[hdr.map(esc).join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `credit-notes-${d.range.start}-to-${d.range.end}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const sel = { padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgCard, color: T.textHead, fontSize: 12 };
+  const opts = (all, list) => [<option key="all" value="All">{all}</option>, ...list.map(v => <option key={v} value={v}>{v}</option>)];
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ color: T.textHead, marginBottom: 14 }}>
+        <SectionTitle icon="receipt" accent={accent}>Credit Notes</SectionTitle>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>Every credit note this financial year: what it was for, who raised it and which sales rep it sits under</div>
+      </div>
+      {rangeLabel && <div style={{ marginBottom: 14 }}><RangeTag text={rangeLabel} theme={T} /></div>}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 20 }}>
+        {tile("Credit notes", d.totals.count.toLocaleString(), `${d.totals.withReason.toLocaleString()} have a reason logged in Odoo`)}
+        {tile("Returns & product credits", money(d.totals.productValue),
+          `Credits against product sales${d.totals.productPctOfSales != null ? `, ${d.totals.productPctOfSales}% of sales` : ""}. This is the figure on the Overview.`, red)}
+        {tile("Discounts, rebates & adjustments", money(d.totals.otherValue), "Credits with no product on them: volume discounts, rebates, rent and sales adjustments", red)}
+        {tile("Total credited", money(d.totals.value), "The two above together: the full value of every credit note", red)}
+      </div>
+
+      <div style={{ display: "grid", gap: 20, marginBottom: 20 }}>
+        {summary(["calendar", "By Month", "Month"], d.months, r => r.month, r => monthLabel(r.month))}
+        {summary(["user", "By Sales Rep", "Sales rep"], d.reps, r => r.rep, r => r.rep)}
+        {summary(["receipt", "What The Credits Were For", "Type", "Product credits are returns and corrections to product sales. The rest carry no product. Each credit note is counted once, under its main type."], d.kinds, r => r.kind, r => r.kind)}
+        {summary(["user", "Raised By", "Person", "The person who created the credit note in Odoo"], d.raisers, r => r.person, r => r.person)}
+        <div style={{ ...card, overflowX: "auto" }}>
+          {title("trophy", "Customers With The Most Credits")}
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={head("left")}>Customer</th><th style={head()}>Credit notes</th><th style={head()}>Product credits</th><th style={head()}>Discounts &amp; adjustments</th><th style={head()}>Total</th></tr></thead>
+            <tbody>{d.customers.map(r => (
+              <tr key={r.customer} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{r.customer}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{money(r.product)}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{money(r.other)}</td>
+                <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700 }}>{money(r.value)}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={card}>
+        {title("receipt", "Every Credit Note")}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search customer, credit note number or reason"
+            style={{ ...sel, minWidth: 280, flex: "1 1 280px" }} />
+          <select value={month} onChange={e => setMonth(e.target.value)} style={sel}>{[<option key="all" value="All">All months</option>, ...d.months.map(m => <option key={m.month} value={m.month}>{monthLabel(m.month)}</option>)]}</select>
+          <select value={kind} onChange={e => setKind(e.target.value)} style={sel}>{opts("All types", d.kinds.map(k => k.kind))}</select>
+          <select value={rep} onChange={e => setRep(e.target.value)} style={sel}>{opts("All sales reps", d.reps.map(r => r.rep))}</select>
+          <select value={by} onChange={e => setBy(e.target.value)} style={sel}>{opts("Raised by anyone", d.raisers.map(r => r.person))}</select>
+          {(q || kind !== "All" || rep !== "All" || month !== "All" || by !== "All") && (
+            <button onClick={() => { setQ(""); setKind("All"); setRep("All"); setMonth("All"); setBy("All"); }}
+              style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Clear filters</button>)}
+          <span style={{ flex: 1 }} />
+          <button onClick={csv} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Download CSV</button>
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10 }}>
+          Showing {rows.length.toLocaleString()} of {d.notes.length.toLocaleString()} credit notes{filtered ? ` · ${money(shown)} of ${money(d.totals.value)}` : ""}. Click a row to read the whole reason.
+        </div>
+        <div style={{ overflow: "auto", maxHeight: 620 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}><tr>
+              <th style={head("left")}>Date</th><th style={head("left")}>Credit note</th><th style={head("left")}>Customer</th>
+              <th style={head("left")}>Sales rep</th><th style={head("left")}>Raised by</th><th style={head("left")}>Type</th>
+              <th style={head("left")}>Reason logged in Odoo</th><th style={head()}>Amount</th>
+            </tr></thead>
+            <tbody>
+              {rows.length === 0 && <tr><td colSpan={8} style={{ ...cell, textAlign: "center", padding: 24, color: T.textMuted }}>No credit notes match</td></tr>}
+              {rows.map(n => {
+                const isOpen = open === n.docNumber;
+                const text = n.reason || n.note || (n.about ? `(${n.about})` : "No reason logged");
+                return (
+                  <tr key={n.docNumber} onClick={() => setOpen(isOpen ? null : n.docNumber)}
+                    style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: "pointer", verticalAlign: "top" }}>
+                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.date}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap", color: T.textMuted }}>{n.docNumber}</td>
+                    <td style={{ ...cell, color: T.text, minWidth: 170 }}>{n.customer}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.rep}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.raisedBy}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.kind}</td>
+                    <td style={{ ...cell, minWidth: 260, maxWidth: 420, color: n.reason ? T.textRow : T.textLabel, lineHeight: 1.45 }}>
+                      {isOpen ? text : (text.length > 120 ? `${text.slice(0, 120)}…` : text)}
+                      {isOpen && n.reasonBy && <div style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>Logged by {n.reasonBy}{n.about ? ` · ${n.about}` : ""}{n.creditedInvoice ? ` · against ${n.creditedInvoice}` : ""}</div>}
+                    </td>
+                    <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700, whiteSpace: "nowrap" }}>{money(n.amount)}</td>
+                  </tr>);
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, paddingRight: 8, fontSize: 12, color: T.textHead, fontWeight: 700 }}>
+          {filtered ? "SHOWN" : "TOTAL"}&nbsp;CREDITED:&nbsp;<span style={{ color: red, marginLeft: 4 }}>{money(shown)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CreditsPanel = ({ source, theme, accent, currency = "NZD", rangeLabel = null }) => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
@@ -571,6 +742,7 @@ const CreditsPanel = ({ source, theme, accent, currency = "NZD", rangeLabel = nu
     </div>
   );
   const loading = !d && !err;
+  if (d?.version === 2) return <CreditsOdoo d={d} theme={T} accent={accent} currency={currency} rangeLabel={rangeLabel} />;
 
   return (
     <div style={{ marginTop: 28 }}>
