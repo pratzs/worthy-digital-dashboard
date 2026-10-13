@@ -564,3 +564,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       to date = sales less (finished months in full + the elapsed share of this month).
       Checked by hand on 14 Oct: pace $1,341,355, sales $1,301,794, behind $39,561.
       Other reps are added one at a time as their budgets are supplied.
+- [x] **56. Hari Patel's FY26 budget added to Sales vs Target (14 Oct 2026).** Apr 104k, May 118k,
+      Jun 101k, Jul 106k, Aug 104k, Sep 100k, Oct 114k, Nov 128k, Dec 121k, Jan 112k, Feb 117k,
+      Mar 132k = $1,357,000; target GP 18% = $244,260 (both agree with the budget sheet).
+      Sales checked from Odoo directly: Apr-Sep match the dashboard to the cent (Sep $70,963.20,
+      the figure that matched finance's report); October moves as invoices are posted.
