@@ -599,3 +599,14 @@ Teams, months, reps and the currency split each add up to the company total, and
       Dec 149.9k, Jan 132.1k, Feb 135.0k, Mar 146.5k = $1,600,000; GP 20% = $320,000 (both agree
       with the sheet). Sales checked from Odoo: Apr-Sep match the dashboard to the cent (Sep
       $131,898.18). June is $272,887.69, well above his June budget of $121,000.
+- [x] **62. Audit of the Overview and Sales rep table and footer against Odoo (14 Oct 2026).**
+      North, 1 Apr to 14 Oct, recalculated independently from Odoo (invoices by salesperson,
+      product lines, cost = standard cost or the dropship receipt cost): orders, revenue,
+      gross profit, margin and average order match for all nine rows (Rubin, Direct, Naitik,
+      Savan, Nayan, Albert, Hari, Nish, Nimesh) and the total (8,324 orders, $8,993,072.71
+      revenue, $1,179,939.51 GP). Rubin's GP differs by one cent from the raw sum because the
+      API settles rounding so rows add to the total. Footer: new customers 22 (first-ever
+      invoice in October) matches; stock valuation $2,419,045.96 matches to the cent; October
+      revenue and GP match. Discounts: counted product lines only for North from now on, like
+      sales and margin (12 no-product lines in October netted -$22.34); October $101,055.52
+      matches an independent line-by-line calculation.
