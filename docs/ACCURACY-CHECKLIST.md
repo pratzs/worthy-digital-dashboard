@@ -498,3 +498,12 @@ Teams, months, reps and the currency split each add up to the company total, and
       (any 5-minute pinger with the Bearer secret) or on a plan that allows it. Tested: cached, fresh and
       warm-up results identical (revenue 8,944,455.47, margin 13.9%); cached reads
       20-60ms; the warm-up refuses requests without the secret.
+- [x] **49. A partly-costed month shows margin on the costed sales (13 Oct 2026).** For
+      a month where 80% or more of sales have a cost but the rest do not, the Monthly
+      cards show margin and gross profit worked out on the sales that have a cost,
+      with the coverage printed under the card (October: 15.5% on 88.3% of sales,
+      $77,688.63 gross profit). Sales with no cost are left out of both sides. Below
+      80% the card stays blank with an explanation. The monthly table still shows a
+      dash for such a month. Examples with no standard cost in Odoo company 4 in
+      October: Allen's Frogs Alive Peg Bag 190G (A0148), Nesquik Milkshakes (A0152),
+      Ripe Raspberries (A0158), Pineapples (A0153), Mountain Dew (A0154).
