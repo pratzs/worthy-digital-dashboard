@@ -491,8 +491,10 @@ Teams, months, reps and the currency split each add up to the company total, and
       is in the cache key, so nothing older than the slot is ever served; only
       COMPLETE results are stored (any `problems` and the result is returned but not
       kept); failures are never stored; `?fresh=1` skips the cache (the page's Try
-      again uses it). The page prints "Odoo figures as of HH:MM NZ". A scheduled
-      warm-up (vercel.json, /api/cron/warm, needs the CRON_SECRET env var) fills the
-      next slot at :03, :08, :13... so people rarely wait. Tested: cached, fresh and
+      again uses it). The page prints "Odoo figures as of HH:MM NZ". The first person
+      in each slot still waits for a live read. A warm-up route exists
+      (/api/cron/warm, needs CRON_SECRET) but is NOT scheduled: Vercel rejected a
+      five-minute cron on this plan and the deploy failed. Schedule it from outside
+      (any 5-minute pinger with the Bearer secret) or on a plan that allows it. Tested: cached, fresh and
       warm-up results identical (revenue 8,944,455.47, margin 13.9%); cached reads
       20-60ms; the warm-up refuses requests without the secret.
