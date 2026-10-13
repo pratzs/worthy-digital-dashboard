@@ -2488,7 +2488,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
           {(() => {
             // Categories & Products, Fast & Slow Movers and Customers share one tab.
             const GROUP = ["products", "movers", "customers"];
-            const mine = me?.sections || [];
+            // Sales by Rep lives on the Overview and Sales page now, so it has no tab of its own.
+            const mine = (me?.sections || []).filter(x => x.id !== "reps");
             const grouped = mine.filter(x => GROUP.includes(x.id));
             const tabs = mine.filter(x => !GROUP.includes(x.id));
             if (grouped.length) {
@@ -2956,6 +2957,16 @@ export default function EcommerceDashboard({ section = "overview" }) {
               T={T} accent={accent}
               exact={exactAmounts}
             />
+          </div>
+        )}
+        {section === "overview" && activeStore.id === "worthy" && channelTab !== "odoo" && (
+          <div style={{ marginTop: 8 }}>
+            {channelTab === "pos" ? (
+              <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
+            ) : (
+              <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0" }}>Online sales aren't broken down by rep - switch to the POS tab for rep figures.</div>
+            )}
           </div>
         )}
         {section === "overview" && activeStore.id === "luxe" && (

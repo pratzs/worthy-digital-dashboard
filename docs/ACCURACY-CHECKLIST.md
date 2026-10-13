@@ -551,3 +551,6 @@ Teams, months, reps and the currency split each add up to the company total, and
       the year to the cent. The cards say "Margin leaves out N invoice lines whose
       recorded cost in Ostendo cannot be right". The item list for finance is in
       south-bad-cost-items-FY26.csv.
+- [x] **54. One tab: "Overview and Sales" (14 Oct 2026).** The separate Sales by Rep tab is
+      gone. The rep table sits on the Overview and Sales page for North (Odoo, POS and
+      Online), Oceania and South. The old /reps address redirects to the Overview.
