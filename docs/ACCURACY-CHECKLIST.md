@@ -618,3 +618,15 @@ Teams, months, reps and the currency split each add up to the company total, and
       high for one rep) and had no "Direct" group, so Direct's weekly margin could not show. It now
       groups reps like finance does (eight field reps and Direct, unassigned included) and takes
       revenue from product lines. Direct's weekly margins now show (October W1 7.3%, W2 3.9%).
+- [x] **64. Analytics is one page; its tables audited against Odoo (14 Oct 2026).** Categories &
+      Products, Fast & Slow Movers and Customers are now one Analytics page, each group under its
+      own heading, no sub-tabs (/movers and /customers redirect to /products; a login only sees the
+      groups it may open). The tables read the same cached figures as the rest of the page, so they no
+      longer wait on a slower legacy request, and the Weekly-rep cost request is no longer made on
+      this page. Checked independently from Odoo (North, 1 Apr to 14 Oct): top 50 products and top 30
+      categories (revenue, units, margin, product count), fast movers, slow movers (on hand and
+      capital = stock x cost) and customers (revenue, order count) all match; the only differences
+      were invoices posted between two readings, Odoo duplicate codes/contacts (C0144 sits on 3
+      products, two contacts share the name "CSB Groups 3 Ltd, Caltex Makaraka") and my own matching
+      method. Slow movers are ranked by capital sitting idle (capital x share unsold), now stated in
+      the subtitle. Worthy South and Worthy Oceania appear as inter-company customers; a note says so.

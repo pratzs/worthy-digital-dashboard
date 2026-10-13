@@ -777,6 +777,11 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
 /* Whole money to the cent, as the finance sheet prints it: $2,568,000.00 */
 const KPI_CENTS = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const KPI_DOLLAR = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
+/* A plain heading for each group on the Analytics page. */
+const GroupTitle = ({ text }) => (
+  <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#475569", margin: "30px 0 12px", paddingBottom: 8, borderBottom: "2px solid rgba(100,116,139,0.25)" }}>{text}</div>
+);
+
 /* Sales vs Target, financial year (April to March), ex GST. The targets are the
    business's own monthly budgets per rep (lib/repTargets.js). Sales are the rep's
    invoiced product lines in the SAME payload as the Sales by Rep table, so the two
@@ -1500,7 +1505,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       ]);
       /* The weekly rep cost is a second heavy Odoo read. It waits for the year's own
          figures so the two never compete - the cards on screen come first. */
-      if (storeId !== "luxe" && FY_SOURCE[storeId] && advStoreRef.current === storeId) {
+      if (section === "overview" && storeId !== "luxe" && FY_SOURCE[storeId] && advStoreRef.current === storeId) {
         const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
         fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
       }
@@ -2408,7 +2413,15 @@ export default function EcommerceDashboard({ section = "overview" }) {
     { id: "credits",    label: "Credit Notes",        icon: "receipt" },
     { id: "debtors",    label: "Debtors",             icon: "receipt" },
   ];
+  /* Categories & Products, Fast & Slow Movers and Customers are ONE page now (Analytics),
+     each group under its own heading, so there are no sub-tabs. A group shows only if
+     this login may open it. */
+  const isAnalytics = ["products", "movers", "customers"].includes(section);
+  const showGroup = (id) => isAnalytics
+    ? (me?.sections || [{ id: section }]).some(x => x.id === id)
+    : advTab === id;
   const renderAdvTabs = () => {
+    if (isAnalytics) return null;
     const subs = (me?.sections || []).filter(x => ["products", "movers", "customers"].includes(x.id));
     if (!["products", "movers", "customers"].includes(section) || subs.length < 2) return null;
     return (
@@ -3041,14 +3054,15 @@ export default function EcommerceDashboard({ section = "overview" }) {
               </>
             )}
 
-            {advTab === "products" && (
+            {showGroup("products") && isAnalytics && <GroupTitle text="Categories & Products" />}
+            {showGroup("products") && (
               <>
                 <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
                   <Icon name="alert" size={13} style={{ marginRight: 6 }} />{INTERCOMPANY_NOTE}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
                   <AdvancedTable theme={T} icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
-                    loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
+                    loading={isLoading(selectedYear)} currency={activeStore.currency}
                     data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
                     columns={[
                       { key: "name",         label: "Category",     color: T.text },
@@ -3061,7 +3075,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                     aiExtra="Which categories drive the business? Flag any with margin < 15%, those need a price review."
                   />
                   <AdvancedTable theme={T} icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
-                    loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency}
+                    loading={isLoading(selectedYear)} currency={activeStore.currency}
                     data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
                     columns={[
                       { key: "name",     label: "Product",  color: T.text },
@@ -3077,10 +3091,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
               </>
             )}
 
-            {advTab === "movers" && (
+            {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
+            {showGroup("movers") && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
                 <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
-                  loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
+                  loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
                   columns={[
                     { key: "name",         label: "Product",     color: T.text },
                     { key: "category",     label: "Category",    color: T.textMuted },
@@ -3092,8 +3107,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   aiContext="fast-moving Odoo SKUs"
                   aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
                 />
-                <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period. Clear, bundle or discontinue"
-                  loading={isLoading(selectedYear) || isOdooAdvLoading()} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
+                <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period, ranked by capital sitting idle. Clear, bundle or discontinue"
+                  loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
                   columns={[
                     { key: "name",          label: "Product",       color: T.text },
                     { key: "category",      label: "Category",      color: T.textMuted },
@@ -3107,7 +3122,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
               </div>
             )}
 
-            {advTab === "customers" && (
+            {showGroup("customers") && isAnalytics && <GroupTitle text="Customers" />}
+            {showGroup("customers") && isAnalytics && activeStore.id === "worthy" && (
+              <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
+                Worthy Products South (Dutch Rusk) and Worthy Oceania are inter-company customers of North and appear in this list.
+              </div>
+            )}
+            {showGroup("customers") && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
                 <AdvancedTable theme={T} icon="trophy" title="Top Customers" range={tableRange()} subtitle="Ranked by net invoice revenue (customers only, suppliers excluded)"
                   loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
@@ -3213,7 +3234,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
               )
             )}
 
-            {advTab === "products" && (
+            {showGroup("products") && isAnalytics && <GroupTitle text="Categories & Products" />}
+            {showGroup("products") && (
               <>
                 <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
                   <Icon name="alert" size={13} style={{ marginRight: 6 }} />{INTERCOMPANY_NOTE}
@@ -3229,7 +3251,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
               </>
             )}
 
-            {advTab === "movers" && (
+            {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
+            {showGroup("movers") && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
                 <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
                   loading={advLoading} currency={activeStore.currency}
@@ -3253,7 +3276,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
               </div>
             )}
 
-            {advTab === "customers" && (
+            {showGroup("customers") && isAnalytics && <GroupTitle text="Customers" />}
+            {showGroup("customers") && (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 20 }}>
                   <AdvancedTable theme={T} title="Top Customers" range={tableRange()}   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
