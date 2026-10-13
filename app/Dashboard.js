@@ -1166,16 +1166,6 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const canSeeStock = me?.role === "mgmt" || me?.role === "purch";
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
   const [stockValue,   setStockValue]   = useState(null);
-  useEffect(() => {
-    let live = true;
-    setStockValue(null);
-    if (!canSeeStock) return;
-    fetch(`/api/stock-value?store=${activeStore.id}`, { cache: "no-store" })
-      .then(r => r.json())
-      .then(j => { if (live && j.ok) setStockValue(j.value); })
-      .catch(() => {});
-    return () => { live = false; };
-  }, [activeStore.id, canSeeStock]);
   const [selectedYear, setSelectedYear] = useState(2026);
 
   const [view,         setView]         = useState("monthly");
@@ -1471,10 +1461,6 @@ export default function EcommerceDashboard({ section = "overview" }) {
       }
 
       // Apr-Dec belong to the selected financial year, Jan-Mar to the next.
-      if (storeId !== "luxe" && FY_SOURCE[storeId]) {
-        const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
-        fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
-      }
       await Promise.all([
         fetchFYFor(storeId, selectedYear),
         // Worthy North also has Online and POS tabs served by Shopify.
@@ -1483,6 +1469,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
           fetchYear(storeId, selectedYear - 1),
         ] : []),
       ]);
+      /* The weekly rep cost is a second heavy Odoo read. It waits for the year's own
+         figures so the two never compete - the cards on screen come first. */
+      if (storeId !== "luxe" && FY_SOURCE[storeId] && advStoreRef.current === storeId) {
+        const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
+        fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
+      }
       // After main years load, fire non-blocking cost/margin + FY tail year
       // (sequential to avoid hammering Ostendo with concurrent header fetches)
       // South is served entirely by the FY endpoint - no calendar-year stitching,
@@ -1572,24 +1564,56 @@ export default function EcommerceDashboard({ section = "overview" }) {
     load();
   }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
 
-  // FIX 2: YoY - parallel load all years
+  /* Stock valuation is a footer figure. It is read after the year on screen has
+     loaded rather than alongside it. */
   useEffect(() => {
-    if (view === "yoy") {
-      if (activeStore.id === "worthy" || activeStore.id === "luxe") {
-        Promise.all(activeStore.id === "luxe"
-          ? yearsForStore.map(yr => fetchFY(yr))
-          : yearsForStore.map(yr => fetchYear(activeStore.id, yr)));
+    if (!restored) return;
+    let live = true;
+    setStockValue(null);
+    if (!canSeeStock) return;
+    (async () => {
+      for (let i = 0; i < 120 && live && (!cacheRef.current[fyKey(activeStore.id, selectedYear)]
+                                          || loadingRef.current[fyKey(activeStore.id, selectedYear)]); i++) {
+        await new Promise((r) => setTimeout(r, 1000));
       }
-      // YoY view: only revenue/order data needed for all years. Skip the
-      // expensive advanced fetch - it's tied to the currently selected year.
-      if (activeStore.id === "worthy") {
-        Promise.all(ALL_YEARS.map(yr => fetchOdoo(4, yr, { fireAdvanced: yr === selectedYear })));
+      if (!live) return;
+      fetch(`/api/stock-value?store=${activeStore.id}`, { cache: "no-store" })
+        .then(r => r.json())
+        .then(j => { if (live && j.ok) setStockValue(j.value); })
+        .catch(() => {});
+    })();
+    return () => { live = false; };
+  }, [restored, activeStore.id, canSeeStock, selectedYear]); // eslint-disable-line
+
+  /* YoY: one year at a time. This used to start every year at once - five years of
+     Odoo and Shopify reads on top of the page's own data - so the year on screen
+     queued behind history nobody had asked to see yet, and Odoo timed out under
+     the pile. Now the selected year goes first, once its own figures have landed,
+     then last year, then the older ones, each only after the one before is done.
+     Leaving the view or the company stops the chain. */
+  useEffect(() => {
+    if (view !== "yoy" || !restored) return;
+    if (activeStore.id !== "worthy" && activeStore.id !== "luxe" && activeStore.id !== "nova") return;
+    let live = true;
+    const storeId = activeStore.id;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    (async () => {
+      // Let the figures for the year on screen finish before any history starts.
+      for (let i = 0; i < 120 && live && loadingRef.current[fyKey(storeId, selectedYear)]; i++) await wait(1000);
+      const order = [selectedYear, selectedYear - 1,
+        ...[...ALL_YEARS].reverse().filter((y) => y < selectedYear - 1)];
+      for (const yr of order) {
+        if (!live) return;
+        if (storeId === "luxe") await fetchFY(yr);
+        else if (storeId === "worthy") {
+          await fetchYear(storeId, yr);
+          if (!live) return;
+          await fetchOdoo(4, yr, { fireAdvanced: yr === selectedYear });
+        } else await fetchOdoo(1, yr, { fireAdvanced: yr === selectedYear });
       }
-      if (activeStore.id === "nova") {
-        Promise.all(ALL_YEARS.map(yr => fetchOdoo(1, yr, { fireAdvanced: yr === selectedYear })));
-      }
-    }
-  }, [activeStore.id, view]); // eslint-disable-line
+    })();
+    return () => { live = false; };
+  }, [restored, activeStore.id, view, selectedYear]); // eslint-disable-line
 
   /* ── Adapters ──────────────────────────────────────────────────────────────
    * These translate the FY payload into the row shapes the tables already know
@@ -1656,7 +1680,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
     priorComparable:   m.priorComparable !== false,
     daysElapsed:       m.daysElapsed,
     daysInMonth:       m.daysInMonth,
-    hasCostData:       Boolean(m.started && m.cost != null && m.cost !== 0),
+    /* The API withholds a margin where too little of the revenue has a cost behind it
+       (a month still being costed). The row then carries a cost that covers only part
+       of the revenue, so working a margin out of it here gives a number that looks
+       real and is not - 25.3% for October against about 12% a month all year. Only the
+       single-month figures are withheld: the year as a whole is still costed against
+       the API's own totals, which is why marginableRevenue is left alone. */
+    hasCostData:       Boolean(m.started && m.cost != null && m.cost !== 0 && !m.marginWithheld),
     marginableRevenue: (m.started && m.cost != null && m.cost !== 0) ? basisOf(m).revenue : 0,
   });
 
@@ -1675,7 +1705,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     totalDiscounts:    m.prior.discounts,
     newCustomers:      null,
     aov:               m.prior.aov,
-    hasCostData:       Boolean(m.started && m.prior.cost != null && m.prior.cost !== 0),
+    hasCostData:       Boolean(m.started && m.prior.cost != null && m.prior.cost !== 0 && !m.prior.marginWithheld),
     marginableRevenue: (m.started && m.prior.cost != null && m.prior.cost !== 0) ? m.prior.revenue : 0,
   });
 
@@ -1696,7 +1726,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     totalCost:      w.cost,
     grossProfit:    w.grossProfit,
     marginPct:      w.marginPct,
-    hasCostData:    w.cost !== 0,
+    hasCostData:    w.cost != null && w.cost !== 0 && !w.marginWithheld,
     totalDiscounts: 0,
     newCustomers:   0,
   }));
@@ -2480,6 +2510,17 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
            : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
            : `${selectedYear} · year to date`}
+          </div>
+        )}
+        {onFY() && cacheRef.current[fyKey(activeStore.id, selectedYear)]?.failed && (
+          /* A failed read must say so. Without this the cards drew NZ$0.00 and a dash,
+             which reads as a quiet month, not as "the figures did not load". */
+          <div role="alert" style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, fontSize: 12,
+                 background: "rgba(220,80,60,0.10)", border: "1px solid rgba(220,80,60,0.45)", color: T.textHead,
+                 display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <span><strong>These figures did not load</strong> - the zeros below are not real. Odoo was too slow to answer.</span>
+            <button onClick={() => { delete cacheRef.current[fyKey(activeStore.id, selectedYear)]; fetchFYFor(activeStore.id, selectedYear); }}
+              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid currentColor", background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600 }}>Try again</button>
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>

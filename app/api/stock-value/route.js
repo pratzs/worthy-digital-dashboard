@@ -8,6 +8,7 @@
  *
  * Totals only, so it is fast and nothing can be cut off by a row limit.
  */
+import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 import { ostendoSql } from '@/lib/ostendo';
 
@@ -26,8 +27,9 @@ async function rpc(payload, timeoutMs) {
 
 async function odooValue(cid) {
   const { ODOO_DB: db, ODOO_USER: user, ODOO_PASSWORD: pw } = process.env;
-  const auth = await rpc({ jsonrpc: '2.0', method: 'call', id: 1,
-    params: { service: 'common', method: 'authenticate', args: [db, user, pw, {}] } }, 15000);
+  const auth = await cachedAuth(() => rpc({ jsonrpc: '2.0', method: 'call', id: 1,
+    params: { service: 'common', method: 'authenticate', args: [db, user, pw, {}] } }, 15000),
+    process.env.ODOO_URL, db, user);
   if (!auth.result) throw new Error('Odoo authentication failed');
   const call = async (model, method, args, kwargs) => {
     const r = await rpc({ jsonrpc: '2.0', method: 'call', id: 2,

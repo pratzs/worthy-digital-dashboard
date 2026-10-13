@@ -1,3 +1,4 @@
+import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -33,10 +34,10 @@ export async function GET(request) {
   });
 
   try {
-    const authJson = await odooCall(url, {
+    const authJson = await cachedAuth(() => odooCall(url, {
       jsonrpc: '2.0', method: 'call', id: 1,
       params: { service: 'common', method: 'authenticate', args: [db, username, password, {}] },
-    }, 15000);
+    }, 15000), url, db, username);
     const uid = authJson.result;
     if (!uid) throw new Error('Authentication failed');
 

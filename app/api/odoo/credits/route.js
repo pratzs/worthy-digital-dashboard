@@ -3,6 +3,7 @@
  * credit note - who it went to and what it was worth. Mirrors
  * /api/ostendo/credits so one panel serves both.
  */
+import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 import { fyRange, nzToday, nzFinancialYear } from '@/lib/ostendo';
 import { repGroup } from '@/lib/odooReps';
@@ -23,8 +24,9 @@ async function rpc(payload, timeoutMs = 45000) {
   return res.json();
 }
 async function connect() {
-  const j = await rpc({ jsonrpc: '2.0', method: 'call', id: 1,
-    params: { service: 'common', method: 'authenticate', args: [ODOO.db, ODOO.user, ODOO.pw, {}] } }, 15000);
+  const j = await cachedAuth(() => rpc({ jsonrpc: '2.0', method: 'call', id: 1,
+    params: { service: 'common', method: 'authenticate', args: [ODOO.db, ODOO.user, ODOO.pw, {}] } }, 15000),
+    ODOO.url, ODOO.db, ODOO.user);
   if (!j.result) throw new Error('Odoo authentication failed');
   const uid = j.result;
   return async (model, method, args, kwargs = {}, timeout = 45000) => {

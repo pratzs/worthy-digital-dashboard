@@ -9,6 +9,7 @@
  * Totals only: the sums are done inside Odoo with read_group, so no invoice
  * rows are pulled and nothing can be silently truncated by a row limit.
  */
+import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 import { KPI_REPS, SERVICE_STATION_BRANDS } from '@/lib/kpiTargets';
 
@@ -30,8 +31,9 @@ async function rpc(payload, timeoutMs = 45000) {
 }
 
 async function connect() {
-  const j = await rpc({ jsonrpc: '2.0', method: 'call', id: 1,
-    params: { service: 'common', method: 'authenticate', args: [ODOO.db, ODOO.user, ODOO.pw, {}] } }, 15000);
+  const j = await cachedAuth(() => rpc({ jsonrpc: '2.0', method: 'call', id: 1,
+    params: { service: 'common', method: 'authenticate', args: [ODOO.db, ODOO.user, ODOO.pw, {}] } }, 15000),
+    ODOO.url, ODOO.db, ODOO.user);
   if (!j.result) throw new Error('Odoo authentication failed');
   const uid = j.result;
   return async (model, method, args, kwargs = {}, timeout = 45000) => {

@@ -461,3 +461,26 @@ Teams, months, reps and the currency split each add up to the company total, and
       age from invoice date, the buckets will not match theirs until that is changed.
 - [x] **44. Light theme only.** The dashboard no longer has a dark mode, including
       when the browser or operating system is set to dark.
+- [x] **45. A month whose cost is incomplete shows no margin (13 Oct 2026).** Worthy
+      Products North showed 25.3% gross margin for October against about 12% every
+      other month. Only 88.3% of October's revenue had a cost behind it (15 products
+      with a zero standard cost, among them the new Allen's lines, $66,497 of sales),
+      so the API correctly withheld the margin, but the page recomputed it from
+      revenue less the part-cost and showed the result. A month, week or prior-year
+      row flagged `marginWithheld` now shows a dash. The full-year figure is still
+      worked from the API's own totals (99.2% costed), so Total 13.9% / $1,242,810.53
+      agrees with the API to the cent.
+- [x] **46. North reads cost in company 4 only (13 Oct 2026).** Cost is held per
+      company in Odoo. The cost read in /api/odoo/fy and /api/odoo/weeks carried no
+      company context, so it returned the API user's default company's cost, which
+      is only right while that default is Worthy Products. North now reads with
+      `allowed_company_ids: [4]`. Worthy Oceania (company 1) is deliberately left as
+      it was: its costs sit in company 1 and the old read returned zero for them
+      (company 1 context gives about 98.8% coverage), so "Oceania carries no costs"
+      was an artefact. Decide whether to switch Oceania before changing it.
+- [x] **47. Loading (13 Oct 2026).** Odoo's login call took 3-13s under load and was
+      repeated by every route on every request (15s limit); the user id is now kept
+      for 30 minutes (lib/odooAuth.js). The Yearly view no longer starts five years
+      at once: the selected year goes first, then older years one at a time. Stock
+      value and weekly rep cost wait for the year's own figures. A failed figures
+      load now shows a red "did not load" banner with Try again, instead of NZ$0.00.

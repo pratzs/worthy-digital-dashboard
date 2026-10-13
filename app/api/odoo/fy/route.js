@@ -25,6 +25,7 @@
  * Nothing is fetched with a row limit. The previous invoice fetch capped at
  * 10,000 and silently dropped the oldest month.
  */
+import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 import {
   toCents, toDollars, pct1, costCovered, fyRange, priorRange, fyMonthKeys, parseIso, iso, MONTH_NAMES,
@@ -54,15 +55,22 @@ async function rpc(payload, timeoutMs = 45000) {
   return res.json();
 }
 
-async function connect() {
-  const j = await rpc({ jsonrpc: '2.0', method: 'call', id: 1,
-    params: { service: 'common', method: 'authenticate', args: [ODOO.db, ODOO.user, ODOO.pw, {}] } }, 15000);
+/* Every read runs in the company being reported, not in whichever company the
+   API user last had selected. Cost (standard_price) is held per company in Odoo,
+   so a read with no company context quietly returns the user's default company's
+   cost - right today only because that default happens to be Worthy Products. */
+const NORTH = 4; // Worthy Products North. Oceania (company 1) is deliberately left as it was - see docs.
+async function connect(cid) {
+  const j = await cachedAuth(() => rpc({ jsonrpc: '2.0', method: 'call', id: 1,
+    params: { service: 'common', method: 'authenticate', args: [ODOO.db, ODOO.user, ODOO.pw, {}] } }, 15000),
+    ODOO.url, ODOO.db, ODOO.user);
   if (!j.result) throw new Error('Odoo authentication failed');
   const uid = j.result;
   return async (model, method, args, kwargs = {}, timeout = 45000) => {
+    const scoped = cid === NORTH ? { ...kwargs, context: { allowed_company_ids: [cid], company_id: cid, ...(kwargs.context || {}) } } : kwargs;
     const r = await rpc({ jsonrpc: '2.0', method: 'call', id: 2,
       params: { service: 'object', method: 'execute_kw',
-                args: [ODOO.db, uid, ODOO.pw, model, method, args, kwargs] } }, timeout);
+                args: [ODOO.db, uid, ODOO.pw, model, method, args, scoped] } }, timeout);
     if (r.error) throw new Error(r.error.data?.message || r.error.message || `${model}.${method} failed`);
     return r.result;
   };
@@ -194,7 +202,7 @@ export async function GET(request) {
   const fy = parseInt(searchParams.get('fy') || '', 10) || nzFinancialYear();
 
   try {
-    const exec = await connect();
+    const exec = await connect(cid);
 
     /* Stop at the last invoice Odoo actually holds for this company.
      * Asking read_group for min AND max of the same field is rejected

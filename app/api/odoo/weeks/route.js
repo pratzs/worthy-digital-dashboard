@@ -7,24 +7,28 @@
  * The weekly view only ever shows one month, so this fetches exactly that month
  * and nothing more.
  */
+import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 import { toCents, toDollars, pct1, costCovered } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-async function connect() {
+const NORTH = 4; // Worthy Products North. Oceania (company 1) is deliberately left as it was - see docs.
+async function connect(cid) {
   const { ODOO_URL: url, ODOO_DB: db, ODOO_USER: user, ODOO_PASSWORD: pw } = process.env;
   const call = async (p) => (await fetch(`${url}/jsonrpc`, { method: 'POST',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p),
     signal: AbortSignal.timeout(45000) })).json();
-  const auth = await call({ jsonrpc: '2.0', method: 'call', id: 1,
-    params: { service: 'common', method: 'authenticate', args: [db, user, pw, {}] } });
+  const auth = await cachedAuth(() => call({ jsonrpc: '2.0', method: 'call', id: 1,
+    params: { service: 'common', method: 'authenticate', args: [db, user, pw, {}] } }), url, db, user);
   if (!auth.result) throw new Error('Odoo authentication failed');
   return async (model, method, args, kwargs = {}) => {
+    // Company-scoped: cost is held per company, so never read it in the user's default one.
+    const scoped = cid === NORTH ? { ...kwargs, context: { allowed_company_ids: [cid], company_id: cid, ...(kwargs.context || {}) } } : kwargs;
     const r = await call({ jsonrpc: '2.0', method: 'call', id: 2,
       params: { service: 'object', method: 'execute_kw',
-                args: [db, auth.result, pw, model, method, args, kwargs] } });
+                args: [db, auth.result, pw, model, method, args, scoped] } });
     if (r.error) throw new Error(r.error.data?.message || r.error.message || `${model}.${method}`);
     return r.result;
   };
@@ -43,7 +47,7 @@ export async function GET(request) {
   const end = `${month}-${String(lastDay).padStart(2, '0')}`;
 
   try {
-    const exec = await connect();
+    const exec = await connect(cid);
     const lineDom = (type) => [
       ['move_id.company_id', '=', cid], ['move_id.move_type', '=', type],
       ['move_id.state', '=', 'posted'],
