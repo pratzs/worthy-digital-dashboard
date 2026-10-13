@@ -569,3 +569,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       Mar 132k = $1,357,000; target GP 18% = $244,260 (both agree with the budget sheet).
       Sales checked from Odoo directly: Apr-Sep match the dashboard to the cent (Sep $70,963.20,
       the figure that matched finance's report); October moves as invoices are posted.
+- [x] **57. Nayan Patel's FY26 budget added to Sales vs Target (14 Oct 2026).** Apr 136k, May 170k,
+      Jun 148k, Jul 152k, Aug 168k, Sep 150k, Oct 174k, Nov 144k, Dec 177k, Jan 145k, Feb 166k,
+      Mar 168k = $1,898,000; target GP 18% = $341,640 (both agree with the budget sheet). Sales
+      checked from Odoo directly: Apr-Sep match the dashboard to the cent (Sep $140,469.18);
+      October moves as invoices are posted.
