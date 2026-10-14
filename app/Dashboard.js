@@ -1146,6 +1146,32 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                 </tr>
               ))}
             </tbody>
+            {annualRows.length > 0 && (() => {
+              /* The total is built the way the company figure is: revenue and orders added up,
+                 gross profit and margin on the revenue the margins rest on. When every rep has a
+                 gross profit it is the sum of the column above, so the column and its total agree
+                 to the cent; a rep whose margin is withheld is left out of the column, so then the
+                 total is worked from revenue less cost instead and is the company's. */
+              const orders  = annualRows.reduce((s, r) => s + (r.orders || 0), 0);
+              const revenue = annualRows.reduce((s, r) => s + r.revenue, 0);
+              const margRv  = annualRows.reduce((s, r) => s + (marginByName[r.name]?.marginableRevenue ?? r.revenue), 0);
+              const cost    = annualRows.reduce((s, r) => s + (marginByName[r.name]?.cost || 0), 0);
+              const allGP   = annualRows.every(r => r.grossProfit !== null);
+              const gp      = hasMargin ? (allGP ? annualRows.reduce((s, r) => s + r.grossProfit, 0) : margRv - cost) : null;
+              const pct     = gp != null && margRv > 0 ? parseFloat(((gp / margRv) * 100).toFixed(1)) : null;
+              return (
+                <tfoot>
+                  <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
+                    <td style={{ ...numStyle(), color: T.textHead, fontWeight: 700 }}>{orders.toLocaleString()}</td>
+                    <td style={{ ...cellStyle(revenue), color: accent, fontWeight: 700 }}>{money(keep(revenue), currency)}</td>
+                    <td style={{ ...cellStyle(1), fontWeight: 700 }}>{orders > 0 ? money(keep(revenue / orders), currency) : "-"}</td>
+                    {hasMargin && <td style={{ ...cellStyle(gp || 0), color: (gp ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{gp != null ? money(keep(gp), currency) : "-"}</td>}
+                    {hasMargin && <td style={{ ...cellStyle(0), color: (pct ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{pct != null ? `${pct}%` : "-"}</td>}
+                  </tr>
+                </tfoot>
+              );
+            })()}
           </table>
         </div>
       )}
@@ -1219,7 +1245,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                        summing that column would quietly shrink the total away from the
                        company figure printed at the top of the page. */
                     const colCost   = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.cost || 0), 0) : 0;
-                    const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.revenue || 0), 0) : 0;
+                    const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.marginRevenue ?? monthAt(r.months, fi)?.revenue ?? 0), 0) : 0;
                     const colGP     = hasMargin ? colMargRv - colCost : null;
                     const colMargin = colMargRv > 0 && colGP != null ? parseFloat(((colGP / colMargRv) * 100).toFixed(1)) : null;
                     const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
@@ -1238,8 +1264,9 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                     const grandTotal = monthlyPivot.reduce((s, rep) => s + rep.months.reduce((ms, m) => ms + m.revenue, 0), 0);
                     const totalMargRv = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.marginableRevenue || m.revenue || 0), 0) : 0;
                     const totalCostF  = hasMargin ? Object.values(marginByName).reduce((s, m) => s + (m.cost || 0), 0) : 0;
-                    const totalGP    = hasMargin ? totalMargRv - totalCostF : null;
-                    const totalMarginPct = totalMargRv > 0 ? parseFloat((((totalMargRv - totalCostF) / totalMargRv) * 100).toFixed(1)) : null;
+                    const gpRows     = Object.values(marginByName);
+                    const totalGP    = hasMargin ? (gpRows.every(m => m.grossProfit != null) ? gpRows.reduce((sum, m) => sum + m.grossProfit, 0) : totalMargRv - totalCostF) : null;
+                    const totalMarginPct = totalGP != null && totalMargRv > 0 ? parseFloat(((totalGP / totalMargRv) * 100).toFixed(1)) : null;
                     return (
                       <>
                         <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(grandTotal), currency)}</td>
@@ -1331,6 +1358,49 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
                   );
                 })}
               </tbody>
+              {weeklyPivot.length > 0 && (() => {
+                const monthOf = (rep) => (marginByName[rep.name]?.months || []).find(m => m.month === MONTH_NAMES[weeklyMonth]);
+                const weekOf  = (rep, wi) => (marginByName[rep.name]?.weeks || []).find(x => x.month === weeklyMonth && x.week === wi + 1);
+                const monthRev = weeklyPivot.reduce((s, r) => s + r.monthTotal, 0);
+                const mGP  = weeklyPivot.reduce((s, r) => s + (monthOf(r)?.grossProfit ?? 0), 0);
+                const mRv  = weeklyPivot.reduce((s, r) => s + (monthOf(r)?.grossProfit != null ? (monthOf(r)?.marginRevenue ?? monthOf(r)?.revenue ?? 0) : 0), 0);
+                const mPct = hasMargin && mRv > 0 ? parseFloat(((mGP / mRv) * 100).toFixed(1)) : null;
+                const colour = (v) => v != null ? (v >= 20 ? "#4ade80" : v >= 0 ? accent : "#f87171") : T.textLabel;
+                return (
+                  <tfoot>
+                    <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
+                      {Array.from({ length: maxWeeks }, (_, wi) => {
+                        const rev = weeklyPivot.reduce((s, r) => s + (r.weeks[wi]?.revenue || 0), 0);
+                        const withM = weeklyPivot.filter(r => weekOf(r, wi)?.grossProfit != null);
+                        const gp = withM.reduce((s, r) => s + weekOf(r, wi).grossProfit, 0);
+                        const rv = withM.reduce((s, r) => s + (weekOf(r, wi).marginRevenue ?? weekOf(r, wi).revenue ?? 0), 0);
+                        const pct = hasMargin && rv > 0 ? parseFloat(((gp / rv) * 100).toFixed(1)) : null;
+                        return (
+                          <td key={wi} style={{ ...cellStyle(rev), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
+                            {rev !== 0 ? (
+                              <>
+                                <div>{money(keep(rev), currency)}</div>
+                                {pct != null && <div style={{ fontSize: 9, color: colour(pct), fontWeight: 700, marginTop: 2 }}>{pct}%</div>}
+                              </>
+                            ) : "-"}
+                          </td>
+                        );
+                      })}
+                      <td style={{ ...cellStyle(monthRev), color: accent, fontWeight: 700, verticalAlign: "top" }}>
+                        {monthRev !== 0 ? (
+                          <>
+                            <div>{money(keep(monthRev), currency)}</div>
+                            {mPct != null && <div style={{ fontSize: 9, color: colour(mPct), fontWeight: 700, marginTop: 2 }}>{mPct}%</div>}
+                          </>
+                        ) : "-"}
+                      </td>
+                      {hasMargin && <td style={{ ...cellStyle(mGP), color: "#C97C9E", fontWeight: 700 }}>{mRv > 0 ? money(keep(mGP), currency) : "-"}</td>}
+                      {hasMargin && <td style={{ ...cellStyle(0), color: colour(mPct), fontWeight: 700 }}>{mPct != null ? `${mPct}%` : "-"}</td>}
+                    </tr>
+                  </tfoot>
+                );
+              })()}
             </table>
           </div>
         </>
@@ -2115,10 +2185,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
     .filter(r => r.cost != null)
     .map(r => ({
       name: r.name, revenue: r.revenue, cost: r.cost, grossProfit: r.grossProfit,
-      marginableRevenue: r.revenue, marginPct: r.marginPct,
+      marginableRevenue: r.marginRevenue ?? r.costedRevenue ?? r.revenue, marginPct: r.marginPct,
       marginWithheld: r.marginWithheld, costCoverage: r.costCoverage,
       months: r.months.map(m => ({
-        month: m.label, revenue: m.revenue, cost: m.cost,
+        month: m.label, revenue: m.revenue, cost: m.marginCost ?? m.cost,
+        marginRevenue: m.marginRevenue ?? m.costedRevenue ?? m.revenue,
         grossProfit: m.grossProfit, marginPct: m.marginPct, started: m.started,
         marginWithheld: m.marginWithheld, costCoverage: m.costCoverage,
       })),
@@ -2130,6 +2201,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         return {
           month: mi, week: w.week, revenue: w.revenue,
           cost: hit?.cost ?? null, grossProfit: hit?.grossProfit ?? null,
+          marginRevenue: hit?.grossProfit != null && hit?.cost != null ? hit.grossProfit + hit.cost : null,
           marginPct: hit?.marginPct ?? null,
         };
       }),
@@ -2164,11 +2236,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
       marginableRevenue: r.marginRevenue ?? r.costedRevenue ?? basisOf(r).revenue,
       priorRevenue: basisOf(r.prior).revenue, growthPct: r.growthPct,
       months: r.months.map(m => ({
-        month: m.label, ...basisOf(m), cost: basisOf(m).cost, started: m.started,
+        month: m.label, ...basisOf(m), cost: m.marginCost ?? basisOf(m).cost,
+        marginRevenue: m.marginRevenue ?? basisOf(m).revenue, started: m.started,
       })),
       weeks: r.weeks.map(w => ({
         month: MONTH_IDX[MONTH_NAMES[parseInt(w.monthKey.slice(5, 7), 10) - 1]],
-        week: w.week, ...basisOf(w), cost: basisOf(w).cost,
+        week: w.week, ...basisOf(w), cost: w.marginCost ?? basisOf(w).cost,
+        marginRevenue: w.marginRevenue ?? basisOf(w).revenue,
       })),
     }));
 

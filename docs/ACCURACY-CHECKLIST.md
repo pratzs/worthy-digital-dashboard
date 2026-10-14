@@ -643,3 +643,13 @@ Teams, months, reps and the currency split each add up to the company total, and
       498 notes have one; the credit note's own reference is shown when there is none, which is
       where Oceania keeps it). Worthy South (Dutch Rusk) and Oceania are inter-company customers and
       appear in the customer list. Oceania loads through the same screen.
+- [x] **66. Sales by Rep has a TOTAL row in all three views (14 Oct 2026).** Annual: orders, revenue,
+      average order, gross profit and margin. Weekly: each week, the month total, gross profit and
+      margin. Monthly already had one. All three work from the same basis as the rows: revenue and
+      orders added up; gross profit is the sum of the column above it (to the cent) and margin is on
+      the revenue the margin rests on (North: sales that have a cost; South: without the impossible-
+      cost lines). The Monthly total used the full revenue against costed-line cost, so it counted
+      the small amount of no-cost sales (about $3.3k for North) as profit; fixed. Checked on North:
+      annual 8,357 orders, $9,016,405.66, GP $1,191,066.32, 13.2% = the monthly grand total = the
+      Overview; weekly month total equals the October column. South: 13,597 orders, $9,511,576.67,
+      GP $1,698,155.04, 18.0%.
