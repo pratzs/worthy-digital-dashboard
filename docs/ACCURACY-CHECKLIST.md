@@ -653,3 +653,10 @@ Teams, months, reps and the currency split each add up to the company total, and
       annual 8,357 orders, $9,016,405.66, GP $1,191,066.32, 13.2% = the monthly grand total = the
       Overview; weekly month total equals the October column. South: 13,597 orders, $9,511,576.67,
       GP $1,698,155.04, 18.0%.
+- [x] **67. Warm-up no longer emails failures (14 Oct 2026).** The GitHub warm-up job failed once
+      (HTTP 504): a cold start needs more Odoo reads than one request may run (300s) and Vercel
+      cut it off. The endpoint now works to a 150s budget, stops starting new reads when it is
+      used, always answers 200 with what it did, and the next call (5 minutes later) continues.
+      The job no longer fails on a slow or failed call (it writes a warning in its log) and
+      never overlaps itself (concurrency group). Tested: manual run completed, HTTP 200 in 160s,
+      5 figures filled, 1 left for the next call. All 12 latest Vercel deployments succeeded.
