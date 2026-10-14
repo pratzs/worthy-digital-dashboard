@@ -733,3 +733,7 @@ Teams, months, reps and the currency split each add up to the company total, and
       Budget to date $562,516.13, so she is +$79,947.53 ahead. South now has a target for every field rep
       (Ravi, Leith, Keith, Jerry, Chris, Michelle, Lynette); only the Christchurch Office / Online code (450)
       has none, as it is not a field rep.
+- [x] **77. Switching tabs keeps the chosen company (14 Oct 2026).** The tab links (Overview and Sales, Analytics,
+      Credit Notes, Debtors) did not carry the company, year and view, so opening another tab on Worthy
+      Products South landed on Worthy Products North. They now carry them in the address; checked by clicking
+      through all four tabs on South: each stays on South.

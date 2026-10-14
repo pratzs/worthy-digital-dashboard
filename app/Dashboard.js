@@ -3021,10 +3021,16 @@ export default function EcommerceDashboard({ section = "overview" }) {
               tabs.splice(tabs.some(x => x.id === "credits" || x.id === "debtors") ? at : tabs.length, 0,
                 { id: "analytics", path: grouped[0].path, label: "Analytics" });
             }
+            // Carry the chosen company, year and view to the other page, so switching tabs on
+            // Worthy Products South stays on South instead of dropping back to North.
+            const keep = new URLSearchParams({
+              store: activeStore.id, fy: String(selectedYear), view, tab: channelTab,
+              m: String(weeklyMonth), w: String(selectedWeek), dark: darkMode ? "1" : "0",
+            }).toString();
             return tabs.map(sec => {
               const on = sec.id === "analytics" ? GROUP.includes(section) : sec.id === section;
               return (
-                <Link key={sec.id} href={sec.path} style={{
+                <Link key={sec.id} href={`${sec.path}#${keep}`} style={{
                   padding: "8px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, textDecoration: "none",
                   border: on ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
                   background: on ? `${accent}18` : "transparent", color: on ? accent : T.textMuted,
