@@ -726,3 +726,10 @@ Teams, months, reps and the currency split each add up to the company total, and
       Jan $135,000, Feb $154,000, Mar $149,000 = $1,833,000 (checked by the app); target GP 20.00% =
       $366,600. Sales $867,615.51 and GP $163,176.91 (19.0%) match Ostendo directly, every month included.
       Budget to date $972,387.10, so she is -$104,771.59 behind.
+- [x] **76. Sales vs Target for South: Lynette (14 Oct 2026).** Budget sheet as printed: Apr $82,000, May $93,000,
+      Jun $75,000, Jul $85,000, Aug $89,000, Sep $97,000, Oct $99,000, Nov $90,000, Dec $90,000,
+      Jan $85,000, Feb $78,000, Mar $85,000 = $1,048,000 (checked by the app); target GP 20.00% =
+      $209,600. Sales $642,463.66 and GP $123,998.03 (19.5%) match Ostendo directly, every month included.
+      Budget to date $562,516.13, so she is +$79,947.53 ahead. South now has a target for every field rep
+      (Ravi, Leith, Keith, Jerry, Chris, Michelle, Lynette); only the Christchurch Office / Online code (450)
+      has none, as it is not a field rep.
