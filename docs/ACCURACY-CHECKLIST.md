@@ -700,3 +700,9 @@ Teams, months, reps and the currency split each add up to the company total, and
       them if they do not). Shown on South's Overview and Sales by Rep. Sales $114,309.85 and GP $21,714.85
       are the same figures as Sales by Rep (checked against Ostendo directly); budget to date $331,451.61
       (May-Sep in full + Oct 13/31 of $75,000), so he reads -$217,141.76 against budget.
+- [x] **71. Sales vs Target for South: Leith (14 Oct 2026).** Budget sheet as printed: Apr $275,000, May $278,000,
+      Jun $260,000, Jul $318,000, Aug $303,000, Sep $332,000, Oct $323,000, Nov $299,000, Dec $338,000,
+      Jan $331,000, Feb $315,000, Mar $322,000 = $3,694,000 (the app checks the months add to the total);
+      target GP 20.00% = $738,800. Sales $1,927,044.54 and GP $353,868.56 (18.5%) match Ostendo directly,
+      every month included. Budget to date $1,901,451.61 (Apr-Sep in full + Oct 13/31), so he is
+      +$25,592.93 ahead.
