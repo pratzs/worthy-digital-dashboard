@@ -716,3 +716,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       Jan $159,000, Feb $148,000, Mar $145,000 = $1,830,000 (checked by the app); target GP 20.00% =
       $366,000. Sales $781,426.66 and GP $144,024.77 (18.6%) match Ostendo directly, every month included.
       Budget to date $982,774.19, so he is -$201,347.53 behind.
+- [x] **74. Sales vs Target for South: Chris (14 Oct 2026).** Budget sheet as printed: Apr $124,000, May $113,000,
+      Jun $103,000, Jul $123,000, Aug $126,000, Sep $131,000, Oct $139,000, Nov $119,000, Dec $125,000,
+      Jan $115,000, Feb $112,000, Mar $128,000 = $1,458,000 (checked by the app); target GP 20.00% =
+      $291,600. Sales $639,270.51 and GP $114,659.29 (18.4%) match Ostendo directly, every month included.
+      Budget to date $778,290.32, so he is -$139,019.81 behind.
