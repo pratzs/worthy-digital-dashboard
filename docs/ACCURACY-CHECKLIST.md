@@ -660,3 +660,17 @@ Teams, months, reps and the currency split each add up to the company total, and
       The job no longer fails on a slow or failed call (it writes a warning in its log) and
       never overlaps itself (concurrency group). Tested: manual run completed, HTTP 200 in 160s,
       5 figures filled, 1 left for the next call. All 12 latest Vercel deployments succeeded.
+- [x] **68. Debtors audited and rebuilt; North is Odoo sales only (14 Oct 2026).** North debtors match Odoo's
+      receivable ledger to the cent: $2,803,964.70 over 2,190 open invoices and credit notes from 648
+      customers (not yet due $2,396,975.20; 1-30 late $215,170.46; 31-60 $97,316.24; 61-90 $32,945.04;
+      over 90 $61,557.76; overdue $406,989.50 = 14.5%); no open payment or journal lines in the ledger.
+      The screen showed only the 40 customers with the most overdue and nothing else. Now: a how-late
+      bar, "Chase first" (over 60 days, inter-company left out), by sales rep (the salesperson
+      assigned to the customer in Odoo; field reps by name, others Direct) with a TOTAL, and every
+      customer with search, filters (overdue, 30/60/90+ late, rep, hide inter-company), sort, a
+      TOTAL, click-to-open invoices (a customer's invoices add up to their balance) and two CSV
+      downloads. $542,245.60 of the total is inter-company (Worthy South and Oceania, none overdue),
+      flagged and excluded from Chase first. Debtors are now shared in five-minute slots and
+      pre-warmed (a cold read had taken 30s queued behind the financial-year read; cached 80ms).
+      The Online Sales and POS Sales channel tabs are removed from North (Odoo sales only for now);
+      old tab=pos / tab=online links land on Odoo Sales. Header reads "Live Odoo".

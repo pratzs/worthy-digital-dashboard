@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { nzFinancialYear } from '@/lib/ostendo';
 import { readFY, slotOf } from '@/lib/odooFyCache';
+import { readDebtors } from '@/lib/odooDebtorsCache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -25,6 +26,14 @@ export async function GET() {
   const fy = nzFinancialYear();
   const now = slotOf();
   const out = [];
+  // Debtors first: quick, and the screen is opened often.
+  for (const slot of [now, now + 1]) {
+    for (const cid of [4, 1]) {
+      const t0 = Date.now();
+      try { await readDebtors(cid, { slot }); out.push({ slot: slot - now, debtors: cid, ms: Date.now() - t0 }); }
+      catch (e) { out.push({ slot: slot - now, debtors: cid, ms: Date.now() - t0, error: String(e.message).slice(0, 80) }); }
+    }
+  }
   for (const slot of [now, now + 1]) {
     for (const [cid, year] of [[4, fy], [1, fy], [4, fy - 1]]) {
       if (Date.now() - began > BUDGET_MS) { out.push({ slot: slot - now, cid, year, skipped: 'time budget used, next call continues' }); continue; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { REP_TARGETS, fyTargetOf } from "@/lib/repTargets";
-import { useState, useEffect, useRef, useReducer } from "react";
+import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
 import {
   Area, BarChart, Bar, Line,
@@ -485,6 +485,245 @@ const SectionTitle = ({ icon, accent, children }) => (
     <Icon name={icon} size={17} style={{ color: accent }} />{children}
   </div>
 );
+/* Debtors for the Odoo companies, built for whoever chases payment: what is owed and how
+   late, who to chase first, whose customers they are, every customer (not just the worst
+   forty) with search and filters, and each customer's open invoices one click away. */
+const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
+  const [q, setQ] = useState("");
+  const [show, setShow] = useState("all");
+  const [rep, setRep] = useState("All");
+  const [sort, setSort] = useState("overdue");
+  const [hideIC, setHideIC] = useState(false);
+  const [open, setOpen] = useState(null);
+  const [limit, setLimit] = useState(100);
+  const money = (v) => fmtExact(v, currency);
+  const red = "#dc2626";
+  const t = d.totals;
+  const dash = (v, bold, color) => (!v ? <span style={{ color: T.textLabel }}>-</span> : <span style={{ fontWeight: bold ? 700 : 400, color }}>{money(v)}</span>);
+  const cell = { padding: "9px 12px", fontSize: 12, color: T.textRow };
+  const head = (align = "right") => ({ padding: "9px 12px", textAlign: align, color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` });
+  const card = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 20 };
+  const title = (icon, text, sub) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}><Icon name={icon} size={15} style={{ marginRight: 8, color: accent }} />{text}</div>
+      {sub && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{sub}</div>}
+    </div>);
+  const tile = (label, value, note, color) => (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: color || T.textHead, marginTop: 6 }}>{value}</div>
+      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, lineHeight: 1.45 }}>{note}</div>}
+    </div>);
+  const sel = { padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgCard, color: T.textHead, fontSize: 12 };
+
+  const bands = [
+    ["current", "Not yet due", "#94a3b8"], ["d1to30", "1 to 30 days late", "#f59e0b"], ["d31to60", "31 to 60", "#ea580c"],
+    ["d61to90", "61 to 90", "#dc2626"], ["over90", "Over 90", "#991b1b"],
+  ];
+  const pctOf = (v) => (t.outstanding > 0 ? (v / t.outstanding) * 100 : 0);
+
+  const needle = q.trim().toLowerCase();
+  const rows = d.customers.filter(c =>
+    (!hideIC || !c.intercompany) && (rep === "All" || c.rep === rep) &&
+    (show === "all" || (show === "overdue" && c.overdue > 0) || (show === "31" && c.d31to60 + c.d61to90 + c.over90 > 0)
+      || (show === "61" && c.d61to90 + c.over90 > 0) || (show === "90" && c.over90 > 0)) &&
+    (!needle || c.name.toLowerCase().includes(needle)));
+  const order = {
+    overdue: (a, b) => b.overdue - a.overdue || b.total - a.total,
+    total: (a, b) => b.total - a.total,
+    oldest: (a, b) => b.oldestDays - a.oldestDays || b.overdue - a.overdue,
+    name: (a, b) => a.name.localeCompare(b.name),
+  }[sort];
+  rows.sort(order);
+  const sum = (k) => rows.reduce((s, c) => s + c[k], 0);
+  const shownRows = rows.slice(0, limit);
+  const filtered = rows.length !== d.customers.length;
+
+  // Chase first: customers with money more than 60 days past due, biggest first.
+  const chase = d.customers.filter(c => !c.intercompany && c.d61to90 + c.over90 > 0)
+    .sort((a, b) => (b.d61to90 + b.over90) - (a.d61to90 + a.over90)).slice(0, 10);
+
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const download = (name, lines) => {
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const csvCustomers = () => download(`debtors-by-customer-${d.asOf}.csv`, [
+    ["Customer", "Sales rep", "Inter-company", "Not yet due", "1 to 30 late", "31 to 60 late", "61 to 90 late", "Over 90 late", "Total owed", "Overdue", "Oldest (days late)", "Open documents"].map(esc).join(","),
+    ...rows.map(c => [c.name, c.rep, c.intercompany ? "Yes" : "", c.current, c.d1to30, c.d31to60, c.d61to90, c.over90, c.total, c.overdue, c.oldestDays, c.documents].map(esc).join(","))]);
+  const nameOf = new Map(d.customers.map(c => [c.id, c.name]));
+  const repOf = new Map(d.customers.map(c => [c.id, c.rep]));
+  const csvInvoices = () => download(`debtors-open-invoices-${d.asOf}.csv`, [
+    ["Customer", "Sales rep", "Document", "Type", "Invoice date", "Due date", "Days late", "Outstanding"].map(esc).join(","),
+    ...d.invoices.slice().sort((a, b) => (nameOf.get(a.c) || "").localeCompare(nameOf.get(b.c) || "") || b.days - a.days)
+      .map(i => [nameOf.get(i.c), repOf.get(i.c), i.doc, i.kind, i.inv, i.due, Math.max(i.days, 0), i.amt].map(esc).join(","))]);
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ color: T.textHead, marginBottom: 14 }}>
+        <SectionTitle icon="receipt" accent={accent}>Debtors</SectionTitle>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>What customers owe us, how late it is, who to chase and whose customers they are. Amounts include GST. Lateness is counted from the due date</div>
+      </div>
+      <div style={{ marginBottom: 14 }}><RangeTag text={`As at ${fmtDay(d.asOf)}`} theme={T} /></div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 16 }}>
+        {tile("Owed to us", money(t.outstanding), `${d.documents.toLocaleString()} open invoices from ${d.customerCount.toLocaleString()} customers${t.intercompany?.total ? `. ${money(t.intercompany.total)} of it is inter-company (Worthy South and Oceania)` : ""}`)}
+        {tile("Overdue", money(t.overdue), t.overduePct != null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? red : undefined)}
+        {tile("Over 60 days late", money(t.d61to90 + t.over90), "More than 60 days past the due date", t.d61to90 + t.over90 > 0 ? red : undefined)}
+        {tile("Over 90 days late", money(t.over90), `${d.customers.filter(c => c.over90 > 0).length} customers`, t.over90 > 0 ? red : undefined)}
+        {tile("Not yet due", money(t.current), "Inside payment terms")}
+      </div>
+
+      <div style={card}>
+        {title("chart", "How Late The Money Is", "Share of everything owed, by how far past the due date")}
+        <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", background: "rgba(128,128,128,0.15)" }}>
+          {bands.map(([k, , col]) => <div key={k} title={money(t[k])} style={{ width: `${Math.max(pctOf(t[k]), 0)}%`, background: col }} />)}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 28px", marginTop: 12 }}>
+          {bands.map(([k, label, col]) => (
+            <div key={k} style={{ fontSize: 12, color: T.textRow }}>
+              <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: col, marginRight: 6 }} />
+              {label}: <strong style={{ color: T.textHead }}>{money(t[k])}</strong> <span style={{ color: T.textMuted }}>({pctOf(t[k]).toFixed(1)}%)</span>
+            </div>))}
+        </div>
+      </div>
+
+      {chase.length > 0 && (
+        <div style={card}>
+          {title("alert", "Chase First", "Customers with money more than 60 days past due, biggest first (inter-company left out)")}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={head("left")}>Customer</th><th style={head("left")}>Sales rep</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th><th style={head()}>Oldest (days late)</th><th style={head()}>Total owed</th></tr></thead>
+              <tbody>{chase.map(c => (
+                <tr key={c.id} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                  <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{c.name}</td>
+                  <td style={{ ...cell, whiteSpace: "nowrap" }}>{c.rep}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{dash(c.d61to90)}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{dash(c.over90, true, "#b91c1c")}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{c.oldestDays}</td>
+                  <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(c.total)}</td>
+                </tr>))}</tbody>
+          </table></div>
+        </div>
+      )}
+
+      <div style={card}>
+        {title("user", "By Sales Rep", "Each customer sits with the salesperson assigned to them in Odoo. Everyone else is Direct")}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>
+              <th style={head("left")}>Sales rep</th><th style={head()}>Customers</th><th style={head()}>Owed</th><th style={head()}>Overdue</th>
+              <th style={head()}>31 to 60</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th>
+            </tr></thead>
+            <tbody>{d.reps.map(r => (
+              <tr key={r.rep} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{r.rep}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{r.customers.toLocaleString()} <span style={{ color: T.textMuted }}>({r.overdueCustomers} late)</span></td>
+                <td style={{ ...cell, textAlign: "right" }}>{money(r.total)}</td>
+                <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700 }}>{dash(r.overdue, true, red)}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{dash(r.d31to60)}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{dash(r.d61to90)}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{dash(r.over90)}</td>
+              </tr>))}</tbody>
+            <tfoot><tr style={{ borderTop: `1px solid ${T.border}` }}>
+              <td style={{ ...cell, fontSize: 10, fontWeight: 700, color: T.textMuted }}>TOTAL</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{d.customerCount.toLocaleString()}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.outstanding)}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: red }}>{money(t.overdue)}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.d31to60)}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.d61to90)}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.over90)}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div style={card}>
+        {title("receipt", "Every Customer Who Owes Us", "Open invoices less credit notes, aged by days past the due date. Click a customer to see their open invoices")}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+          <input value={q} onChange={e => { setQ(e.target.value); setLimit(100); }} placeholder="Search customer" style={{ ...sel, minWidth: 220, flex: "1 1 220px" }} />
+          <select value={show} onChange={e => { setShow(e.target.value); setLimit(100); }} style={sel}>
+            <option value="all">Everyone who owes</option><option value="overdue">Overdue only</option>
+            <option value="31">More than 30 days late</option><option value="61">More than 60 days late</option><option value="90">More than 90 days late</option>
+          </select>
+          <select value={rep} onChange={e => { setRep(e.target.value); setLimit(100); }} style={sel}>
+            <option value="All">All sales reps</option>{d.reps.map(r => <option key={r.rep} value={r.rep}>{r.rep}</option>)}
+          </select>
+          <select value={sort} onChange={e => setSort(e.target.value)} style={sel}>
+            <option value="overdue">Sort: most overdue</option><option value="total">Sort: largest balance</option>
+            <option value="oldest">Sort: oldest late</option><option value="name">Sort: name</option>
+          </select>
+          <label style={{ fontSize: 12, color: T.textRow, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={hideIC} onChange={e => setHideIC(e.target.checked)} /> Hide inter-company
+          </label>
+          <span style={{ flex: 1 }} />
+          <button onClick={csvCustomers} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Download customers CSV</button>
+          <button onClick={csvInvoices} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Download all open invoices CSV</button>
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10 }}>
+          Showing {shownRows.length.toLocaleString()} of {rows.length.toLocaleString()} customers{filtered ? ` (filtered from ${d.customerCount.toLocaleString()})` : ""}.
+        </div>
+        <div style={{ overflow: "auto", maxHeight: 640 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}><tr>
+              <th style={head("left")}>Customer</th><th style={head("left")}>Sales rep</th><th style={head()}>Not yet due</th>
+              <th style={head()}>1 to 30</th><th style={head()}>31 to 60</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th>
+              <th style={head()}>Oldest</th><th style={head()}>Total owed</th>
+            </tr></thead>
+            <tbody>
+              {shownRows.length === 0 && <tr><td colSpan={9} style={{ ...cell, textAlign: "center", padding: 24, color: T.textMuted }}>No customers match</td></tr>}
+              {shownRows.map(c => {
+                const isOpen = open === c.id;
+                const inv = isOpen ? d.invoices.filter(i => i.c === c.id).sort((a, b) => b.days - a.days) : [];
+                return (
+                  <React.Fragment key={c.id}>
+                    <tr onClick={() => setOpen(isOpen ? null : c.id)} style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: "pointer", background: isOpen ? `${accent}0d` : "transparent" }}>
+                      <td style={{ ...cell, color: T.text, minWidth: 200 }}>
+                        <span style={{ color: T.textMuted, marginRight: 6 }}>{isOpen ? "▾" : "▸"}</span>{c.name}
+                        {c.intercompany && <span style={{ marginLeft: 8, fontSize: 10, color: "#b45309", border: "1px solid #b4530955", borderRadius: 6, padding: "1px 6px" }}>inter-company</span>}
+                      </td>
+                      <td style={{ ...cell, whiteSpace: "nowrap" }}>{c.rep}</td>
+                      <td style={{ ...cell, textAlign: "right" }}>{dash(c.current)}</td>
+                      <td style={{ ...cell, textAlign: "right" }}>{dash(c.d1to30)}</td>
+                      <td style={{ ...cell, textAlign: "right", color: "#b45309" }}>{dash(c.d31to60)}</td>
+                      <td style={{ ...cell, textAlign: "right", color: "#c2410c" }}>{dash(c.d61to90)}</td>
+                      <td style={{ ...cell, textAlign: "right", color: "#b91c1c" }}>{dash(c.over90)}</td>
+                      <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>{c.oldestDays > 0 ? `${c.oldestDays} days` : <span style={{ color: T.textLabel }}>-</span>}</td>
+                      <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(c.total)}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr><td colSpan={9} style={{ padding: "4px 12px 16px 36px", background: `${accent}0d` }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                          <thead><tr><th style={head("left")}>Document</th><th style={head("left")}>Type</th><th style={head("left")}>Invoice date</th><th style={head("left")}>Due date</th><th style={head()}>Days late</th><th style={head()}>Outstanding</th></tr></thead>
+                          <tbody>{inv.map(i => (
+                            <tr key={i.doc} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                              <td style={cell}>{i.doc}</td><td style={cell}>{i.kind}</td><td style={cell}>{i.inv ? fmtDay(i.inv) : "-"}</td><td style={cell}>{i.due ? fmtDay(i.due) : "-"}</td>
+                              <td style={{ ...cell, textAlign: "right", color: i.days > 0 ? red : T.textLabel }}>{i.days > 0 ? i.days : "not due"}</td>
+                              <td style={{ ...cell, textAlign: "right", fontWeight: 600, color: i.amt < 0 ? "#16a34a" : T.textHead }}>{money(i.amt)}</td>
+                            </tr>))}</tbody>
+                        </table>
+                      </td></tr>
+                    )}
+                  </React.Fragment>);
+              })}
+            </tbody>
+            <tfoot><tr style={{ borderTop: `1px solid ${T.border}` }}>
+              <td style={{ ...cell, fontSize: 10, fontWeight: 700, color: T.textMuted }} colSpan={2}>{filtered ? "TOTAL OF THESE CUSTOMERS" : "TOTAL"}</td>
+              {["current", "d1to30", "d31to60", "d61to90", "over90"].map(k => <td key={k} style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(sum(k))}</td>)}
+              <td style={cell} />
+              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(sum("total"))}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+        {rows.length > limit && (
+          <div style={{ marginTop: 12, textAlign: "center" }}>
+            <button onClick={() => setLimit(limit + 200)} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Show 200 more ({(rows.length - limit).toLocaleString()} not shown)</button>
+          </div>)}
+      </div>
+    </div>
+  );
+};
+
 const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
@@ -505,6 +744,7 @@ const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
       {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
     </div>
   );
+  if (d?.version === 2) return <DebtorsOdoo d={d} theme={T} accent={accent} currency={currency} />;
   const t = d?.totals;
   const asAt = d ? `As at ${fmtDay(d.asOf)}` : null;
   /* A nil bucket is a dash, so the buckets that hold money stand out. */
@@ -1477,7 +1717,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       const yr = parseInt(p.get("fy") || "", 10);
       if (ALL_YEARS.includes(yr)) setSelectedYear(yr);
       if (["monthly", "weekly", "yoy"].includes(p.get("view"))) setView(p.get("view"));
-      if (["odoo", "online", "pos"].includes(p.get("tab"))) setChannelTab(p.get("tab"));
+      if (p.get("tab") === "odoo") setChannelTab("odoo"); // an old tab=pos / tab=online link lands on Odoo Sales
       const mo = parseInt(p.get("m") || "", 10);
       if (mo >= 0 && mo <= 11) setWeeklyMonth(mo);
       const wk = parseInt(p.get("w") || "", 10);
@@ -2716,7 +2956,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               {anyLoading && <div style={{ fontSize: 10, color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: "2px 8px", borderRadius: 20 }}>LOADING…</div>}
             </div>
             <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.04em", marginTop: 2 }}>
-              {activeStore.id === "worthy" ? "Live Shopify + Odoo" : activeStore.id === "luxe" ? "Live Ostendo" : "Live Odoo"} · Performance Overview
+              {activeStore.id === "worthy" ? "Live Odoo" : activeStore.id === "luxe" ? "Live Ostendo" : "Live Odoo"} · Performance Overview
             </div>
           </div>
         </div>
@@ -2741,16 +2981,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
       {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
       {(activeStore.id === "worthy" || activeStore.id === "nova") && (
         <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-          {(activeStore.id === "worthy"
-            ? [
-                { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
-                { id: "online", label: "Online Sales", icon: "globe" },
-                { id: "pos",    label: "POS Sales",    icon: "store" },
-              ]
-            : [
-                { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
-              ]
-          ).map(tab => (
+          {/* North is Odoo sales only for now: the Online and POS channels are not shown. Their
+              code is still here, switched off, in case they come back. */}
+          {[
+            { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
+          ].map(tab => (
             <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
               padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap",
               border: "none", borderBottom: channelTab === tab.id ? `2px solid ${accent}` : "2px solid transparent",
