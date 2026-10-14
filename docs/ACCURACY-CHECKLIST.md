@@ -706,3 +706,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       target GP 20.00% = $738,800. Sales $1,927,044.54 and GP $353,868.56 (18.5%) match Ostendo directly,
       every month included. Budget to date $1,901,451.61 (Apr-Sep in full + Oct 13/31), so he is
       +$25,592.93 ahead.
+- [x] **72. Sales vs Target for South: Keith (14 Oct 2026).** Budget sheet as printed: Apr $133,000, May $118,000,
+      Jun $136,000, Jul $145,000, Aug $132,000, Sep $129,000, Oct $143,000, Nov $135,000, Dec $147,000,
+      Jan $135,000, Feb $134,000, Mar $134,000 = $1,621,000 (checked by the app); target GP 20.00% =
+      $324,200. Sales $943,573.64 and GP $156,256.79 (16.7%) match Ostendo directly, every month included.
+      Budget to date $852,967.74, so he is +$90,605.90 ahead.
