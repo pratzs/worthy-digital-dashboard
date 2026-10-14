@@ -695,3 +695,8 @@ Teams, months, reps and the currency split each add up to the company total, and
       instead of reading as one product; product/category margins on the same basis as the Overview. South
       figures, analytics, credits and debtors are now shared in five-minute slots and warmed like North
       (cached 100-150ms; cold analytics 8s).
+- [x] **70. Sales vs Target for South: Ravi Kumar (14 Oct 2026).** Same budget as Nimesh on North: no April,
+      total $835,000, GP 18.00% = $150,300 (monthly amounts add to the sheet total; the app refuses to load
+      them if they do not). Shown on South's Overview and Sales by Rep. Sales $114,309.85 and GP $21,714.85
+      are the same figures as Sales by Rep (checked against Ostendo directly); budget to date $331,451.61
+      (May-Sep in full + Oct 13/31 of $75,000), so he reads -$217,141.76 against budget.

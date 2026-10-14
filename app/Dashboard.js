@@ -1203,9 +1203,9 @@ const GroupTitle = ({ text }) => (
    always agree. "vs pace" compares sales with what the budget says should have been
    sold by now: every finished month in full, plus the part of the current month
    that has passed. */
-const SalesVsTargetTable = ({ theme, payload }) => {
+const SalesVsTargetTable = ({ theme, payload, company = "north" }) => {
   const year = payload?.fy;
-  const targets = REP_TARGETS.filter(t => t.fy === year);
+  const targets = REP_TARGETS.filter(t => t.fy === year && (t.company || "north") === company);
   const barColor = (p) => (p >= 100 ? "#16a34a" : p >= 90 ? "#65a30d" : p >= 75 ? "#f59e0b" : "#dc2626");
   const rows = !payload ? [] : targets.map(t => {
     const rep = (payload.reps || []).find(r => r.name === t.rep);
@@ -3495,6 +3495,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         )}
         {section === "overview" && activeStore.id === "luxe" && (
           <div style={{ marginTop: 8 }}>
+            <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} company="south" />
             <SalesRepBreakdown
               salespeople={getSalespeople()}
               salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
@@ -3696,6 +3697,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
             {advTab === "reps" && (
               activeStore.id === "luxe" ? (
+                <>
+                <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} company="south" />
                 <SalesRepBreakdown
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
@@ -3710,6 +3713,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   T={T} accent={accent}
                   exact
                 />
+                </>
               ) : channelTab === "pos" ? (
                 <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
                   aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
