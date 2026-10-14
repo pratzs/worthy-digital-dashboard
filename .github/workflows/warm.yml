@@ -3,10 +3,28 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+
+# One warm-up at a time. If a run is still going when the next one is due, the next waits
+# (and a third replaces it) instead of piling more work onto Odoo.
+concurrency:
+  group: warm-dashboard
+  cancel-in-progress: false
+
 jobs:
   warm:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - name: Fill the shared figures for this slot and the next
-        run: curl -fsS --max-time 420 https://worthy-digital-dashboard.vercel.app/api/cron/warm
+        run: |
+          # A slow or failed warm-up is not an emergency: the next call carries on. It is
+          # recorded as a warning in this run's log instead of failing the job, so it does not
+          # send a failure email every five minutes. A real outage still shows in the warnings.
+          code=$(curl -sS --max-time 330 -o warm.json -w '%{http_code}' https://worthy-digital-dashboard.vercel.app/api/cron/warm || echo 000)
+          echo "HTTP $code"
+          cat warm.json 2>/dev/null | head -c 1500 || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::warning title=Warm-up did not complete::The dashboard answered HTTP $code. The next run will continue."
+          fi
+          exit 0

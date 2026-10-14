@@ -14,12 +14,20 @@ export const maxDuration = 300;
    It needs no secret because it can do no harm and reveals nothing: it returns only
    a status, and a slot that is already filled is answered from the cache, so calling
    it often costs Odoo nothing. At most one live read per slot per figure, ever. */
+/* A cold start (nothing stored yet) can take several minutes of Odoo reads, longer than
+   one request is allowed to run. So the warm-up works to a time budget: it stops STARTING
+   new reads once the budget is used and answers normally, and whatever is left is picked up
+   by the next call five minutes later. A read already running finishes well inside the limit. */
+const BUDGET_MS = 150 * 1000;
+
 export async function GET() {
+  const began = Date.now();
   const fy = nzFinancialYear();
   const now = slotOf();
   const out = [];
   for (const slot of [now, now + 1]) {
     for (const [cid, year] of [[4, fy], [1, fy], [4, fy - 1]]) {
+      if (Date.now() - began > BUDGET_MS) { out.push({ slot: slot - now, cid, year, skipped: 'time budget used, next call continues' }); continue; }
       const t = Date.now();
       try {
         const { payload } = await readFY(cid, year, { slot });
@@ -29,5 +37,8 @@ export async function GET() {
       }
     }
   }
-  return NextResponse.json({ ok: out.every((o) => !o.error), out });
+  return NextResponse.json({
+    ok: out.every((o) => !o.error), done: out.filter((o) => o.ms != null && !o.error).length,
+    skipped: out.filter((o) => o.skipped).length, ms: Date.now() - began, out,
+  });
 }
