@@ -674,3 +674,24 @@ Teams, months, reps and the currency split each add up to the company total, and
       pre-warmed (a cold read had taken 30s queued behind the financial-year read; cached 80ms).
       The Online Sales and POS Sales channel tabs are removed from North (Odoo sales only for now);
       old tab=pos / tab=online links land on Odoo Sales. Header reads "Live Odoo".
+- [x] **69. Worthy Products South given the same treatment as North (14 Oct 2026).** Checked against Ostendo
+      itself. Overview/Sales by Rep: product-line revenue $9,511,576.67 and every rep's revenue and gross
+      profit match an independent Ostendo query (to the cent; a rep's GP can differ by 1c only from float
+      rounding in the checker). Head of Finance's rule applied as for North: margin only on sales that have a
+      cost, so product lines sold with NO cost (1,051 lines, $17,673) are now left out of margin as well as
+      the impossible-cost lines (FY26 margin 17.8%, was 18.0%); revenue stays in full. Credit Notes rebuilt
+      (same screen as North): 1,172 notes = $313,743.46, exactly the Overview's credit value; split into
+      product credits $123,801.39 (what comes off Overview sales) and rebates $189,942.07 (descriptor
+      "Rebate" lines); by month, rep, type, raised by (the Ostendo user), customer; reason = what the team
+      typed on the note (reference and line notes; 572 have one); every note searchable, CSV. Debtors
+      rebuilt (same screen as North): open $2,526,325.50 less $26,201.28 unapplied payments =
+      $2,500,124.22 over 3,117 documents, overdue $222,009.99 (8.9%) - both match Ostendo directly; every
+      customer's invoices add up to their balance; rep = the customer's salesperson in Ostendo;
+      $6,900 owed by Worthy Products Ltd flagged inter-company. Analytics: categories add up to
+      $9,511,576.67 (the Overview); customers now on the same product-line basis, and one customer per shop
+      (Ostendo opens "Shop 2025" then "Shop 2026": 13 of the 50 "lapsed" customers, $223k lifetime, were
+      actually trading under this year's name); lifetime value checked to the cent; fast movers taken from
+      EVERY product; catch-all codes (ZZZSTOCK = ad hoc stock, 358 different products) split by description
+      instead of reading as one product; product/category margins on the same basis as the Overview. South
+      figures, analytics, credits and debtors are now shared in five-minute slots and warmed like North
+      (cached 100-150ms; cold analytics 8s).

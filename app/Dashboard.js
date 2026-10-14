@@ -567,7 +567,7 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
       <div style={{ marginBottom: 14 }}><RangeTag text={`As at ${fmtDay(d.asOf)}`} theme={T} /></div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 16 }}>
-        {tile("Owed to us", money(t.outstanding), `${d.documents.toLocaleString()} open invoices from ${d.customerCount.toLocaleString()} customers${t.intercompany?.total ? `. ${money(t.intercompany.total)} of it is inter-company (Worthy South and Oceania)` : ""}`)}
+        {tile("Owed to us", money(t.outstanding), `${d.documents.toLocaleString()} open invoices from ${d.customerCount.toLocaleString()} customers${t.intercompany?.total ? `. ${money(t.intercompany.total)} of it is inter-company (${d.intercompanyLabel || "Worthy South and Oceania"})` : ""}`)}
         {tile("Overdue", money(t.overdue), t.overduePct != null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? red : undefined)}
         {tile("Over 60 days late", money(t.d61to90 + t.over90), "More than 60 days past the due date", t.d61to90 + t.over90 > 0 ? red : undefined)}
         {tile("Over 90 days late", money(t.over90), `${d.customers.filter(c => c.over90 > 0).length} customers`, t.over90 > 0 ? red : undefined)}
@@ -608,7 +608,7 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
       )}
 
       <div style={card}>
-        {title("user", "By Sales Rep", "Each customer sits with the salesperson assigned to them in Odoo. Everyone else is Direct")}
+        {title("user", "By Sales Rep", d.system === "Ostendo" ? "Each customer sits with the salesperson assigned to them in Ostendo" : "Each customer sits with the salesperson assigned to them in Odoo. Everyone else is Direct")}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
@@ -803,6 +803,9 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
   const [open, setOpen] = useState(null);
   const monthLabel = (k) => `${MONTH_NAMES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
   const money = (v) => fmtExact(v, currency);
+  const sys = d.system || "Odoo";
+  const otherHead = d.otherLabel || "Discounts & adjustments";
+  const reasonWhere = d.reasonNote || `logged in ${sys}`;
   const needle = q.trim().toLowerCase();
   const rows = d.notes.filter(n =>
     (kind === "All" || n.kind === kind) && (rep === "All" || n.rep === rep) &&
@@ -833,7 +836,7 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr>
           <th style={head("left")}>{label[2]}</th><th style={head()}>Credit notes</th>
-          <th style={head()}>Product credits</th><th style={head()}>Discounts &amp; adjustments</th><th style={head()}>Total</th>
+          <th style={head()}>Product credits</th><th style={head()}>{otherHead}</th><th style={head()}>Total</th>
         </tr></thead>
         <tbody>
           {list.map(r => (
@@ -857,7 +860,7 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
 
   const csv = () => {
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const hdr = ["Date", "Credit note", "Customer", "Sales rep", "Raised by", "Type", "About", "Reason logged in Odoo", "Product credit", "Discount / adjustment", "Total"];
+    const hdr = ["Date", "Credit note", "Customer", "Sales rep", "Raised by", "Type", "About", `Reason (${reasonWhere})`, "Product credit", otherHead, "Total"];
     const lines = rows.map(n => [n.date, n.docNumber, n.customer, n.rep, n.raisedBy, n.kind, n.about, n.reason, n.productAmount.toFixed(2), n.otherAmount.toFixed(2), n.amount.toFixed(2)].map(esc).join(","));
     const blob = new Blob([[hdr.map(esc).join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
@@ -875,10 +878,10 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
       {rangeLabel && <div style={{ marginBottom: 14 }}><RangeTag text={rangeLabel} theme={T} /></div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 20 }}>
-        {tile("Credit notes", d.totals.count.toLocaleString(), `${d.totals.withReason.toLocaleString()} have a reason logged in Odoo`)}
+        {tile("Credit notes", d.totals.count.toLocaleString(), `${d.totals.withReason.toLocaleString()} have a reason: ${reasonWhere}`)}
         {tile("Returns & product credits", money(d.totals.productValue),
           `Credits against product sales${d.totals.productPctOfSales != null ? `, ${d.totals.productPctOfSales}% of sales` : ""}. This is the figure on the Overview.`, red)}
-        {tile("Discounts, rebates & adjustments", money(d.totals.otherValue), "Credits with no product on them: volume discounts, rebates, rent and sales adjustments", red)}
+        {tile(d.otherLabel || "Discounts, rebates & adjustments", money(d.totals.otherValue), d.otherNote || "Credits with no product on them: volume discounts, rebates, rent and sales adjustments", red)}
         {tile("Total credited", money(d.totals.value), "The two above together: the full value of every credit note", red)}
       </div>
 
@@ -886,11 +889,11 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
         {summary(["calendar", "By Month", "Month"], d.months, r => r.month, r => monthLabel(r.month))}
         {summary(["user", "By Sales Rep", "Sales rep"], d.reps, r => r.rep, r => r.rep)}
         {summary(["receipt", "What The Credits Were For", "Type", "Product credits are returns and corrections to product sales. The rest carry no product. Each credit note is counted once, under its main type."], d.kinds, r => r.kind, r => r.kind)}
-        {summary(["user", "Raised By", "Person", "The person who created the credit note in Odoo"], d.raisers, r => r.person, r => r.person)}
+        {summary(["user", "Raised By", "Person", `The person who created the credit note in ${sys}`], d.raisers, r => r.person, r => r.person)}
         <div style={{ ...card, overflowX: "auto" }}>
           {title("trophy", "Customers With The Most Credits")}
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th style={head("left")}>Customer</th><th style={head()}>Credit notes</th><th style={head()}>Product credits</th><th style={head()}>Discounts &amp; adjustments</th><th style={head()}>Total</th></tr></thead>
+            <thead><tr><th style={head("left")}>Customer</th><th style={head()}>Credit notes</th><th style={head()}>Product credits</th><th style={head()}>{otherHead}</th><th style={head()}>Total</th></tr></thead>
             <tbody>{d.customers.map(r => (
               <tr key={r.customer} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                 <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{r.customer}</td>
@@ -926,7 +929,7 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
             <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}><tr>
               <th style={head("left")}>Date</th><th style={head("left")}>Credit note</th><th style={head("left")}>Customer</th>
               <th style={head("left")}>Sales rep</th><th style={head("left")}>Raised by</th><th style={head("left")}>Type</th>
-              <th style={head("left")}>Reason logged in Odoo</th><th style={head()}>Amount</th>
+              <th style={head("left")}>Reason</th><th style={head()}>Amount</th>
             </tr></thead>
             <tbody>
               {rows.length === 0 && <tr><td colSpan={8} style={{ ...cell, textAlign: "center", padding: 24, color: T.textMuted }}>No credit notes match</td></tr>}
@@ -2014,17 +2017,17 @@ export default function EcommerceDashboard({ section = "overview" }) {
             name: p.title, title: p.title, category: p.category || "-",
             qtySold: p.unitsSold, unitsSold: p.unitsSold,
             revenue: p.revenue, cost: p.cost,
-            grossProfit: p.revenue - p.cost, margin: p.margin,
+            grossProfit: p.revenue - p.cost, margin: p.marginClean,
           }));
           const fastMoving = (data.fastMoving || []).map(p => ({
             name: p.title, title: p.title, category: p.category || "-",
             qtySold: p.unitsSold, unitsSold: p.unitsSold,
-            revenue: p.revenue, margin: p.margin,
+            revenue: p.revenue, margin: p.marginClean,
           }));
           const categories = (data.categories || []).map(c => ({
             name: c.category, category: c.category,
             qty: c.unitsSold, unitsSold: c.unitsSold,
-            revenue: c.revenue, margin: c.margin,
+            revenue: c.revenue, margin: c.marginClean,
             productCount: c.productCount,
           }));
           const customers = (data.customers || []).map(c => ({
@@ -2760,7 +2763,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     if (activeStore.id === "luxe") {
       const n = view === "monthly" ? latestMonth?.suspectLines
               : view === "yoy" ? fyPayload(selectedYear)?.totals?.suspectLines : null;
-      return n > 0 ? `Margin leaves out ${n.toLocaleString()} invoice line${n === 1 ? "" : "s"} whose recorded cost in Ostendo cannot be right. Revenue is in full.` : null;
+      return n > 0 ? `Margin leaves out ${n.toLocaleString()} invoice line${n === 1 ? "" : "s"} with no recorded cost, or one that cannot be right, in Ostendo. Revenue is in full.` : null;
     }
     const cover = partCost ? (partCost.full > 0 ? Math.round((partCost.rev / partCost.full) * 1000) / 10 : null)
                 : (yearCostedOK && totalRev > 0 ? Math.round((totalMargRev / totalRev) * 1000) / 10 : null);

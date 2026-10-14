@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { nzFinancialYear } from '@/lib/ostendo';
 import { readFY, slotOf } from '@/lib/odooFyCache';
 import { readDebtors } from '@/lib/odooDebtorsCache';
+import { readSouth } from '@/lib/ostendoCache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -28,7 +29,7 @@ export async function GET() {
   const out = [];
   // Debtors first: quick, and the screen is opened often.
   for (const slot of [now, now + 1]) {
-    for (const cid of [4, 1]) {
+    for (const cid of [4, 1, 'south']) {
       const t0 = Date.now();
       try { await readDebtors(cid, { slot }); out.push({ slot: slot - now, debtors: cid, ms: Date.now() - t0 }); }
       catch (e) { out.push({ slot: slot - now, debtors: cid, ms: Date.now() - t0, error: String(e.message).slice(0, 80) }); }
@@ -44,6 +45,15 @@ export async function GET() {
       } catch (e) {
         out.push({ slot: slot - now, cid, year, ms: Date.now() - t, error: String(e.message).slice(0, 80) });
       }
+    }
+  }
+  // Worthy Products South (Ostendo): quick reads, so after North's.
+  for (const slot of [now, now + 1]) {
+    for (const [name, qs] of [['fy', `?fy=${fy}`], ['advanced', `?fy=${fy}`], ['fy', `?fy=${fy - 1}`]]) {
+      if (Date.now() - began > BUDGET_MS) { out.push({ slot: slot - now, south: name, skipped: 'time budget used, next call continues' }); continue; }
+      const t = Date.now();
+      try { await readSouth(name, qs, { slot }); out.push({ slot: slot - now, south: name + qs, ms: Date.now() - t }); }
+      catch (e) { out.push({ slot: slot - now, south: name + qs, ms: Date.now() - t, error: String(e.message).slice(0, 80) }); }
     }
   }
   return NextResponse.json({
