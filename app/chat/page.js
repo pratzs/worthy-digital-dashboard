@@ -5,6 +5,11 @@ import Link from "next/link";
 
 const LS_PROVIDER = "worthy_chat_provider";
 const LS_KEY_PREFIX = "worthy_chat_key_";
+// sessionStorage, not localStorage: the conversation survives a refresh (the
+// actual ask) but doesn't linger indefinitely on a shared computer the way a
+// permanent record would - it clears when the tab/browser closes.
+const SS_MESSAGES = "worthy_chat_messages";
+const SS_HISTORY = "worthy_chat_history";
 
 const SYSTEM = `You answer questions about Worthy's trading figures for a company director, who asks in `
   + `plain, layman language - not Odoo field names or jargon - and expects you to work out what they mean, `
@@ -329,18 +334,46 @@ export default function ChatPage() {
     const p = localStorage.getItem(LS_PROVIDER);
     const k = p && localStorage.getItem(LS_KEY_PREFIX + p);
     if (p && k) { setProvider(p); setApiKey(k); }
+    try {
+      const savedMessages = JSON.parse(sessionStorage.getItem(SS_MESSAGES) || "null");
+      const savedHistory = JSON.parse(sessionStorage.getItem(SS_HISTORY) || "null");
+      if (Array.isArray(savedMessages) && savedMessages.length) setMessages(savedMessages);
+      if (Array.isArray(savedHistory)) historyRef.current = savedHistory;
+    } catch { /* corrupt or absent - just start fresh */ }
     setReady(true);
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
+
+  // Saved every time the conversation changes (right after send() updates
+  // historyRef.current and then messages), so a refresh picks up exactly
+  // where the conversation left off, including the tool-call history needed
+  // to keep asking follow-up questions correctly.
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      if (messages.length) {
+        sessionStorage.setItem(SS_MESSAGES, JSON.stringify(messages));
+        sessionStorage.setItem(SS_HISTORY, JSON.stringify(historyRef.current));
+      } else {
+        sessionStorage.removeItem(SS_MESSAGES);
+        sessionStorage.removeItem(SS_HISTORY);
+      }
+    } catch { /* storage full/unavailable - conversation just won't survive a refresh this time */ }
+  }, [messages, ready]);
 
   function forgetKey() {
     if (provider) localStorage.removeItem(LS_KEY_PREFIX + provider);
     localStorage.removeItem(LS_PROVIDER);
     setProvider(null);
     setApiKey(null);
+    clearConversation();
+  }
+
+  function clearConversation() {
     setMessages([]);
     historyRef.current = [];
+    try { sessionStorage.removeItem(SS_MESSAGES); sessionStorage.removeItem(SS_HISTORY); } catch { /* ignore */ }
   }
 
   async function send(text) {
@@ -377,6 +410,12 @@ export default function ChatPage() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {apiKey && messages.length > 0 && (
+            <button onClick={clearConversation} style={{ fontSize: 11, color: "#8a8178", background: "none",
+              border: "1px solid #e4e0da", borderRadius: 7, padding: "5px 10px", cursor: "pointer" }}>
+              New conversation
+            </button>
+          )}
           {apiKey && (
             <button onClick={forgetKey} style={{ fontSize: 11, color: "#8a8178", background: "none",
               border: "1px solid #e4e0da", borderRadius: 7, padding: "5px 10px", cursor: "pointer" }}>
