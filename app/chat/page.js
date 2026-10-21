@@ -61,11 +61,16 @@ const SYSTEM = `You answer questions about Worthy's trading figures for a compan
   + `SALESPERSON instead, and the product itself is named completely differently. "Dragon 2kg bags" turned `
   + `out to mean products supplied BY a company called Dragon Sweets, most of which don't contain the word `
   + `"Dragon" in a way you'd guess, matched via product.supplierinfo -> partner_id, not a product-name `
-  + `search. "Top products Leith sold" means a salesperson named Leith (res.users or an Odoo field like `
-  + `invoice_user_id/user_id), not a product called Leith. Before you search product names for a `
-  + `capitalised word, consider checking res.partner (supplier/customer) and res.users (salesperson) for `
-  + `that name too - do both searches rather than committing to one guess, and if your first interpretation `
-  + `returns nothing or looks wrong, try the others before telling the user you can't find it.\n\n`
+  + `search. "Top products Leith sold" means a salesperson, not a product called Leith - but check which `
+  + `system first: north/oceania salespeople live in res.users (an Odoo field like invoice_user_id/`
+  + `user_id), while south/Ostendo reps (Jerry, Michelle, Keith, Chris, Ravi Kumar, Lynette, Leith, and the `
+  + `Christchurch Office/Online account) are NOT Odoo users at all - they only exist as the numeric-code `
+  + `mapping documented on the ostendo_query tool, and searching res.users for one of those names will `
+  + `correctly find nothing because they were never in Odoo to begin with. Before you search product names `
+  + `for a capitalised word, consider checking res.partner (supplier/customer), res.users (north/oceania `
+  + `salesperson) and the Ostendo rep-code list (south salesperson) for that name too - do all of them `
+  + `rather than committing to one guess, and if your first interpretation returns nothing or looks wrong, `
+  + `try the others before telling the user you can't find it.\n\n`
   + `For ANY "how many / total / sum / top N" question, use odoo_aggregate (it computes the real total `
   + `inside Odoo via read_group) - never sum odoo_search's rows yourself. odoo_search is capped at 500 rows `
   + `and a manual sum over it silently under-reports whenever more rows exist; odoo_search even tells you `
@@ -105,7 +110,15 @@ const SYSTEM = `You answer questions about Worthy's trading figures for a compan
   + `silently pick one unit to ignore the rest - ask the person plainly, e.g. "Some of these are ordered by `
   + `the carton rather than individually - how many are in one carton?", and wait for their answer before `
   + `giving a total. The same caution applies to any other ambiguous business term you're not sure the `
-  + `person and you mean the same thing by - ask rather than assume.`;
+  + `person and you mean the same thing by - ask rather than assume.\n\n`
+  + `On the Odoo side specifically, a differing product_uom across purchase.order.line/sale.order.line rows `
+  + `for the same product does NOT automatically mean they're incomparable - check before assuming a `
+  + `conversion is needed. Look up the uom.uom records involved: the same category_id AND the same factor `
+  + `means they represent the same real quantity and can be summed as-is (Worthy's Odoo genuinely has a `
+  + `blank-named duplicate UOM record sitting alongside "Unit" with an identical factor of 1 - a data-entry `
+  + `quirk, not a real unit difference, confirmed by checking the factor rather than assuming). A different `
+  + `factor within the same category, or a different category_id entirely, means a real conversion applies `
+  + `- treat that the same as the carton/shipper case above and ask rather than guess the multiplier.`;
 
 const PRESENT_TABLE_TOOL = {
   name: "present_table",
