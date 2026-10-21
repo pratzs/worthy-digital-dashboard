@@ -27,7 +27,9 @@ const TOOLS = [
     description: 'Show the user a table. Call this once, as your last step, whenever the answer is '
       + 'naturally tabular (a list of customers, a month-by-month breakdown, a rep leaderboard, etc). '
       + 'Pick the columns and rows yourself from what the other tools returned - round money to whole '
-      + 'dollars for readability, keep it to the rows that actually matter for the question asked.',
+      + 'dollars for readability, keep it to the rows that actually matter for the question asked. Every '
+      + 'cell must be a string, a number or null - convert anything else before calling this: a '
+      + 'true/false field becomes "Yes"/"No", and a many2one [id, "Name"] pair becomes just the name.',
     input_schema: {
       type: 'object',
       properties: {
@@ -94,6 +96,16 @@ const SYSTEM = `You answer questions about Worthy's trading figures for a compan
   + `back empty, so the person can correct your assumption instead of getting a wrong number. State dollar `
   + `figures in NZD. When you present a table, also give a one or two sentence summary of the headline in `
   + `your own words - don't just dump the table with no comment.\n\n`
+  + `Every figure you give has to be backed by evidence the person could check themselves, never just `
+  + `stated. Briefly say where it came from - which company and system (Odoo north, Odoo oceania, or `
+  + `Ostendo south), roughly which records, and the date range or filter you used - a short line under the `
+  + `number, not a wall of technical detail. If a figure is large, surprising, or doesn't match what the `
+  + `person seems to expect, run a second, differently-angled check before presenting it as fact (e.g. spot `
+  + `check a few individual records, or total a different way and confirm the two agree) - this product `
+  + `has been burned before by numbers that looked right on the first pass and weren't (wrong company, the `
+  + `wrong product matched to a name, units silently mismatched), so a figure you haven't double-checked is `
+  + `not one to hand over confidently. If you genuinely cannot verify something, say so plainly rather than `
+  + `presenting a guess as settled fact - "I couldn't confirm that" is a better answer than a wrong number.\n\n`
   + `Unit of measure matters and is easy to get silently wrong - a quantity field is only ever counted in `
   + `whatever unit that specific record used (each, case, carton, shipper, kg...), and that unit can vary `
   + `line to line for the same product. Before totaling a quantity across many records, check whether the `
