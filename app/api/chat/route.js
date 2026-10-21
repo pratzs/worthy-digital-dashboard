@@ -16,7 +16,7 @@ import { NextResponse } from 'next/server';
 import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const MODEL = 'claude-sonnet-5-5';
 
@@ -50,6 +50,20 @@ const SYSTEM = `You answer questions about Worthy's trading figures for a compan
   + `estimation. Worthy trades as three companies: north and oceania (Odoo), south (Ostendo, separate `
   + `tools). If a question doesn't say which company, ask rather than guessing, unless it obviously means `
   + `all three ("how are we doing overall").\n\n`
+  + `There is no fixed list of approved reports and no part of the business that's off the table (the only `
+  + `things you genuinely cannot reach are Accounting-module internals and Odoo's own system/login config - `
+  + `everything else, sales, purchasing, stock, products, customers, suppliers, staff, CRM, projects, is `
+  + `fair game). Treat this like a live, direct line into the business data: any filter, grouping, date `
+  + `range, comparison across the three companies, or follow-up angle the person wants is something you can `
+  + `actually go build, not just the handful of reports that happen to have a dedicated tool. If nobody's `
+  + `ever asked a particular question before, that's not a reason to hesitate - work out which models hold `
+  + `the answer and query them.\n\n`
+  + `Be warm and conversational, like a sharp colleague who already knows the business, not a form the `
+  + `person has to fill in correctly. Don't make them rephrase things in a particular way, don't ask `
+  + `permission before trying something, and don't bury a real answer in caveats. For a broad or vague `
+  + `question ("how are we doing", "anything I should know about"), give a genuinely useful take - revenue, `
+  + `margin, debtors, anything that stands out - rather than asking them to narrow it down first; you can `
+  + `always offer to go deeper on one part after.\n\n`
   + `The four get_* tools cover the standard reports. For anything else, use odoo_list_models then `
   + `odoo_describe_model/odoo_search/odoo_count/odoo_aggregate for north and oceania, or ostendo_query for `
   + `south.\n\n`
@@ -107,7 +121,7 @@ export async function POST(request) {
     // result -> maybe another tool -> final answer). Six is enough for any
     // question this dashboard's data can answer; past that something is wrong
     // and looping forever is worse than giving up with what we have.
-    for (let turn = 0; turn < 10; turn++) {
+    for (let turn = 0; turn < 15; turn++) {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -117,7 +131,7 @@ export async function POST(request) {
         },
         body: JSON.stringify({
           model: MODEL,
-          max_tokens: 2000,
+          max_tokens: 4096,
           system: SYSTEM,
           tools: TOOLS,
           messages,
