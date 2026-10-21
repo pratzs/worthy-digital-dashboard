@@ -16,10 +16,15 @@ export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths and all Next.js internals straight through.
+  // /api/mcp/* and /.well-known/* authenticate themselves (OAuth Bearer
+  // tokens, not the worthy_auth cookie) - an AI client calling them has no
+  // cookie to present, so the cookie check must not apply here at all.
   if (
     PUBLIC_PATHS.some(p => pathname === p) ||
     pathname.startsWith('/_next/') ||
-    pathname.startsWith('/static/')
+    pathname.startsWith('/static/') ||
+    pathname.startsWith('/api/mcp') ||
+    pathname.startsWith('/.well-known/')
   ) {
     return NextResponse.next();
   }

@@ -13,62 +13,15 @@
  * guess at shaping raw Odoo/Ostendo payloads.
  */
 import { NextResponse } from 'next/server';
-import { readFY } from '@/lib/odooFyCache';
-import { readDebtors } from '@/lib/odooDebtorsCache';
-import { handle as ostendoFyHandle } from '@/lib/ostendoFy';
-import { computeSouthDebtors } from '@/lib/ostendoDebtors';
-import { nzFinancialYear } from '@/lib/ostendo';
+import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const MODEL = 'claude-sonnet-5-5';
 
-// North = Worthy Products North (Odoo company 4). Oceania = Worthy Oceania (Odoo
-// company 1). South = Worthy Products South, which lives in Ostendo, not Odoo.
-const ODOO_COMPANY = { north: 4, oceania: 1 };
-
 const TOOLS = [
-  {
-    name: 'get_financial_year',
-    description: "A company's financial year: monthly revenue, cost, gross profit, margin %, "
-      + "invoice/order counts, and the sales-rep breakdown. Covers north and oceania (both in Odoo). "
-      + "For south use get_south_financial_year instead - it is a different system (Ostendo), not Odoo.",
-    input_schema: {
-      type: 'object',
-      properties: {
-        company: { type: 'string', enum: ['north', 'oceania'] },
-        fy: { type: 'integer', description: 'Financial year starting year, e.g. 2026 for FY26 (1 Apr 2026 - 31 Mar 2027). Defaults to the current FY.' },
-      },
-      required: ['company'],
-    },
-  },
-  {
-    name: 'get_south_financial_year',
-    description: 'Worthy Products South\'s financial year figures, from Ostendo (not Odoo): monthly '
-      + 'revenue, cost, margin, and rep breakdown.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        fy: { type: 'integer', description: 'Financial year starting year, e.g. 2026 for FY26. Defaults to the current FY.' },
-      },
-    },
-  },
-  {
-    name: 'get_debtors',
-    description: 'Outstanding customer debtors and overdue invoices for north or oceania (Odoo), with '
-      + 'ageing buckets (current, 1-30, 31-60, 61-90, over 90 days) and a per-customer breakdown.',
-    input_schema: {
-      type: 'object',
-      properties: { company: { type: 'string', enum: ['north', 'oceania'] } },
-      required: ['company'],
-    },
-  },
-  {
-    name: 'get_south_debtors',
-    description: 'Outstanding customer debtors for Worthy Products South, from Ostendo (not Odoo).',
-    input_schema: { type: 'object', properties: {} },
-  },
+  ...DATA_TOOLS,
   {
     name: 'present_table',
     description: 'Show the user a table. Call this once, as your last step, whenever the answer is '
@@ -90,29 +43,6 @@ const TOOLS = [
     },
   },
 ];
-
-async function runTool(name, input) {
-  if (name === 'get_financial_year') {
-    const cid = ODOO_COMPANY[input.company];
-    if (!cid) throw new Error(`Unknown company '${input.company}'. Use north or oceania.`);
-    const { payload } = await readFY(cid, input.fy || nzFinancialYear());
-    return payload;
-  }
-  if (name === 'get_south_financial_year') {
-    const req = new Request(`http://internal/south-fy?fy=${input.fy || nzFinancialYear()}`);
-    const res = await ostendoFyHandle(req);
-    return res.json();
-  }
-  if (name === 'get_debtors') {
-    const cid = ODOO_COMPANY[input.company];
-    if (!cid) throw new Error(`Unknown company '${input.company}'. Use north or oceania.`);
-    return readDebtors(cid);
-  }
-  if (name === 'get_south_debtors') {
-    return computeSouthDebtors();
-  }
-  throw new Error(`Unknown tool '${name}'`);
-}
 
 const SYSTEM = `You answer questions about Worthy's trading figures for a company director, using the `
   + `tools provided - never from memory or estimation. Worthy trades as three companies: north and `
@@ -180,7 +110,7 @@ export async function POST(request) {
           continue;
         }
         try {
-          const result = await runTool(use.name, use.input || {});
+          const result = await runDataTool(use.name, use.input || {});
           toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(result) });
         } catch (e) {
           toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: `Error: ${e.message}`, is_error: true });
