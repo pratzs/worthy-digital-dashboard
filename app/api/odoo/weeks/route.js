@@ -37,7 +37,11 @@ async function connect(cid) {
 }
 
 const dayOf = (v) => String(v ?? '').substring(0, 10);
-const weekOf = (iso) => Math.min(5, Math.ceil(Number(iso.substring(8, 10)) / 7));
+// Weeks run Monday to Sunday, clipped to the month (week 1 may be a short stub); same rule as lib/odooFy.js.
+const weekOf = (iso) => {
+  const lead = (new Date(`${iso.substring(0, 7)}-01T00:00:00Z`).getUTCDay() + 6) % 7;
+  return Math.floor((Number(iso.substring(8, 10)) - 1 + lead) / 7) + 1;
+};
 
 export async function GET(request) {
   const p = new URL(request.url).searchParams;

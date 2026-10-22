@@ -1313,7 +1313,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
   const monthlyPivot = salespeopleMonthly || [];
 
   // Weekly pivot rows for selectedMonth: cols = W1..W5 + Month Total
-  const maxWeeks = 5;
+  const maxWeeks = (salespeopleWeekly || []).some(r => r.weekly.some(x => x.month === weeklyMonth && x.week === 6 && x.revenue !== 0)) ? 6 : 5;
   const weeklyPivot = (salespeopleWeekly || []).map(rep => ({
     name:  rep.name,
     weeks: Array.from({ length: maxWeeks }, (_, wi) => {
@@ -2729,6 +2729,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
   // Helper: compute week date range string, e.g. "1–7 Jun"
   const weekDateRange = (year, month, week) => {
+    const known = getWeekly().find(w => w.month === month && w.week === week && w.dateRange);
+    if (known) return `${known.dateRange} ${year}`;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const start = (week - 1) * 7 + 1;
     const end   = Math.min(week * 7, daysInMonth);
