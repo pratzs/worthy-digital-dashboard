@@ -12,7 +12,18 @@ import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const PROTOCOL_VERSION = '2024-11-05';
+// Echo the client's requested version when we support it (MCP spec version
+// negotiation). Hardcoding 2024-11-05 told clients to use that version's old
+// HTTP+SSE transport, while this server only speaks Streamable HTTP.
+const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const negotiateVersion = (requested) => (SUPPORTED_VERSIONS.includes(requested) ? requested : SUPPORTED_VERSIONS[0]);
+
+// DATA_TOOLS is written in the Anthropic Messages API shape (input_schema),
+// because the dashboard chat hands it straight to Claude. The MCP spec's
+// field is inputSchema - Claude's connector tolerated the wrong name, but a
+// strict client (ChatGPT) finds no schema on any tool and drops them all,
+// which is exactly "authenticated, but no callable tools".
+const MCP_TOOLS = DATA_TOOLS.map(({ input_schema, ...tool }) => ({ ...tool, inputSchema: input_schema }));
 
 // Some MCP clients (confirmed: a ChatGPT "Developer Mode" connector) call
 // this endpoint directly from the person's browser rather than from their own
@@ -104,7 +115,7 @@ export async function POST(request) {
 
   if (method === 'initialize') {
     return rpcResult(id, {
-      protocolVersion: PROTOCOL_VERSION,
+      protocolVersion: negotiateVersion(params.protocolVersion),
       capabilities: { tools: {} },
       serverInfo: { name: 'worthy-reports', version: '1.0.0' },
     }, sse);
@@ -113,7 +124,7 @@ export async function POST(request) {
     return rpcResult(id, {}, sse);
   }
   if (method === 'tools/list') {
-    return rpcResult(id, { tools: DATA_TOOLS }, sse);
+    return rpcResult(id, { tools: MCP_TOOLS }, sse);
   }
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params;
