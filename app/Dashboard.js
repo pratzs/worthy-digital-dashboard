@@ -1262,7 +1262,7 @@ const SalesVsTargetTable = ({ theme, payload, company = "north" }) => {
 };
 
 // ── Sales Rep Breakdown - ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, accent, exact = false }) => {
+const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, accent, exact = false }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
   const marginByName = {};
   for (const m of (repMargins || [])) marginByName[m.name] = m;
@@ -1544,7 +1544,7 @@ const SalesRepBreakdown = ({ salespeople, salespeopleMonthly, salespeopleWeekly,
               <thead>
                 <tr>
                   <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
-                  {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}</th>)}
+                  {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}<div style={{ fontSize: 9, fontWeight: 500, letterSpacing: 0, textTransform: "none", color: T.textMuted, marginTop: 2 }}>{weekRangeOf(i + 1) || " "}</div></th>)}
                   <th style={{ ...headStyle, color: accent }}>Month Total</th>
                   {hasMargin && <th style={headStyle}>Gross Profit</th>}
                   {hasMargin && <th style={headStyle}>Margin</th>}
@@ -2729,14 +2729,20 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 : totalDisc;
 
   // Helper: compute week date range string, e.g. "1–7 Jun"
-  const weekDateRange = (year, month, week) => {
+  const weekDateRange = (fyYear, month, week, short = false) => {
+    // A financial year runs Apr to Mar, so Jan to Mar fall in the next calendar year.
+    const year = onFY() && month < 3 ? fyYear + 1 : fyYear;
     const known = getWeekly().find(w => w.month === month && w.week === week && w.dateRange);
-    if (known) return `${known.dateRange} ${year}`;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const lead  = (new Date(year, month, 1).getDay() + 6) % 7;   // Monday-start weeks, clipped to the month
-    const start = week === 1 ? 1 : (week - 1) * 7 - lead + 1;
-    const end   = Math.min(week * 7 - lead, daysInMonth);
-    return `${start}–${end} ${MONTH_NAMES[month]} ${year}`;
+    let range = known?.dateRange;
+    if (!range) {
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const lead  = (new Date(year, month, 1).getDay() + 6) % 7;   // Monday-start weeks, clipped to the month
+      const start = week === 1 ? 1 : (week - 1) * 7 - lead + 1;
+      const end   = Math.min(week * 7 - lead, daysInMonth);
+      if (start > daysInMonth) return "";
+      range = `${start}–${end} ${MONTH_NAMES[month]}`;
+    }
+    return short ? range : `${range} ${year}`;
   };
 
   const prevCost       = prev.reduce((s, d) => s + (d.totalCost || 0), 0);
@@ -3477,7 +3483,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {section === "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <div style={{ marginTop: 8 }}>
             {activeStore.id === "worthy" && <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} />}
-            <SalesRepBreakdown
+            <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
               salespeopleWeekly={getOdooSalespeopleWeekly()}
@@ -3506,7 +3512,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {section === "overview" && activeStore.id === "luxe" && (
           <div style={{ marginTop: 8 }}>
             <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} company="south" />
-            <SalesRepBreakdown
+            <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
               salespeople={getSalespeople()}
               salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
               salespeopleWeekly={getLuxeSalespeopleWeekly()}
@@ -3532,7 +3538,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               <>
                 {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
                 {activeStore.id === "worthy" && <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} />}
-                <SalesRepBreakdown
+                <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
                   salespeople={getOdooSalespeople()}
                   salespeopleMonthly={getOdooSalespeopleMonthly()}
                   salespeopleWeekly={getOdooSalespeopleWeekly()}
@@ -3709,7 +3715,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               activeStore.id === "luxe" ? (
                 <>
                 <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} company="south" />
-                <SalesRepBreakdown
+                <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
                   salespeopleWeekly={getLuxeSalespeopleWeekly()}
