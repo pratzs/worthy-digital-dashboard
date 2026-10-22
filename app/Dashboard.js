@@ -2296,8 +2296,23 @@ export default function EcommerceDashboard({ section = "overview" }) {
     return cached.all || generateEmptyYear();
   };
   const getWeekly = () => {
-    if (onFY() && (activeStore.id !== "worthy" || channelTab === "odoo"))
-      return fyWeekRows(fyPayload(selectedYear));
+    if (onFY() && (activeStore.id !== "worthy" || channelTab === "odoo")) {
+      const rows = fyWeekRows(fyPayload(selectedYear));
+      if (activeStore.id === "luxe") return rows;
+      /* Odoo holds cost per month, so a week's margin comes from the per-rep week costs
+         fetched for the selected month: add the reps up for each week. */
+      const costRows = odooWeekRows();
+      return rows.map(r => {
+        if (r.month !== weeklyMonth) return r;
+        const hits = costRows.filter(x => x.week === r.week && x.grossProfit != null && x.cost != null);
+        if (!hits.length) return r;
+        const gp = hits.reduce((a, x) => a + x.grossProfit, 0);
+        const cost = hits.reduce((a, x) => a + x.cost, 0);
+        const marginRev = gp + cost;
+        return { ...r, totalCost: cost, grossProfit: gp, marginableRevenue: marginRev, marginCost: cost,
+                 marginPct: marginPct1(gp, marginRev), hasCostData: true };
+      });
+    }
     const cached = cacheRef.current[activeStore.id + ":" + selectedYear];
     if (!cached) return [];
     if (activeStore.id !== "worthy") return cached.weekly || [];
@@ -3279,8 +3294,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
             const wAvgAOV    = wTotalOrd > 0 ? Math.round(wTotalRev / wTotalOrd) : 0;
             const wHasCost   = weeklyData.some(w => w.hasCostData);
             const wTotalCost = weeklyData.reduce((s, w) => s + (w.totalCost || 0), 0);
-            const wTotalGP   = wHasCost ? wTotalRev - wTotalCost : null;
-            const wMarginPct = wHasCost && wTotalRev > 0 ? marginPct1(wTotalRev - wTotalCost, wTotalRev) : null;
+            /* Total the same figures the rows show (their gross profit and the revenue it was
+               measured on), so the month total always agrees with the weeks above it. */
+            const wCosted    = weeklyData.filter(w => w.grossProfit != null);
+            const wTotalGP   = wHasCost ? (wCosted.length ? wCosted.reduce((s, w) => s + w.grossProfit, 0) : wTotalRev - wTotalCost) : null;
+            const wMarginRev = wCosted.length ? wCosted.reduce((s, w) => s + (w.marginableRevenue ?? w.revenue), 0) : wTotalRev;
+            const wMarginPct = wHasCost && wMarginRev > 0 ? marginPct1(wTotalGP, wMarginRev) : null;
             return (
               <>
                 {/* Month selector */}
@@ -3363,7 +3382,10 @@ export default function EcommerceDashboard({ section = "overview" }) {
                           </tr>
                         ) : weeklyData.map((row, i) => {
                           const prevW = weeklyData[i - 1];
-                          const wGrowth = prevW ? calcGrowth(row.revenue, prevW.revenue) : null;
+                          /* Weeks are not all the same length (the first can be a short stub and the current
+                             one is still running), so compare revenue per day, not week against week. */
+                          const perDay = (w) => (w.days > 0 ? w.revenue / w.days : w.revenue);
+                          const wGrowth = prevW ? calcGrowth(perDay(row), perDay(prevW)) : null;
                           const has = row.revenue > 0;
                           return (
                             <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === 100 + i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
@@ -3398,6 +3420,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                         </tfoot>
                       )}
                     </table>
+                    <div style={{ marginTop: 10, fontSize: 10, color: T.textMuted }}>Weeks run Monday to Sunday and the first and last are clipped to the month. Vs Prev Week compares revenue per day, so a short or unfinished week is not judged against a full one.</div>
                   </div>
                 </div>
               </>
