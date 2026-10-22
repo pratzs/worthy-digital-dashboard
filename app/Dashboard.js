@@ -1748,7 +1748,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
-  const _todayStr    = new Date().toISOString().split('T')[0];
+  const _todayStr    = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland' }).format(new Date());   // New Zealand today, not UTC
   const advStartDate = view === "weekly"
     ? `${selectedYear}-${String(weeklyMonth + 1).padStart(2, '0')}-01`
     : activeStore.id === "luxe"
