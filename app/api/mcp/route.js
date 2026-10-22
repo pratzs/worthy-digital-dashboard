@@ -119,8 +119,13 @@ export async function POST(request) {
     const { name, arguments: args = {} } = params;
     try {
       const result = await runDataTool(name, args);
+      // structuredContent must be a plain object per the MCP spec - most tools
+      // here already return one (search/fetch/get_*/odoo_aggregate etc), but
+      // ostendo_query can return a bare array, which isn't valid there.
+      const isPlainObject = result !== null && typeof result === 'object' && !Array.isArray(result);
       return rpcResult(id, {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        ...(isPlainObject ? { structuredContent: result } : {}),
         isError: false,
       }, sse);
     } catch (e) {
