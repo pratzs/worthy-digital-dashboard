@@ -28,11 +28,32 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-function rpcResult(id, result) {
-  return NextResponse.json({ jsonrpc: '2.0', id, result }, { headers: CORS_HEADERS });
+// The Streamable HTTP transport lets the server answer a POST with either a
+// single application/json body or a text/event-stream carrying exactly one
+// event - both are spec-legal, but some real client implementations send
+// Accept: text/event-stream (sometimes without application/json at all) and
+// are strict about actually getting SSE back; confirmed live that this
+// server previously replied application/json regardless of what Accept said.
+// A client whose parser only understands the stream it asked for would
+// silently discard a JSON reply - "connected", but no tool call ever lands.
+function wantsEventStream(request) {
+  const accept = request.headers.get('accept') || '';
+  return accept.includes('text/event-stream') && !accept.includes('application/json');
 }
-function rpcError(id, code, message, status = 200) {
-  return NextResponse.json({ jsonrpc: '2.0', id, error: { code, message } }, { status, headers: CORS_HEADERS });
+function sseResponse(payload, status) {
+  const body = `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
+  return new NextResponse(body, {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  });
+}
+function rpcResult(id, result, sse = false) {
+  const payload = { jsonrpc: '2.0', id, result };
+  return sse ? sseResponse(payload, 200) : NextResponse.json(payload, { headers: CORS_HEADERS });
+}
+function rpcError(id, code, message, status = 200, sse = false) {
+  const payload = { jsonrpc: '2.0', id, error: { code, message } };
+  return sse ? sseResponse(payload, status) : NextResponse.json(payload, { status, headers: CORS_HEADERS });
 }
 
 function unauthorized(request) {
@@ -60,11 +81,13 @@ export async function POST(request) {
   const session = token && await checkAccessToken(token);
   if (!session) return unauthorized(request);
 
+  const sse = wantsEventStream(request);
+
   let body;
   try {
     body = await request.json();
   } catch {
-    return rpcError(null, -32700, 'Parse error', 400);
+    return rpcError(null, -32700, 'Parse error', 400, sse);
   }
   const { id, method, params = {} } = body || {};
 
@@ -84,13 +107,13 @@ export async function POST(request) {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: { tools: {} },
       serverInfo: { name: 'worthy-reports', version: '1.0.0' },
-    });
+    }, sse);
   }
   if (method === 'ping') {
-    return rpcResult(id, {});
+    return rpcResult(id, {}, sse);
   }
   if (method === 'tools/list') {
-    return rpcResult(id, { tools: DATA_TOOLS });
+    return rpcResult(id, { tools: DATA_TOOLS }, sse);
   }
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params;
@@ -99,12 +122,12 @@ export async function POST(request) {
       return rpcResult(id, {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         isError: false,
-      });
+      }, sse);
     } catch (e) {
-      return rpcResult(id, { content: [{ type: 'text', text: e.message }], isError: true });
+      return rpcResult(id, { content: [{ type: 'text', text: e.message }], isError: true }, sse);
     }
   }
-  return rpcError(id, -32601, `Unknown method '${method}'`);
+  return rpcError(id, -32601, `Unknown method '${method}'`, 200, sse);
 }
 
 // A real MCP client probes GET for an SSE stream before falling back to plain
