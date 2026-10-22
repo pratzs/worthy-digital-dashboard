@@ -9,6 +9,7 @@ import {
   ComposedChart, ReferenceLine
 } from "recharts";
 import { bankTargetFor } from "@/lib/bankTargets";
+import { weekOfMonth } from "@/lib/weekOfMonth";
 
 // Brand palettes
 const BRAND = {
@@ -1701,7 +1702,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const [darkMode]                          = useState(false);   // the dashboard is always light
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
-  const [selectedWeek,   setSelectedWeek]   = useState(Math.ceil(new Date().getDate() / 7));
+  const [selectedWeek,   setSelectedWeek]   = useState(weekOfMonth(new Date()));
 
   /* ── Keep the view in the address bar ──────────────────────────────────────
    * Without this, refreshing while looking at Worthy Products South dropped you
@@ -3278,7 +3279,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 {/* Month selector */}
                 <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
                   {MONTH_NAMES.map((mn, mi) => (
-                    <button key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(mi === new Date().getMonth() ? Math.ceil(new Date().getDate() / 7) : 1); }} style={{
+                    <button key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(mi === new Date().getMonth() ? weekOfMonth(new Date()) : 1); }} style={{
                       padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
                       border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
                       background: weeklyMonth === mi ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"),

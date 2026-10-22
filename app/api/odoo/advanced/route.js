@@ -1,5 +1,6 @@
 import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
+import { weekOfMonth } from '@/lib/weekOfMonth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -300,7 +301,7 @@ export async function GET(request) {
       repAgg[repName].revenue += rev;
       if (mi >= 0 && moveD) {
         repAgg[repName].monthly[mi].revenue += rev;
-        const wk   = Math.ceil(moveD.getDate() / 7);
+        const wk   = weekOfMonth(moveD);
         const wkey = `${mi}_${wk}`;
         if (!repAgg[repName].weekly[wkey]) repAgg[repName].weekly[wkey] = { revenue: 0, cost: 0, marginableRev: 0 };
         repAgg[repName].weekly[wkey].revenue += rev;
@@ -323,7 +324,7 @@ export async function GET(request) {
       if (mi >= 0 && moveD) {
         repAgg[repName].monthly[mi].cost          += cost;
         repAgg[repName].monthly[mi].marginableRev += rev;
-        const wk   = Math.ceil(moveD.getDate() / 7);
+        const wk   = weekOfMonth(moveD);
         const wkey = `${mi}_${wk}`;
         repAgg[repName].weekly[wkey].cost          += cost;
         repAgg[repName].weekly[wkey].marginableRev += rev;

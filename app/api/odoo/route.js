@@ -1,5 +1,6 @@
 import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
+import { weekOfMonth } from '@/lib/weekOfMonth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -173,7 +174,7 @@ export async function GET(request) {
       if (d.getFullYear() !== year) continue;
 
       const mi       = d.getMonth();
-      const weekNum  = Math.ceil(d.getDate() / 7);
+      const weekNum  = weekOfMonth(d);
       const isCredit = inv.move_type === 'out_refund';
       const rev      = parseFloat(inv.amount_untaxed || 0) * (isCredit ? -1 : 1);
 
@@ -225,7 +226,7 @@ export async function GET(request) {
       const d = new Date(inv.invoice_date);
       if (d.getFullYear() !== year) continue;
       const mi       = d.getMonth();
-      const weekNum  = Math.ceil(d.getDate() / 7);
+      const weekNum  = weekOfMonth(d);
       const isCredit = inv.move_type === 'out_refund';
       const rev      = parseFloat(inv.amount_untaxed || 0) * (isCredit ? -1 : 1);
       const repName  = (inv.invoice_user_id && inv.invoice_user_id[1]) ? inv.invoice_user_id[1] : 'Unassigned';
