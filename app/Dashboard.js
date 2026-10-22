@@ -1725,7 +1725,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       const mo = parseInt(p.get("m") || "", 10);
       if (mo >= 0 && mo <= 11) setWeeklyMonth(mo);
       const wk = parseInt(p.get("w") || "", 10);
-      if (wk >= 1 && wk <= 5) setSelectedWeek(wk);
+      if (wk >= 1 && wk <= 6) setSelectedWeek(wk);
     } catch { /* a malformed hash should never stop the dashboard loading */ }
     setRestored(true);
   }, []);
@@ -2733,8 +2733,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
     const known = getWeekly().find(w => w.month === month && w.week === week && w.dateRange);
     if (known) return `${known.dateRange} ${year}`;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const start = (week - 1) * 7 + 1;
-    const end   = Math.min(week * 7, daysInMonth);
+    const lead  = (new Date(year, month, 1).getDay() + 6) % 7;   // Monday-start weeks, clipped to the month
+    const start = week === 1 ? 1 : (week - 1) * 7 - lead + 1;
+    const end   = Math.min(week * 7 - lead, daysInMonth);
     return `${start}–${end} ${MONTH_NAMES[month]} ${year}`;
   };
 

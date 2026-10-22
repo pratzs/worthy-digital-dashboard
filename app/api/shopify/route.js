@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { weekOfMonth } from '@/lib/weekOfMonth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -133,10 +134,13 @@ export async function GET(request) {
     const weeklyAllB = {}, weeklyPosB = {}, weeklyOnlineB = {};
 
     allOrders.forEach(order => {
-      const orderDate = new Date(order.createdAt);
+      // Shopify stamps orders in UTC; the dashboard reports New Zealand dates, so bucket on those.
+      const nz = Object.fromEntries(new Intl.DateTimeFormat('en-NZ', { timeZone: 'Pacific/Auckland', year: 'numeric', month: 'numeric', day: 'numeric' })
+        .formatToParts(new Date(order.createdAt)).map(p => [p.type, Number(p.value)]));
+      const orderDate = new Date(nz.year, nz.month - 1, nz.day);
       const i       = orderDate.getMonth();
       const day     = orderDate.getDate();
-      const weekNum = Math.ceil(day / 7); // 1=days1-7, 2=8-14, 3=15-21, 4=22-28, 5=29-31
+      const weekNum = weekOfMonth(orderDate); // Monday to Sunday, clipped to the month
       const rev     = parseFloat(order.totalPriceSet?.shopMoney?.amount     || 0);
       const disc    = parseFloat(order.totalDiscountsSet?.shopMoney?.amount || 0);
       const appName = (order.app?.name || "").toLowerCase();
@@ -213,9 +217,10 @@ export async function GET(request) {
     const buildWeekly = (buckets) => {
       const arr = [];
       for (let mi = 0; mi < 12; mi++) {
-        for (let w = 1; w <= 5; w++) {
-          const startDay = (w - 1) * 7 + 1;
-          const endDay   = Math.min(w * 7, getDaysInMonth(year, mi));
+        const lead = (new Date(year, mi, 1).getDay() + 6) % 7;   // 0 = the 1st is a Monday
+        for (let w = 1; w <= 6; w++) {
+          const startDay = w === 1 ? 1 : (w - 1) * 7 - lead + 1;
+          const endDay   = Math.min(w * 7 - lead, getDaysInMonth(year, mi));
           if (startDay > getDaysInMonth(year, mi)) continue;
           const b = buckets[`${mi}_${w}`];
           const gp     = b?.hasCostData ? Math.round(b.marginableRevenue - b.totalCost) : null;
