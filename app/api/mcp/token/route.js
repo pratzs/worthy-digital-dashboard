@@ -37,8 +37,14 @@ export async function POST(request) {
   if (!(await pkceVerify(params.code_verifier, code.code_challenge))) {
     return NextResponse.json({ error: 'invalid_grant', error_description: 'PKCE verification failed.' }, { status: 400 });
   }
+  // RFC 8707: the client (ChatGPT) sends the same resource on /authorize and
+  // /token - if it sends one at this step, it must match what /authorize
+  // captured, rather than silently accepting a mismatched one.
+  if (params.resource && code.resource && params.resource !== code.resource) {
+    return NextResponse.json({ error: 'invalid_target', error_description: 'resource does not match the authorization request.' }, { status: 400 });
+  }
 
-  const access_token = await issueAccessToken();
+  const access_token = await issueAccessToken(code.resource || params.resource);
   return NextResponse.json({
     access_token,
     token_type: 'Bearer',

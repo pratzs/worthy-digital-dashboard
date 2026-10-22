@@ -105,6 +105,7 @@ export async function POST(request) {
     client_id: fields.client_id,
     redirect_uri: fields.redirect_uri,
     code_challenge: fields.code_challenge,
+    resource: fields.resource,
   });
   const dest = new URL(fields.redirect_uri);
   dest.searchParams.set('code', code);
