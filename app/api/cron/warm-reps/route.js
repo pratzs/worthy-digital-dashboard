@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { REPS } from '@/lib/repAccess';
+import { activePrincipals } from '@/lib/repAccess';
+
+// Only people who sit on an enabled lead's team are warmed; everyone else has no access, so nothing is loaded for them.
+const teamPeople = () => [...new Map(activePrincipals().flatMap((p) => p.people).map((r) => [r.key, r])).values()];
 import { nzFinancialYear } from '@/lib/ostendo';
 import { warmRepData, REP_DATA_TAG } from '@/lib/repData';
 import { getStamp, setStamp } from '@/lib/repStore';
@@ -28,6 +31,7 @@ export async function GET(request) {
   revalidateTag(REP_DATA_TAG, { expire: 0 });
   const fy = nzFinancialYear();
   const out = [];
+  const REPS = teamPeople();
   for (const rep of REPS) {
     if (Date.now() - began > BUDGET_MS) { out.push({ rep: rep.key, skipped: 'time budget used, the next run continues' }); continue; }
     const t = Date.now();

@@ -9,9 +9,9 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 
 process.env.REP_AUTH_SECRET = randomBytes(24).toString('hex');
-const { REPS, repForCode, currentVer, hashCode, repByKey } = await import('../lib/repAccess.js');
+const { REPS, repForCode, currentVer, hashCode, repByKey, principalByKey, resolvePerson } = await import('../lib/repAccess.js');
 const oauth = await import('../lib/repOauth.js');
-const { projectSales, projectDebtors, guard } = await import('../lib/repProject.js');
+const { projectSales, projectDebtors, guard, guardTeam } = await import('../lib/repProject.js');
 const { projectBestSellers, projectCustomers, projectRecent, targetProgress } = await import('../lib/repInsights.js');
 const { buildActionPlan } = await import('../lib/repPlan.js');
 
@@ -84,22 +84,80 @@ test('company fields are blocked', () => {
   for (const k of ['totals', 'reps', 'atRisk']) assert.throws(() => guard({ [k]: [] }, repByKey('jerry')), /company field/);
 });
 
-console.log('Access codes');
+console.log('Access codes (team leads only)');
 const salt = 's1';
 process.env.REP_ACCESS = JSON.stringify({
-  jerry: { salt, hash: hashCode('J'.repeat(24), salt), ver: 2 },
+  michelle: { salt, hash: hashCode('M'.repeat(24), salt), ver: 2 },
+  jerry: { salt, hash: hashCode('J'.repeat(24), salt), ver: 1 },
   savan: { salt, hash: hashCode('S'.repeat(24), salt), ver: 1 },
+  lead1: { salt, hash: hashCode('L'.repeat(24), salt), ver: 1 },
 });
-test('right code names the right rep and version', () => {
-  const hit = repForCode('J'.repeat(24));
-  assert.equal(hit.rep.key, 'jerry'); assert.equal(hit.ver, 2);
+test('a lead code names the lead and version', () => {
+  const hit = repForCode('M'.repeat(24));
+  assert.equal(hit.rep.key, 'michelle'); assert.equal(hit.ver, 2);
+  assert.deepEqual(hit.rep.people.map((p) => p.key).sort(), ['chris', 'lynette', 'michelle', 'ravi']);
+});
+test('when an email is on file both email and password are needed', () => {
+  const keep = process.env.REP_ACCESS;
+  process.env.REP_ACCESS = JSON.stringify({ michelle: { salt, hash: hashCode('M'.repeat(24), salt), ver: 1, email: 'Michelle@Worthy.test' } });
+  assert.equal(repForCode('M'.repeat(24), 'michelle@worthy.test').rep.key, 'michelle');
+  for (const e of ['', undefined, 'jerry@worthy.test', 'michelle@worthy.test.evil']) assert.equal(repForCode('M'.repeat(24), e), null);
+  assert.equal(repForCode('x'.repeat(24), 'michelle@worthy.test'), null);
+  process.env.REP_ACCESS = keep;
 });
 test('wrong, short, empty and unknown codes are refused', () => {
-  for (const c of ['x'.repeat(24), 'J'.repeat(23), '', null, undefined, 'S'.repeat(24) + 'x']) assert.equal(repForCode(c), null);
+  for (const c of ['x'.repeat(24), 'M'.repeat(23), '', null, undefined, 'M'.repeat(24) + 'x']) assert.equal(repForCode(c), null);
 });
-test('a rep with no entry cannot sign in; version 0 means off', () => {
-  assert.equal(currentVer('keith'), 0);
-  assert.equal(currentVer('jerry'), 2);
+test('the other nine reps cannot sign in even with a valid entry', () => {
+  for (const c of ['J', 'S']) assert.equal(repForCode(c.repeat(24)), null);
+  for (const k of ['jerry', 'savan', 'keith', 'chris', 'ravi', 'lynette', 'nimesh', 'nayan', 'naitik']) assert.equal(currentVer(k), 0, k);
+});
+test('Team 1 lead is switched off even if someone puts an entry in', () => {
+  assert.equal(repForCode('L'.repeat(24)), null); assert.equal(currentVer('lead1'), 0);
+});
+test('the test lead only exists when REP_ALLOW_TEST_LEAD=1', () => {
+  assert.equal(principalByKey('testlead'), null);
+  process.env.REP_ALLOW_TEST_LEAD = '1';
+  assert.ok(principalByKey('testlead')); delete process.env.REP_ALLOW_TEST_LEAD;
+  assert.equal(principalByKey('testlead'), null);
+});
+test('version 0 means off, a lead with an entry works', () => {
+  assert.equal(currentVer('michelle'), 2);
+  delete process.env.REP_ACCESS; assert.equal(currentVer('michelle'), 0);
+  process.env.REP_ACCESS = JSON.stringify({ michelle: { salt, hash: hashCode('M'.repeat(24), salt), ver: 2 } });
+});
+
+console.log('Team wall');
+const michelle = principalByKey('michelle');
+test('team is exactly Michelle, Chris, Ravi Kumar, Lynette', () => {
+  assert.deepEqual(michelle.people.map((p) => p.label), ['Michelle', 'Chris', 'Ravi Kumar', 'Lynette']);
+});
+test('a lead resolves herself and her own team, by first name', () => {
+  assert.equal(resolvePerson(michelle, '').key, 'michelle');
+  for (const [q, k] of [['Chris', 'chris'], ['ravi', 'ravi'], ['Ravi Kumar', 'ravi'], ['lyn', 'lynette'], ['michelle', 'michelle']]) assert.equal(resolvePerson(michelle, q).key, k);
+});
+test('anyone outside the team is refused (Team 1 reps, North reps, Leith, company, odd input)', () => {
+  for (const q of ['Jerry', 'keith', 'Savan', 'Nimesh Darjee', 'naitik', 'Leith', 'everyone', 'all', 'company', 'Direct', '*', '.*', 'a', 'Chris;Jerry', ' ']) {
+    if (q.trim() === '') continue;
+    assert.throws(() => resolvePerson(michelle, q), /not on your team|more than one/, q);
+  }
+});
+test('a lead with no sales of her own must name someone', () => {
+  const t = { ...michelle, self: null, people: michelle.members };
+  assert.throws(() => resolvePerson(t, ''), /Say which team member/);
+});
+test('guardTeam allows only team labels and blocks company keys', () => {
+  guardTeam({ members: [{ person: 'Chris' }, { person: 'Lynette' }], teamTotal: { revenue: 1 } }, michelle.people);
+  assert.throws(() => guardTeam({ members: [{ person: 'Jerry' }] }, michelle.people), /another rep/);
+  assert.throws(() => guardTeam({ members: [{ rep: 'Keith' }] }, michelle.people), /another rep/);
+  assert.throws(() => guardTeam({ totals: {} }, michelle.people), /company field/);
+});
+test('a mixed North and South test team resolves both systems', () => {
+  process.env.REP_ALLOW_TEST_LEAD = '1';
+  const t = principalByKey('testlead');
+  assert.equal(t.system, 'mixed'); assert.equal(resolvePerson(t, 'jerry').system, 'south'); assert.equal(resolvePerson(t, 'nimesh').system, 'north');
+  assert.throws(() => resolvePerson(t, 'chris'), /not on your team/);
+  delete process.env.REP_ALLOW_TEST_LEAD;
 });
 
 console.log('Tokens');

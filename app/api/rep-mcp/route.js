@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { checkAccessToken } from '@/lib/repOauth';
-import { repByKey, currentVer } from '@/lib/repAccess';
+import { principalByKey, currentVer } from '@/lib/repAccess';
 import { REP_TOOLS, runRepTool } from '@/lib/repTools';
 
 export const dynamic = 'force-dynamic';
@@ -61,7 +61,7 @@ function repFromRequest(request) {
   const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : null;
   const claims = token ? checkAccessToken(token) : null;
   if (!claims) return null;
-  const rep = repByKey(claims.sub);
+  const rep = principalByKey(claims.sub);
   // A rep who has been switched off, or whose version was bumped, stops working at once.
   if (!rep || currentVer(rep.key) === 0 || currentVer(rep.key) !== claims.ver) return null;
   return rep;

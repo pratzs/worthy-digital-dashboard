@@ -89,6 +89,7 @@ const tapBtn = { minHeight: 44, textAlign: "left", fontSize: 15, padding: "10px 
 export default function MySales() {
   const [rep, setRep] = useState(undefined);   // undefined = checking, null = signed out
   const [code, setCode] = useState("");
+  const [email, setEmail] = useState("");
   const [signErr, setSignErr] = useState("");
   const [signing, setSigning] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -151,12 +152,12 @@ export default function MySales() {
     e.preventDefault();
     setSigning(true); setSignErr("");
     try {
-      const r = await fetch("/api/my-sales/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const r = await fetch("/api/my-sales/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code }) });
       const j = await r.json();
       if (!r.ok) { setSignErr(j.error || "Could not sign in."); }
       else {
-        setCode(""); enter({ name: j.name, system: j.system });
-        fetch("/api/my-sales/me", { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).then((m) => m && setQuota(m.quota || null)).catch(() => {});
+        setCode(""); setEmail(""); enter({ name: j.name, system: j.system });
+        fetch("/api/my-sales/me", { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).then((m) => { if (m) { setQuota(m.quota || null); setRep((r) => (r ? { ...r, ...m } : r)); } }).catch(() => {});
       }
     } catch { setSignErr("Could not connect. Check your internet and try again."); }
     setSigning(false);
@@ -178,7 +179,7 @@ export default function MySales() {
       // Only real exchanges go to the server: not the error notes this page added itself.
       const history = next.filter((m) => !m.error).map(({ role, content }) => ({ role, content }));
       const r = await fetch("/api/my-sales/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history }), signal: ctl.signal });
-      if (r.status === 401) { loadedFor.current = null; setRep(null); setSignErr("Your session ended. Please type your code again, and your conversation will still be here."); setMessages(next); }
+      if (r.status === 401) { loadedFor.current = null; setRep(null); setSignErr("Your session ended. Please sign in again, and your conversation will still be here."); setMessages(next); }
       else if (!r.ok || !r.body) {
         const j = await r.json().catch(() => ({}));
         if (j.quota) setQuota(j.quota);
@@ -257,15 +258,17 @@ export default function MySales() {
         <form onSubmit={signIn} style={{ boxSizing: "border-box", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 16, padding: 28, width: "100%", maxWidth: 400 }}>
           <img src="/logo-black.png" alt="Worthy" style={{ height: 56, width: "auto", display: "block", marginBottom: 14 }} />
           <h1 style={{ fontSize: 22, margin: "0 0 6px", color: BRAND.brown }}>My account</h1>
-          <p style={{ fontSize: 16, color: BRAND.muted, margin: "0 0 18px", lineHeight: 1.45 }}>Type or paste your personal code below, then tap Open. Then you can ask about your own sales and your own customers.</p>
+          <p style={{ fontSize: 16, color: BRAND.muted, margin: "0 0 18px", lineHeight: 1.45 }}>Type your email and password below, then tap Open. Then you can ask about your own and your team's sales and customers.</p>
           {signErr && <div role="alert" style={{ color: BRAND.rust, fontSize: 15, marginBottom: 12, lineHeight: 1.4 }}>{signErr}</div>}
-          <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Your personal code" autoComplete="off" autoFocus required
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" autoComplete="username" autoFocus required
             style={{ width: "100%", boxSizing: "border-box", padding: "14px", fontSize: 16, borderRadius: 10, border: `1px solid ${BRAND.line}`, marginBottom: 12 }} />
-          <button type="submit" disabled={signing || code.trim().length < 10}
-            style={{ width: "100%", minHeight: 48, fontSize: 17, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 10, cursor: "pointer", opacity: signing || code.trim().length < 10 ? 0.6 : 1 }}>
+          <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Your password" autoComplete="current-password" required
+            style={{ width: "100%", boxSizing: "border-box", padding: "14px", fontSize: 16, borderRadius: 10, border: `1px solid ${BRAND.line}`, marginBottom: 12 }} />
+          <button type="submit" disabled={signing || code.trim().length < 10 || !email.includes("@")}
+            style={{ width: "100%", minHeight: 48, fontSize: 17, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 10, cursor: "pointer", opacity: signing || code.trim().length < 10 || !email.includes("@") ? 0.6 : 1 }}>
             {signing ? "Checking..." : "Open"}
           </button>
-          <p style={{ fontSize: 14, color: BRAND.muted, margin: "14px 0 0", lineHeight: 1.4 }}>Your code is on the sheet we gave you. Lost it? Ask Pratham.</p>
+          <p style={{ fontSize: 14, color: BRAND.muted, margin: "14px 0 0", lineHeight: 1.4 }}>Your email and password are on the sheet we gave you. Lost them? Ask Pratham.</p>
         </form>
       </div>
     );
@@ -280,7 +283,7 @@ export default function MySales() {
           <div style={{ fontWeight: 700, fontSize: 17, color: BRAND.brown }}>My account</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
-          <div style={{ fontSize: 13, color: BRAND.muted, textAlign: "right", lineHeight: 1.3 }}>Signed in as<br /><strong style={{ color: BRAND.brown, fontWeight: 600 }}>{rep.name}</strong></div>
+          <div style={{ fontSize: 13, color: BRAND.muted, textAlign: "right", lineHeight: 1.3 }}>Signed in as<br /><strong style={{ color: BRAND.brown, fontWeight: 600 }}>{rep.name}</strong>{rep.team ? <span> · Team lead</span> : null}</div>
           <button onClick={signOut} style={{ minHeight: 40, fontSize: 14, color: BRAND.rust, background: "none", border: `1px solid ${BRAND.line}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Sign out</button>
         </div>
       </header>
@@ -295,14 +298,18 @@ export default function MySales() {
         {messages.length === 0 && (
           <div>
             <h2 style={{ fontSize: 22, color: BRAND.brown, margin: "8px 0 6px" }}>Hi {rep.name.split(" ")[0]}, how can I help?</h2>
-            <p style={{ fontSize: 16, color: BRAND.muted, margin: "0 0 14px", lineHeight: 1.5 }}>I am your sales helper. I can only see your own sales and your own customers, so everything I tell you is about you.</p>
+            <p style={{ fontSize: 16, color: BRAND.muted, margin: "0 0 14px", lineHeight: 1.5 }}>
+              {rep.teamMembers && rep.teamMembers.length
+                ? <>I am your team helper. I can see {rep.hasOwnSales ? "your own sales and " : ""}the sales, customers and unpaid invoices of your team ({rep.teamMembers.join(", ")}), and nobody else. Ask about the whole team, or about one person by name.</>
+                : "I am your sales helper. I can only see your own sales and your own customers, so everything I tell you is about you."}
+            </p>
             <ol style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", paddingLeft: 22 }}>
               <li><strong>Tap a question</strong> below, or type your own at the bottom and tap Ask.</li>
               <li><strong>Wait a few seconds</strong> while I look up your figures.</li>
               <li><strong>Tap one of the next questions</strong> I suggest, to go deeper.</li>
             </ol>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {SUGGESTIONS.map((s) => <button key={s} onClick={() => ask(s)} style={tapBtn}>{s}</button>)}
+              {(rep.suggestions && rep.suggestions.length ? rep.suggestions : SUGGESTIONS).map((s) => <button key={s} onClick={() => ask(s)} style={tapBtn}>{s}</button>)}
             </div>
           </div>
         )}

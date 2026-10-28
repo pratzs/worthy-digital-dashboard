@@ -27,11 +27,21 @@ export default function RepUsage() {
           <div style={card}>
             <h2 style={{ fontSize: 16, color: C.brown, margin: "0 0 10px" }}>Questions by rep</h2>
             <table style={{ borderCollapse: "collapse", minWidth: "100%" }}>
-              <thead><tr>{["Rep", "System", "Today", "Last 7 days", "Answered", "Failed", "Average seconds", "AI tokens in / out"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Lead", "Email", "Today", "Last 7 days", "Answered", "Failed", "Average seconds", "AI tokens in / out"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>{d.reps.map((r) => (
-                <tr key={r.key}><td style={{ ...td, fontWeight: 600 }}>{r.name}</td><td style={td}>{r.system === "north" ? "North" : "South"}</td><td style={td}>{r.today} / {d.dailyLimit}</td><td style={td}>{r.last7Days}</td><td style={td}>{r.answered}</td><td style={{ ...td, color: r.failed ? C.rust : undefined }}>{r.failed}</td><td style={td}>{r.avgSeconds ?? "-"}</td><td style={td}>{r.inputTokens.toLocaleString()} / {r.outputTokens.toLocaleString()}</td></tr>
+                <tr key={r.key}><td style={{ ...td, fontWeight: 600 }}>{r.name}</td><td style={td}>{r.email || "-"}</td><td style={td}>{r.today} / {d.dailyLimit}</td><td style={td}>{r.last7Days}</td><td style={td}>{r.answered}</td><td style={{ ...td, color: r.failed ? C.rust : undefined }}>{r.failed}</td><td style={td}>{r.avgSeconds ?? "-"}</td><td style={td}>{r.inputTokens.toLocaleString()} / {r.outputTokens.toLocaleString()}</td></tr>
               ))}</tbody>
             </table>
+          </div>
+          <div style={card}>
+            <h2 style={{ fontSize: 16, color: C.brown, margin: "0 0 10px" }}>Sign-ins ({(d.signins || []).length})</h2>
+            {!(d.signins || []).length ? <div style={{ color: C.muted, fontSize: 14 }}>None yet.</div> : (
+              <table style={{ borderCollapse: "collapse", minWidth: "100%" }}>
+                <thead><tr>{["When", "Lead", "Email typed", "Where", "Result", "Device"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                <tbody>{d.signins.map((s, i) => (
+                  <tr key={i}><td style={td}>{when(s.t)}</td><td style={td}>{s.rep ? name(s.rep) : "-"}</td><td style={td}>{s.email || "-"}</td><td style={td}>{s.how === "connector" ? "Claude / ChatGPT" : "My account page"}</td><td style={{ ...td, color: s.ok ? "#2f7a3d" : C.rust, fontWeight: 600 }}>{s.ok ? "Signed in" : "Failed"}</td><td style={{ ...td, maxWidth: 260 }}>{s.ua}</td></tr>
+                ))}</tbody>
+              </table>)}
           </div>
           <div style={card}>
             <h2 style={{ fontSize: 16, color: C.brown, margin: "0 0 10px" }}>"This looks wrong" and "Helpful" notes ({d.feedback.length})</h2>
