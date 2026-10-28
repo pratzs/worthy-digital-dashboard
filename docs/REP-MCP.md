@@ -46,3 +46,27 @@ The chat assistant acts as the rep's own sales mentor: it shows its evidence (pe
 - The conversation is kept on the rep's own device (localStorage, 24 hours, cleared on Sign out), so an accidental refresh carries on. A question interrupted by a refresh shows "Your last question did not finish" with a Try again button. **New conversation** clears it.
 - Signing in starts a quiet warm-up (`/api/my-sales/warm`) so the first answer is quicker; rep data is cached for ten minutes across servers (`unstable_cache` in `lib/repData.js`).
 - While waiting: a progress panel with plain messages (changes after 4, 12, 30 and 60 seconds). Failures say what to do and offer Try again; technical reasons only go to the server log.
+
+## 29 Oct 2026 additions
+
+**Tools (rep connector and the My account page share them):** `my_profile`, `my_sales` (now with a month-end forecast and the same time last year), `my_debtors`, `my_best_sellers` and `my_customers` (both now with the rep's own margin), `my_customer` (deep-dive on ONE of the rep's own customers, matched only against that rep's own customers), `my_cross_sell`, `my_recent_orders`, `my_action_plan`.
+
+**Where the figures come from (verified 29 Oct against Odoo and Ostendo directly):** posted invoices and credit notes only. North: `account.move.line` where the move is posted, product lines only, credit notes taken off (draft and cancelled invoices and sales orders are never read). South: stock lines of `SALESINVOICELINES` joined to `SALESINVOICEHEADER` (every status there is an issued document: Printed, Fully Paid, Partially Paid), credit-note lines carry negative amounts. For all 10 reps the assistant's year total equals the independent figure to the cent.
+
+**Margin** is the rep's own, on the part of sales with a recorded cost, left blank when under 60% has one (North uses standard cost; South uses the invoice line cost and the dashboard's rule that excludes impossible costs). Margin is per product and per customer over the financial year to date.
+
+**Cross-sell** (`lib/repAnalysis.js crossSell`) uses only the rep's own customers' purchases over 12 months. A suggestion needs: the "because" product bought by 6 or more of the rep's customers and at least $150 by this customer, 4 or more customers buying both, at least 40% overlap and a lift of 1.5, and a typical yearly spend on the suggested product of at least $250. The counts are shown as evidence.
+
+**Month-end forecast** counts Monday to Friday only and does not allow for public holidays (always said so). **Same time last year** is withheld as a percentage when the swing is above +300% or below -80% (a different customer list last year).
+
+**Daily limit and usage records:** `lib/repStore.js` keeps the exact daily question count per rep (default 60, `REP_CHAT_DAILY_LIMIT`), a usage log (rep, time, question shortened to 300 characters, tools, ok or not, seconds, AI tokens) and the "this looks wrong" notes. It uses an Upstash Redis database over REST (create it in Vercel: Storage, Create Database, Upstash, Redis, connect to the project; that adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`). With none connected it falls back to memory on one server, so counts are approximate and reset on restart. The rep sees "Questions left today: N of 60". A question that failed because of us is given back. Management views it at `/rep-usage` (dashboard login, management only; API `/api/rep-usage`).
+
+**Streaming:** `/api/my-sales/chat` streams newline-delimited JSON events (`status`, `delta`, `reset`, `done`, `error`) from the AI service's server-sent events.
+
+**Warm-up:** `/api/cron/warm-reps` (called every 20 minutes from 04:00 to 20:00 NZ time by `.github/workflows/warm-reps.yml`) expires the rep datasets (`revalidateTag('rep-data')`) and reloads them one rep at a time; a call within 9 minutes of the last does nothing (`?force=<WARM_KEY>` overrides). Rep datasets are cached for 40 minutes.
+
+**Home-screen app and QR:** `/my-account.webmanifest` and icons (`public/my-account-*.png`) let a phone install the page like an app; the printed sheets carry a QR code of the link. If the link moves to a subdomain, regenerate the sheets.
+
+**Management connector hardening (`/api/mcp`):** only claude.ai, claude.com, chatgpt.com, openai.com addresses (https) or an app on the person's own computer (http on localhost / 127.0.0.1) can be registered or used as a redirect; wrong passwords wait 1.5 seconds; the hard-coded fallback secret and default password are gone (with no `AUTH_SECRET` or `DASHBOARD_PASSWORD`, nothing signs or verifies).
+
+**Tests:** `node scripts/rep-leak-test.mjs`, `node scripts/rep-analysis-test.mjs`, `node scripts/mgmt-connector-test.mjs <url>` (server with `DASHBOARD_PASSWORD=localtestpw`), `node scripts/rep-e2e.mjs <url> "<codes folder>" <reps>`, and `node scripts/rep-chat-test.mjs <url> "<codes folder>" savan jerry` (uses `scripts/stub-ai.mjs`, a streaming stand-in for the AI service).

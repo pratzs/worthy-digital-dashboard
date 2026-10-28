@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   '/login',
   '/api/auth/login',
   '/api/cron/warm', // protected by CRON_SECRET inside the route, not by the login cookie
+  '/api/cron/warm-reps', // reveals nothing and rate-limits itself, so the scheduled job needs no login
   '/logo-black.png',
   '/logo-white.png',
   '/favicon.ico',
@@ -26,6 +27,7 @@ export async function middleware(request) {
     pathname.startsWith('/api/mcp') ||
     // the rep-only connector and the My Sales chat page sign reps in themselves, with their own tokens
     pathname.startsWith('/api/rep-mcp') ||
+    pathname.startsWith('/my-account') ||   // the My account app icons and manifest (a phone fetches them without signing in)
     pathname === '/my-sales' || pathname.startsWith('/my-sales/') || pathname.startsWith('/api/my-sales') ||
     pathname.startsWith('/.well-known/')
   ) {

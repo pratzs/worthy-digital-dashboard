@@ -14,7 +14,7 @@ export async function POST(request) {
   const rep = repFromSession(request);
   if (!rep) return NextResponse.json({ error: 'not signed in' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   const started = Date.now();
-  const names = ['my_sales', 'my_customers', 'my_best_sellers', 'my_debtors'];
+  const names = ['my_sales', 'my_customers', 'my_best_sellers', 'my_cross_sell', 'my_debtors'];
   const results = await Promise.allSettled(names.map((n) => runRepTool(rep, n, {})));
   console.log(JSON.stringify({ evt: 'rep_warm', rep: rep.key, ok: results.filter((r) => r.status === 'fulfilled').length, of: names.length, ms: Date.now() - started }));
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });

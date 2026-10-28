@@ -6,7 +6,7 @@
  * lib/oauth.js) is what the AI client holds from then on, not the password.
  */
 import { NextResponse } from 'next/server';
-import { clientRedirectUris, issueCode } from '@/lib/oauth';
+import { clientRedirectUris, issueCode, redirectAllowed } from '@/lib/oauth';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +70,7 @@ async function validate(fields) {
   if (fields.code_challenge_method && fields.code_challenge_method !== 'S256') return 'Unsupported code_challenge_method.';
   const uris = await clientRedirectUris(fields.client_id);
   if (!uris) return 'Unknown client. Try adding the connector again.';
-  if (!uris.includes(fields.redirect_uri)) return 'redirect_uri does not match this client\'s registration.';
+  if (!uris.includes(fields.redirect_uri) || !redirectAllowed(fields.redirect_uri)) return 'redirect_uri does not match this client\'s registration.';
   return null;
 }
 
@@ -98,6 +98,7 @@ export async function POST(request) {
 
   const password = form.get('password');
   if (!process.env.DASHBOARD_PASSWORD || password !== process.env.DASHBOARD_PASSWORD) {
+    await new Promise((r) => setTimeout(r, 1500));   // slow down password guessing
     return html(page({ error: 'Wrong password.', fields }), 401);
   }
 

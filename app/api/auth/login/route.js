@@ -23,7 +23,7 @@ export async function POST(request) {
   // Management keeps the original password and its built-in default; the other
   // departments only exist once their password is set on the server.
   const expected = {
-    mgmt:  process.env.DASHBOARD_PASSWORD || 'Worthy-Insights-2026',
+    mgmt:  process.env.DASHBOARD_PASSWORD || '',
     bdm:   process.env.DASHBOARD_PASSWORD_BDM || '',
     purch: process.env.DASHBOARD_PASSWORD_PURCHASING || '',
   };

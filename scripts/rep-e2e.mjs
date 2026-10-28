@@ -45,7 +45,7 @@ for (const key of keys) {
   const token = await signIn(key);
   ok(Boolean(token), 'signed in with own code');
   const list = (await rpc(token, 'tools/list')).json.result.tools.map((t) => t.name);
-  ok(JSON.stringify(list) === JSON.stringify(['my_profile', 'my_sales', 'my_debtors', 'my_best_sellers', 'my_customers', 'my_recent_orders']), `tools offered: ${list.join(', ')}`);
+  ok(JSON.stringify(list) === JSON.stringify(['my_profile', 'my_sales', 'my_debtors', 'my_best_sellers', 'my_customers', 'my_recent_orders', 'my_action_plan', 'my_customer', 'my_cross_sell']), `tools offered: ${list.join(', ')}`);
   for (const bad of ['odoo_search', 'ostendo_query', 'get_financial_year', 'get_south_financial_year', 'get_debtors', 'search', 'fetch']) {
     const r = await call(token, bad, { company: 'north', sql: 'select 1', model: 'res.partner' });
     ok(r?.isError === true, `management tool ${bad} refused`);
@@ -68,7 +68,7 @@ for (const key of keys) {
   const leakedD = others.filter((n) => d.customers.some((c) => false) || dt.includes(`"rep": "${n}"`));
   ok(leakedD.length === 0, 'debtors: no other rep');
   console.log(`  debtors: ${d.summary.customers} customers, outstanding ${d.summary.outstanding}, overdue ${d.summary.overdue}, invoices ${d.invoices.length}`);
-  for (const tool of ['my_best_sellers', 'my_customers', 'my_recent_orders']) {
+  for (const tool of ['my_best_sellers', 'my_customers', 'my_recent_orders', 'my_action_plan', 'my_cross_sell']) {
     const t0 = Date.now();
     const r = await call(token, tool, { rep: 'Keith', fy: 2026 });
     const res = r?.structuredContent;

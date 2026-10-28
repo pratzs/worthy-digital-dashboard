@@ -6,7 +6,7 @@
  * /authorize and /token - see lib/oauth.js for why that's deliberate.
  */
 import { NextResponse } from 'next/server';
-import { registerClient } from '@/lib/oauth';
+import { registerClient, redirectAllowed } from '@/lib/oauth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +18,9 @@ export async function POST(request) {
     return NextResponse.json({ error: 'invalid_client_metadata' }, { status: 400 });
   }
   const redirect_uris = Array.isArray(body?.redirect_uris) ? body.redirect_uris : [];
-  if (redirect_uris.length === 0 || !redirect_uris.every((u) => {
-    try { return new URL(u).protocol === 'https:'; } catch { return false; }
-  })) {
+  if (redirect_uris.length === 0 || redirect_uris.length > 5 || !redirect_uris.every(redirectAllowed)) {
     return NextResponse.json({ error: 'invalid_redirect_uri',
-      error_description: 'redirect_uris must be a non-empty array of https URLs' }, { status: 400 });
+      error_description: 'redirect_uris must be addresses on claude.ai, ChatGPT or OpenAI, or an app on your own computer.' }, { status: 400 });
   }
 
   const client_id = await registerClient(redirect_uris);
