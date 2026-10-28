@@ -3,7 +3,7 @@
 A separate connector for sales reps. Each rep sees ONLY their own sales and the debtors of their own customers, from the system they work in (North = Odoo, South = Ostendo). The management connector (`/api/mcp`) is unchanged and unrelated: different endpoint, different signing key, different sign-in, different tools. A token from one never works on the other.
 
 - Endpoint to add in Claude / ChatGPT: `https://worthy-digital-dashboard.vercel.app/api/rep-mcp`
-- Tools: `my_profile`, `my_sales` (optional `fy`), `my_debtors`. No tool accepts a person, customer, query or filter.
+- Tools: `my_profile`, `my_sales` (optional `fy`; includes pace against target), `my_debtors`, `my_best_sellers`, `my_customers` (top, gone quiet, slipping, growing, new or returning), `my_recent_orders`. No tool accepts a person, customer, query or filter. Product and customer data is read per rep in `lib/repData.js` (North: invoice salesperson matched to exactly one Odoo user; South: the rep's Ostendo codes); the calculations are pure functions in `lib/repInsights.js`.
 - Sales and own gross profit/margin come from the same cached reports as the dashboard. Debtors are the customers assigned to the rep.
 
 ## How leaks are prevented
@@ -37,3 +37,6 @@ Edit `REPS` in `lib/repAccess.js` (label must match the name the dashboard uses 
 - Nothing is stored: no conversation log. A one line audit entry (rep, ok/failed, time) goes to the Vercel logs.
 - Test: `node scripts/rep-chat-test.mjs <url> "<codes folder>" savan jerry` against a local server started with `ANTHROPIC_API_URL` pointing at a stand-in (see the header of the script).
 - One-page instructions for reps: generated per rep (with their code) into `Worthy Rep Access\Rep sheets` outside the repo.
+
+## Mentor behaviour
+The chat assistant acts as the rep's own sales mentor: it shows its evidence (period, as-of date, a 'Based on:' line), ties every recommendation to a figure from the rep's own data, labels general advice as such, and never invents numbers. Cost and margin are shown only as the rep's own gross profit and margin (no per-product margin yet).

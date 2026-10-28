@@ -12,6 +12,7 @@ process.env.REP_AUTH_SECRET = randomBytes(24).toString('hex');
 const { REPS, repForCode, currentVer, hashCode, repByKey } = await import('../lib/repAccess.js');
 const oauth = await import('../lib/repOauth.js');
 const { projectSales, projectDebtors, guard } = await import('../lib/repProject.js');
+const { projectBestSellers, projectCustomers, projectRecent, targetProgress } = await import('../lib/repInsights.js');
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log(`  ok  ${name}`); } catch (e) { console.error(`FAIL  ${name}\n      ${e.message}`); process.exitCode = 1; } };
@@ -145,6 +146,68 @@ test('with no REP_AUTH_SECRET nothing validates', () => {
   const keep = process.env.REP_AUTH_SECRET; delete process.env.REP_AUTH_SECRET;
   try { assert.equal(oauth.checkAccessToken('a.b'), null); assert.throws(() => oauth.issueAccessToken({ sub: 'jerry', ver: 1 })); }
   finally { process.env.REP_AUTH_SECRET = keep; }
+});
+
+
+console.log('Best sellers, customers, recent orders, target pace');
+const meta = { period: { from: '2026-04-01', to: '2026-10-28' }, asOf: '2026-10-28', fyStart: '2026-04-01', windows: {}, basis: 'test' };
+test('best sellers rank by revenue, show share and trend, and hold no other rep', () => {
+  const rows = [
+    { code: 'A1', name: 'Alpha', units: 10, revenue: 5000, rev90: 3000, prev90: 1000 },
+    { code: 'B2', name: 'Beta', units: 50, revenue: 9000, rev90: 1000, prev90: 4000 },
+    { code: 'C3', name: 'Gamma', units: 1, revenue: 100, rev90: 0, prev90: 0 },
+  ];
+  const out = projectBestSellers(rows, repByKey('jerry'), meta);
+  guard(out, repByKey('jerry'));
+  assert.equal(out.bestSellers[0].product, 'Beta');
+  assert.equal(out.bestSellers[0].shareOfYourSalesPct, Math.round(9000 / 14100 * 1000) / 10);
+  assert.equal(out.growingProducts[0].product, 'Alpha');
+  assert.equal(out.slowingProducts[0].product, 'Beta');
+  assert.ok(!JSON.stringify(out).includes('"products"'));
+});
+test('customers: top, quiet, slipping, growing and new come from the rep own invoices', () => {
+  const inv = [
+    { customer: 'Big Shop', date: '2026-10-20', amount: 8000 }, { customer: 'Big Shop', date: '2026-08-01', amount: 7000 },
+    { customer: 'Quiet Dairy', date: '2026-07-01', amount: 3000 }, { customer: 'Quiet Dairy', date: '2026-05-10', amount: 2500 },
+    { customer: 'Slipping Cafe', date: '2026-10-10', amount: 500 }, { customer: 'Slipping Cafe', date: '2026-06-20', amount: 4000 },
+    { customer: 'New Store', date: '2026-10-01', amount: 2500 },
+    { customer: 'Last Year Only', date: '2025-12-01', amount: 900 },
+    { customer: 'Big Shop', date: '2026-09-01', amount: -200, credit: true },
+  ];
+  const out = projectCustomers(inv, repByKey('keith'), meta);
+  guard(out, repByKey('keith'));
+  assert.equal(out.topCustomers[0].customer, 'Big Shop');
+  assert.equal(out.topCustomers[0].revenueThisYear, 14800);
+  assert.equal(out.topCustomers[0].ordersThisYear, 2, 'credit notes are not orders');
+  assert.ok(out.quietCustomers.some((c) => c.customer === 'Quiet Dairy'));
+  assert.ok(out.quietCustomers.some((c) => c.customer === 'Last Year Only'));
+  assert.ok(out.slippingCustomers.some((c) => c.customer === 'Slipping Cafe'));
+  assert.ok(out.newOrReturningCustomers.some((c) => c.customer === 'New Store'));
+  assert.ok(!out.newOrReturningCustomers.some((c) => c.customer === 'Last Year Only'));
+});
+test('recent orders: newest first, credit notes flagged, capped at 30', () => {
+  const inv = Array.from({ length: 40 }, (_, i) => ({ customer: `C${i}`, date: `2026-10-${String(1 + (i % 28)).padStart(2, '0')}`, amount: 10 + i, credit: i % 10 === 0, number: `N${i}` }));
+  const out = projectRecent(inv, repByKey('chris'), meta);
+  assert.equal(out.recent.length, 30);
+  assert.ok(out.recent[0].date >= out.recent[29].date);
+  assert.ok(out.recent.some((r) => r.type === 'Credit note'));
+});
+test('target pace: budget to date, ahead or behind, and what is needed per day', () => {
+  const months = [{ key: '2026-09', revenue: 90000 }, { key: '2026-10', revenue: 150000 }];
+  const t = { monthlyBudget: { '2026-09': 100000, '2026-10': 200000, '2026-11': 300000 } };
+  const p = targetProgress(t, months, '2026-10-20');
+  assert.equal(p.thisMonth.budget, 200000);
+  assert.equal(p.thisMonth.daysLeftInMonth, 11);
+  assert.equal(p.thisMonth.stillToSell, 50000);
+  assert.equal(p.thisMonth.neededPerRemainingDay, Math.round(50000 / 11 * 100) / 100);
+  assert.equal(p.yearBudgetToDate, Math.round((100000 + 200000 * 20 / 31) * 100) / 100);
+  assert.equal(p.actualYearToDate, 240000);
+  assert.equal(targetProgress(null, months, '2026-10-20'), null);
+});
+test('empty input gives a clear note, not an error', () => {
+  assert.ok(projectBestSellers([], repByKey('jerry'), meta).note);
+  assert.ok(projectCustomers([], repByKey('jerry'), meta).note);
+  assert.ok(projectRecent([], repByKey('jerry'), meta).note);
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', with FAILURES' : ''}`);

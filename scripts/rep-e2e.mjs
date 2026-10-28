@@ -45,7 +45,7 @@ for (const key of keys) {
   const token = await signIn(key);
   ok(Boolean(token), 'signed in with own code');
   const list = (await rpc(token, 'tools/list')).json.result.tools.map((t) => t.name);
-  ok(JSON.stringify(list) === JSON.stringify(['my_profile', 'my_sales', 'my_debtors']), `tools offered: ${list.join(', ')}`);
+  ok(JSON.stringify(list) === JSON.stringify(['my_profile', 'my_sales', 'my_debtors', 'my_best_sellers', 'my_customers', 'my_recent_orders']), `tools offered: ${list.join(', ')}`);
   for (const bad of ['odoo_search', 'ostendo_query', 'get_financial_year', 'get_south_financial_year', 'get_debtors', 'search', 'fetch']) {
     const r = await call(token, bad, { company: 'north', sql: 'select 1', model: 'res.partner' });
     ok(r?.isError === true, `management tool ${bad} refused`);
@@ -68,6 +68,19 @@ for (const key of keys) {
   const leakedD = others.filter((n) => d.customers.some((c) => false) || dt.includes(`"rep": "${n}"`));
   ok(leakedD.length === 0, 'debtors: no other rep');
   console.log(`  debtors: ${d.summary.customers} customers, outstanding ${d.summary.outstanding}, overdue ${d.summary.overdue}, invoices ${d.invoices.length}`);
+  for (const tool of ['my_best_sellers', 'my_customers', 'my_recent_orders']) {
+    const t0 = Date.now();
+    const r = await call(token, tool, { rep: 'Keith', fy: 2026 });
+    const res = r?.structuredContent;
+    ok(r && !r.isError && res?.rep === LABEL[key], `${tool} answered for ${res?.rep ?? r?.content?.[0]?.text}`);
+    const txt = JSON.stringify(res || {});
+    const leak = others.filter((n) => txt.includes(`"${n}"`));
+    ok(leak.length === 0 && !txt.includes('Direct'), `${tool}: no other rep named`);
+    if (tool === 'my_best_sellers') console.log(`  best sellers: ${res.productsSold} products, top: ${res.bestSellers?.[0]?.product} ($${res.bestSellers?.[0]?.revenueThisYear}), ${Date.now() - t0}ms`);
+    if (tool === 'my_customers') console.log(`  customers: ${res.summary.customersOrderedThisYear} ordered, top: ${res.topCustomers?.[0]?.customer} ($${res.topCustomers?.[0]?.revenueThisYear}), quiet ${res.quietCustomers.length}, slipping ${res.slippingCustomers.length}, ${Date.now() - t0}ms`);
+    if (tool === 'my_recent_orders') console.log(`  recent: ${res.recent.length}, newest ${res.recent?.[0]?.date} ${res.recent?.[0]?.type} $${res.recent?.[0]?.amount}`);
+  }
+  console.log(`  target pace: ${JSON.stringify(sales.targetProgress && { behind: sales.targetProgress.aheadOrBehind, pct: sales.targetProgress.percentOfBudgetToDate, month: sales.targetProgress.thisMonth && sales.targetProgress.thisMonth.percentOfMonthBudget })}`);
   const bogus = await rpc(token.slice(0, -3) + 'abc', 'tools/list');
   ok(bogus.status === 401, 'tampered token refused (401)');
 }

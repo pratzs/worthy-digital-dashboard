@@ -6,10 +6,11 @@ const BRAND = { rust: "#B13924", gold: "#FDB714", brown: "#66270F", bg: "#FAF8F5
 
 const SUGGESTIONS = [
   "How are my sales this month?",
-  "How did this week go compared with last week?",
+  "What are my best sellers?",
+  "Which customers should I call this week?",
   "How am I going against my target?",
   "Which of my customers owe me money?",
-  "Who is the most overdue?",
+  "How can I grow my sales?",
 ];
 
 /* A small, safe renderer for the answer text: paragraphs, bullet lists, bold and simple tables.

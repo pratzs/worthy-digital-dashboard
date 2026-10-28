@@ -63,7 +63,7 @@ for (const key of keys) {
   const sales = await (await post('/api/my-sales/chat', { messages: [{ role: 'user', content: 'SALES please' }] }, cookie)).json();
   const sys = seen[0].system;
   ok(sys.includes(LABEL[key]), 'the AI is told who this rep is');
-  ok(JSON.stringify(seen[0].tools.map((t) => t.name)) === JSON.stringify(['my_profile', 'my_sales', 'my_debtors']), 'the AI is only given the 3 rep tools');
+  ok(JSON.stringify(seen[0].tools.map((t) => t.name)) === JSON.stringify(['my_profile', 'my_sales', 'my_debtors', 'my_best_sellers', 'my_customers', 'my_recent_orders']), 'the AI is only given the 6 rep tools');
   const text = sales.text || '';
   const others = OTHERS.filter((n) => n !== LABEL[key] && text.includes(n));
   ok(text.startsWith('RESULT:') && text.includes(`"rep":"${LABEL[key]}"`), `tool answered for ${LABEL[key]} even though the AI asked for Keith/Savan`);
