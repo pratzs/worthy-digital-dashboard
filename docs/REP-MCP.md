@@ -31,7 +31,7 @@ Edit `REPS` in `lib/repAccess.js` (label must match the name the dashboard uses 
 `https://worthy-digital-dashboard.vercel.app/my-sales` : a rep opens the link, types their personal code, and chats. No Claude or ChatGPT account, no connector. It uses the same rep tools and the same access codes as the connector, so a rep still only ever gets their own sales and their own customers' debtors.
 
 - Sign-in sets a 12 hour HttpOnly cookie (`worthy_rep`, signed with `REP_AUTH_SECRET`) naming one rep; the version is checked on every request, so removing a rep from `REP_ACCESS` cuts them off at once.
-- The chat (`/api/my-sales/chat`) hands Claude only the three rep tools; the rep comes from the cookie, never from the request. AI usage is billed to Worthy's `ANTHROPIC_API_KEY`.
+- The chat (`/api/my-sales/chat`) hands Claude only the three rep tools; the rep comes from the cookie, never from the request. AI usage is billed to Worthy's `REP_CHAT_API_KEY` (falls back to `ANTHROPIC_API_KEY` if that is not set), so the rep chat has its own key and limits.
 - Limits: 60 questions per rep per day (`REP_CHAT_DAILY_LIMIT`, per server instance, best effort), 12 messages of history, 6 tool steps per question. Set a monthly spend limit on the Anthropic key as the hard ceiling.
 - Optional `REP_CHAT_MODEL` changes the model (default claude-sonnet-5-5).
 - Nothing is stored: no conversation log. A one line audit entry (rep, ok/failed, time) goes to the Vercel logs.

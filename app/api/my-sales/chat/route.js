@@ -20,6 +20,8 @@ export const maxDuration = 120;
 
 const MODEL = process.env.REP_CHAT_MODEL || 'claude-sonnet-5-5';
 const API_URL = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
+// The rep chat has its own key setting so its usage and limits are separate from the dashboard's other AI features.
+const apiKey = () => process.env.REP_CHAT_API_KEY || process.env.ANTHROPIC_API_KEY;
 const MAX_TURNS = 6;            // ask -> tool -> answer; more than this means something is wrong
 const MAX_HISTORY = 12;         // recent messages kept
 const MAX_CHARS = 2000;         // per message
@@ -68,7 +70,7 @@ const clean = (history) => {
 export async function POST(request) {
   const rep = repFromSession(request);
   if (!rep) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
-  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'The assistant is not switched on yet.' }, { status: 503 });
+  if (!apiKey()) return NextResponse.json({ error: 'The assistant is not switched on yet.' }, { status: 503 });
 
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }); }
@@ -85,7 +87,7 @@ export async function POST(request) {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const res = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey(), 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: systemFor(rep), tools: TOOLS, messages }),
         signal: AbortSignal.timeout(60000),
       });
