@@ -149,14 +149,14 @@ export default function MySales() {
             <p style={{ fontSize: 14, color: BRAND.muted, margin: "0 0 16px", lineHeight: 1.5 }}>Ask me about your own sales and your own customers. Tap one to start, or type your own question.</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => ask(s)} style={{ textAlign: "left", fontSize: 14, padding: "10px 14px", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 12, cursor: "pointer", color: "#2b2622" }}>{s}</button>
+                <button key={s} onClick={() => ask(s)} style={{ maxWidth: "100%", textAlign: "left", fontSize: 14, padding: "10px 14px", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 12, cursor: "pointer", color: "#2b2622" }}>{s}</button>
               ))}
             </div>
           </div>
         )}
         {messages.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", margin: "10px 0" }}>
-            <div style={{ maxWidth: "92%", padding: "10px 14px", borderRadius: 14, fontSize: 15, background: m.role === "user" ? BRAND.rust : "#fff", color: m.role === "user" ? "#fff" : (m.error ? BRAND.rust : "#2b2622"), border: m.role === "user" ? "none" : `1px solid ${BRAND.line}` }}>
+            <div style={{ maxWidth: "92%", minWidth: 0, overflowWrap: "anywhere", padding: "10px 14px", borderRadius: 14, fontSize: 15, background: m.role === "user" ? BRAND.rust : "#fff", color: m.role === "user" ? "#fff" : (m.error ? BRAND.rust : "#2b2622"), border: m.role === "user" ? "none" : `1px solid ${BRAND.line}` }}>
               {m.role === "user" ? m.content : <Answer text={m.content} />}
             </div>
           </div>
@@ -167,10 +167,10 @@ export default function MySales() {
 
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} style={{ position: "sticky", bottom: 0, background: BRAND.bg, borderTop: `1px solid ${BRAND.line}`, padding: "10px 16px calc(10px + env(safe-area-inset-bottom))" }}>
         <div style={{ display: "flex", gap: 8, maxWidth: 760, margin: "0 auto" }}>
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask about your sales or customers" maxLength={2000}
-            style={{ flex: 1, padding: "13px 14px", fontSize: 16, borderRadius: 12, border: `1px solid ${BRAND.line}`, background: "#fff" }} />
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask a question" maxLength={2000}
+            style={{ flex: 1, minWidth: 0, padding: "13px 14px", fontSize: 16, borderRadius: 12, border: `1px solid ${BRAND.line}`, background: "#fff" }} />
           <button type="submit" disabled={busy || !input.trim()}
-            style={{ padding: "0 20px", fontSize: 15, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 12, cursor: "pointer", opacity: busy || !input.trim() ? 0.6 : 1 }}>Ask</button>
+            style={{ flexShrink: 0, padding: "0 20px", fontSize: 15, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 12, cursor: "pointer", opacity: busy || !input.trim() ? 0.6 : 1 }}>Ask</button>
         </div>
       </form>
     </div>
