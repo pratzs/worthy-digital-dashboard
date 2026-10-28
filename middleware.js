@@ -24,6 +24,7 @@ export async function middleware(request) {
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/static/') ||
     pathname.startsWith('/api/mcp') ||
+    pathname.startsWith('/api/rep-mcp') || // the rep-only connector authenticates itself with its own tokens
     pathname.startsWith('/.well-known/')
   ) {
     return NextResponse.next();
