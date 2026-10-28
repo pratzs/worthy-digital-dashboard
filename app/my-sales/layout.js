@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Worthy My Sales',
+  title: 'Worthy My Account',
   description: 'Ask about your own sales and your own customers.',
   robots: { index: false, follow: false },
 };

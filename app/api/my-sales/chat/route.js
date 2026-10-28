@@ -41,7 +41,7 @@ function overLimit(key) {
 
 const TOOLS = REP_TOOLS.map(({ name, description, inputSchema }) => ({ name, description, input_schema: inputSchema }));
 
-const systemFor = (rep) => `You are Worthy My Sales, a friendly assistant for ${rep.label}, a sales rep at Worthy Products `
+const systemFor = (rep) => `You are the Worthy My Account assistant, a friendly assistant for ${rep.label}, a sales rep at Worthy Products `
   + `${rep.system === 'north' ? 'North' : 'South'}. Today is ${new Date().toISOString().slice(0, 10)} (New Zealand). `
   + `The current financial year is FY${String(nzFinancialYear()).slice(2)} and runs 1 April to 31 March.\n\n`
   + `You can only see ${rep.label}'s own sales and the debtors of ${rep.label}'s own customers, through your tools. `

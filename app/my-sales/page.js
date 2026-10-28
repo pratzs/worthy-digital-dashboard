@@ -113,8 +113,8 @@ export default function MySales() {
     return (
       <div style={{ ...shell, alignItems: "center", justifyContent: "center", padding: 16 }}>
         <form onSubmit={signIn} style={{ boxSizing: "border-box", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 16, padding: 28, width: "100%", maxWidth: 380 }}>
-          <div style={{ width: 44, height: 5, background: BRAND.gold, borderRadius: 3, marginBottom: 16 }} />
-          <h1 style={{ fontSize: 20, margin: "0 0 6px", color: BRAND.brown }}>Worthy My Sales</h1>
+          <img src="/logo-black.png" alt="Worthy" style={{ height: 56, width: "auto", display: "block", marginBottom: 14 }} />
+          <h1 style={{ fontSize: 20, margin: "0 0 6px", color: BRAND.brown }}>My account</h1>
           <p style={{ fontSize: 14, color: BRAND.muted, margin: "0 0 18px", lineHeight: 1.45 }}>Type your personal code to ask about your own sales and your own customers.</p>
           {signErr && <div role="alert" style={{ color: BRAND.rust, fontSize: 13, marginBottom: 12 }}>{signErr}</div>}
           <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Your personal code" autoComplete="off" autoFocus required
@@ -131,12 +131,15 @@ export default function MySales() {
 
   return (
     <div style={shell}>
-      <header style={{ background: "#fff", borderBottom: `1px solid ${BRAND.line}`, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontWeight: 700, color: BRAND.brown }}>Worthy My Sales</div>
-          <div style={{ fontSize: 12, color: BRAND.muted }}>{rep.name} · {rep.system === "north" ? "Worthy Products North" : "Worthy Products South"}</div>
+      <header style={{ background: "#fff", borderBottom: `1px solid ${BRAND.line}`, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/logo-black.png" alt="Worthy" style={{ height: 40, width: "auto", display: "block" }} />
+          <div style={{ fontWeight: 700, fontSize: 17, color: BRAND.brown }}>My account</div>
         </div>
-        <button onClick={signOut} style={{ fontSize: 13, color: BRAND.rust, background: "none", border: `1px solid ${BRAND.line}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer" }}>Sign out</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+          <div style={{ fontSize: 13, color: BRAND.muted, textAlign: "right", lineHeight: 1.3 }}>Signed in as<br /><strong style={{ color: BRAND.brown, fontWeight: 600 }}>{rep.name}</strong></div>
+          <button onClick={signOut} style={{ fontSize: 13, color: BRAND.rust, background: "none", border: `1px solid ${BRAND.line}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Sign out</button>
+        </div>
       </header>
 
       <main style={{ flex: 1, width: "100%", maxWidth: 760, margin: "0 auto", padding: "16px 16px 8px", boxSizing: "border-box" }}>
