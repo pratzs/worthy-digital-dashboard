@@ -90,7 +90,7 @@ export async function POST(request) {
         signal: AbortSignal.timeout(60000),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message || 'AI error');
+      if (data.error) throw new Error(`AI service ${res.status} ${data.error.type || ''}: ${data.error.message || 'error'}`);
       messages.push({ role: 'assistant', content: data.content });
 
       const uses = (data.content || []).filter((b) => b.type === 'tool_use');
@@ -114,7 +114,8 @@ export async function POST(request) {
     }
     throw new Error('too many steps');
   } catch (e) {
-    console.log(JSON.stringify({ evt: 'rep_chat', rep: rep.key, ok: false, ms: Date.now() - started }));
+    // The reason goes to the server log only (never to the rep): an AI service message or a step name, no figures.
+    console.log(JSON.stringify({ evt: 'rep_chat', rep: rep.key, ok: false, ms: Date.now() - started, why: String(e?.message || e).slice(0, 300) }));
     return NextResponse.json({ error: 'Sorry, I could not get your figures just now. Please try again in a minute.' }, { status: 502 });
   }
 }
