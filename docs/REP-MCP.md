@@ -3,7 +3,7 @@
 A separate connector for sales reps. Each rep sees ONLY their own sales and the debtors of their own customers, from the system they work in (North = Odoo, South = Ostendo). The management connector (`/api/mcp`) is unchanged and unrelated: different endpoint, different signing key, different sign-in, different tools. A token from one never works on the other.
 
 - Endpoint to add in Claude / ChatGPT: `https://worthy-digital-dashboard.vercel.app/api/rep-mcp`
-- Tools: `my_profile`, `my_sales` (optional `fy`; includes pace against target), `my_debtors`, `my_best_sellers`, `my_customers` (top, gone quiet, slipping, growing, new or returning), `my_recent_orders`. No tool accepts a person, customer, query or filter. Product and customer data is read per rep in `lib/repData.js` (North: invoice salesperson matched to exactly one Odoo user; South: the rep's Ostendo codes); the calculations are pure functions in `lib/repInsights.js`.
+- Tools: `my_profile`, `my_sales` (optional `fy`; includes pace against target), `my_debtors`, `my_action_plan` (ranked, evidence-backed opportunities, computed in `lib/repPlan.js`), `my_best_sellers`, `my_customers` (top, gone quiet, slipping, growing, new or returning), `my_recent_orders`. No tool accepts a person, customer, query or filter. Product and customer data is read per rep in `lib/repData.js` (North: invoice salesperson matched to exactly one Odoo user; South: the rep's Ostendo codes); the calculations are pure functions in `lib/repInsights.js`.
 - Sales and own gross profit/margin come from the same cached reports as the dashboard. Debtors are the customers assigned to the rep.
 
 ## How leaks are prevented
@@ -40,3 +40,9 @@ Edit `REPS` in `lib/repAccess.js` (label must match the name the dashboard uses 
 
 ## Mentor behaviour
 The chat assistant acts as the rep's own sales mentor: it shows its evidence (period, as-of date, a 'Based on:' line), ties every recommendation to a figure from the rep's own data, labels general advice as such, and never invents numbers. Cost and margin are shown only as the rep's own gross profit and margin (no per-product margin yet).
+
+## Page behaviour for non-technical reps
+- Answers lead with one plain sentence, show a "Based on:" evidence line, and finish with three tap-to-ask next questions (parsed from a final `Next questions:` line the assistant writes).
+- The conversation is kept on the rep's own device (localStorage, 24 hours, cleared on Sign out), so an accidental refresh carries on. A question interrupted by a refresh shows "Your last question did not finish" with a Try again button. **New conversation** clears it.
+- Signing in starts a quiet warm-up (`/api/my-sales/warm`) so the first answer is quicker; rep data is cached for ten minutes across servers (`unstable_cache` in `lib/repData.js`).
+- While waiting: a progress panel with plain messages (changes after 4, 12, 30 and 60 seconds). Failures say what to do and offer Try again; technical reasons only go to the server log.

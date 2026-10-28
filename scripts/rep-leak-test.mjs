@@ -13,6 +13,7 @@ const { REPS, repForCode, currentVer, hashCode, repByKey } = await import('../li
 const oauth = await import('../lib/repOauth.js');
 const { projectSales, projectDebtors, guard } = await import('../lib/repProject.js');
 const { projectBestSellers, projectCustomers, projectRecent, targetProgress } = await import('../lib/repInsights.js');
+const { buildActionPlan } = await import('../lib/repPlan.js');
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log(`  ok  ${name}`); } catch (e) { console.error(`FAIL  ${name}\n      ${e.message}`); process.exitCode = 1; } };
@@ -208,6 +209,50 @@ test('empty input gives a clear note, not an error', () => {
   assert.ok(projectBestSellers([], repByKey('jerry'), meta).note);
   assert.ok(projectCustomers([], repByKey('jerry'), meta).note);
   assert.ok(projectRecent([], repByKey('jerry'), meta).note);
+});
+
+
+console.log('Action plan: every suggestion carries its evidence');
+test('plan is built only from the rep own figures and every item shows exact numbers', () => {
+  const rep = repByKey('keith');
+  const sales = { asOf: '2026-10-28', targetProgress: targetProgress({ monthlyBudget: { '2026-10': 200000 } }, [{ key: '2026-10', revenue: 120000 }], '2026-10-28') };
+  const inv = [
+    { customer: 'Quiet Dairy', date: '2026-07-01', amount: 3000 }, { customer: 'Quiet Dairy', date: '2026-05-10', amount: 2500 },
+    { customer: 'Slipping Cafe', date: '2026-10-10', amount: 500 }, { customer: 'Slipping Cafe', date: '2026-06-20', amount: 4000 },
+    { customer: 'Big Shop', date: '2026-10-20', amount: 90000 }, { customer: 'Tiny', date: '2026-04-20', amount: 100 },
+  ];
+  const customers = projectCustomers(inv, rep, { period: {}, asOf: '2026-10-28', fyStart: '2026-04-01', basis: 'x' });
+  const products = projectBestSellers([
+    { code: 'A', name: 'Alpha Bars', units: 5, revenue: 9000, rev90: 1500, prev90: 4000 },
+    { code: 'B', name: 'Beta Drink', units: 5, revenue: 8000, rev90: 5000, prev90: 2000 },
+  ], rep, { period: {}, asOf: '2026-10-28', windows: {}, basis: 'x' });
+  const debtors = projectDebtors({ asOf: '2026-10-28', basis: 'b', customers: [
+    { id: 1, name: 'Slow Payer', rep: 'Keith', total: 5000, overdue: 4000, current: 1000, d1to30: 0, d31to60: 4000, d61to90: 0, over90: 0, oldestDays: 40, documents: 2, overdueDocuments: 1 },
+    { id: 2, name: 'Worthy North Ltd', rep: 'Keith', total: 9000, overdue: 9000, intercompany: true, oldestDays: 70 },
+    { id: 3, name: 'Someone Elses', rep: 'Jerry', total: 7000, overdue: 7000, oldestDays: 90 },
+  ], invoices: [] }, rep);
+  const plan = buildActionPlan({ rep, sales, customers, products, debtors });
+  guard(plan, rep);
+  const types = plan.opportunities.map((o) => o.type);
+  for (const t of ['target', 'quiet_customer', 'overdue_account', 'slipping_customer', 'slowing_product', 'growing_product']) assert.ok(types.includes(t), `missing ${t}`);
+  assert.equal(plan.opportunities[0].type, 'target');
+  const text = JSON.stringify(plan);
+  assert.ok(!text.includes('Worthy North Ltd'), 'intercompany debtor is never suggested');
+  assert.ok(!text.includes('Someone Elses') && !text.includes('Jerry'), 'no other rep data');
+  const tgt = plan.opportunities.find((o) => o.type === 'target');
+  assert.ok(tgt.evidence.some((e) => e.includes('$120,000') && e.includes('$200,000')), 'target evidence quotes the real numbers');
+  assert.ok(tgt.evidence.some((e) => e.includes('$26,667') && e.includes('3 days')), 'needed per day: (200000-120000)/3');
+  const quiet = plan.opportunities.find((o) => o.type === 'quiet_customer');
+  assert.ok(quiet.evidence[0].includes('Quiet Dairy') && quiet.evidence[1].includes('$5,500'), 'quiet customer evidence');
+  const od = plan.opportunities.find((o) => o.type === 'overdue_account');
+  assert.ok(od.evidence[0].includes('$5,000') && od.evidence[0].includes('$4,000') && od.evidence[0].includes('40 days'));
+  for (const o of plan.opportunities) assert.ok(o.evidence.length > 0 && o.action && o.title, 'each item has a title, an action and evidence');
+  assert.deepEqual(plan.opportunities.map((o) => o.rank), plan.opportunities.map((_, i) => i + 1));
+});
+test('thin data gives an honest note, not invented advice', () => {
+  const plan = buildActionPlan({ rep: repByKey('chris'), sales: null, customers: null, products: null, debtors: null });
+  assert.equal(plan.opportunities.length, 0);
+  assert.ok(plan.note);
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', with FAILURES' : ''}`);
