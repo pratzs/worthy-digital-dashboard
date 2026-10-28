@@ -160,6 +160,29 @@ test('a mixed North and South test team resolves both systems', () => {
   delete process.env.REP_ALLOW_TEST_LEAD;
 });
 
+
+console.log('Accuracy guards');
+{
+  const { productMargins, customerMargins } = await import('../lib/repAnalysis.js');
+  const rows = [
+    { customer: 'A', customerKey: 'a', productKey: 'PODS', product: 'Pods', units: 3, revenue: 16, mRev: 16, mCost: 14, ucMin: 4.6, ucMax: 4.6 },
+    { customer: 'B', customerKey: 'b', productKey: 'PODS', product: 'Pods', units: 20, revenue: 782, mRev: 782, mCost: 1365, ucMin: 68.25, ucMax: 68.25 },
+    { customer: 'A', customerKey: 'a', productKey: 'COLA', product: 'Cola', units: 10, revenue: 100, mRev: 100, mCost: 80, ucMin: 8, ucMax: 8 },
+  ];
+  test('a product costed in different units (4.6 vs 68.25) gets no margin, only a note', () => {
+    const pm = productMargins(rows).get('PODS');
+    assert.equal(pm.marginPct, null); assert.equal(pm.grossProfit, null); assert.ok(pm.marginNote);
+    assert.equal(productMargins(rows).get('COLA').marginPct, 20);
+  });
+  test('customer margins are not tripped by different products having different costs', () => {
+    assert.ok(customerMargins(rows).get('a').marginPct !== null);
+  });
+  test('normal cost drift (under 3x) still gives a margin', () => {
+    const r = [{ customer: 'A', customerKey: 'a', productKey: 'X', product: 'X', units: 1, revenue: 100, mRev: 100, mCost: 80, ucMin: 7, ucMax: 9 }];
+    assert.equal(productMargins(r).get('X').marginPct, 20);
+  });
+}
+
 console.log('Tokens');
 test('a good token verifies and carries the rep and version', () => {
   const t = oauth.issueAccessToken({ sub: 'jerry', ver: 2 });
@@ -258,7 +281,9 @@ test('target pace: budget to date, ahead or behind, and what is needed per day',
   assert.equal(p.thisMonth.budget, 200000);
   assert.equal(p.thisMonth.daysLeftInMonth, 11);
   assert.equal(p.thisMonth.stillToSell, 50000);
-  assert.equal(p.thisMonth.neededPerRemainingDay, Math.round(50000 / 11 * 100) / 100);
+  // 21 to 31 Oct 2026 has 7 working days (Wed 21 to Fri 23, Mon 26 to Fri 30)... counted from the 21st: 21,22,23,26,27,28,29,30 = 8
+  assert.equal(p.thisMonth.tradingDaysLeft, 8);
+  assert.equal(p.thisMonth.neededPerRemainingTradingDay, Math.round(50000 / 8 * 100) / 100);
   assert.equal(p.yearBudgetToDate, Math.round((100000 + 200000 * 20 / 31) * 100) / 100);
   assert.equal(p.actualYearToDate, 240000);
   assert.equal(targetProgress(null, months, '2026-10-20'), null);
@@ -299,7 +324,8 @@ test('plan is built only from the rep own figures and every item shows exact num
   assert.ok(!text.includes('Someone Elses') && !text.includes('Jerry'), 'no other rep data');
   const tgt = plan.opportunities.find((o) => o.type === 'target');
   assert.ok(tgt.evidence.some((e) => e.includes('$120,000') && e.includes('$200,000')), 'target evidence quotes the real numbers');
-  assert.ok(tgt.evidence.some((e) => e.includes('$26,667') && e.includes('3 days')), 'needed per day: (200000-120000)/3');
+  // 29 and 30 Oct are working days, 31 Oct is a Saturday: 80,000 over 2 working days, never over 3 calendar days
+  assert.ok(tgt.evidence.some((e) => e.includes('$40,000') && e.includes('2 working days')), 'needed per working day: (200000-120000)/2');
   const quiet = plan.opportunities.find((o) => o.type === 'quiet_customer');
   assert.ok(quiet.evidence[0].includes('Quiet Dairy') && quiet.evidence[1].includes('$5,500'), 'quiet customer evidence');
   const od = plan.opportunities.find((o) => o.type === 'overdue_account');
