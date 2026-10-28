@@ -8,7 +8,7 @@
  * and nothing more.
  */
 import { cachedAuth } from '@/lib/odooAuth';
-import { loadUnitCosts } from '@/lib/odooCost';
+import { loadUnitCosts, makeQtyInProductUnit } from '@/lib/odooCost';
 import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
 import { NextResponse } from 'next/server';
 import { toCents, toDollars, pct1 } from '@/lib/ostendo';
@@ -16,7 +16,7 @@ import { toCents, toDollars, pct1 } from '@/lib/ostendo';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const NORTH = 4; // Worthy Products North. Oceania (company 1) is deliberately left as it was - see docs.
+const NORTH = 4; // Worthy Products North. Oceania (company 1) is read in its own company too.
 async function connect(cid) {
   const { ODOO_URL: url, ODOO_DB: db, ODOO_USER: user, ODOO_PASSWORD: pw } = process.env;
   const call = async (p) => (await fetch(`${url}/jsonrpc`, { method: 'POST',
@@ -27,7 +27,7 @@ async function connect(cid) {
   if (!auth.result) throw new Error('Odoo authentication failed');
   return async (model, method, args, kwargs = {}) => {
     // Company-scoped: cost is held per company, so never read it in the user's default one.
-    const scoped = cid === NORTH ? { ...kwargs, context: { allowed_company_ids: [cid], company_id: cid, ...(kwargs.context || {}) } } : kwargs;
+    const scoped = { ...kwargs, context: { allowed_company_ids: [cid], company_id: cid, ...(kwargs.context || {}) } };
     const r = await call({ jsonrpc: '2.0', method: 'call', id: 2,
       params: { service: 'object', method: 'execute_kw',
                 args: [db, auth.result, pw, model, method, args, scoped] } });
@@ -94,17 +94,18 @@ export async function GET(request) {
     const runOne = async ([name, ids]) => {
       const fetchSide = (type, sign) => exec('account.move.line', 'read_group',
         [[...lineDom(type), ['move_id.invoice_user_id', 'in', ids]],
-         ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'date:day']], { lazy: false })
+         ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'product_uom_id', 'date:day']], { lazy: false })
         .then((rows) => rows.map((r) => ({ ...r, _sign: sign })));
       const [inv, ref] = await Promise.all([fetchSide('out_invoice', 1), fetchSide('out_refund', -1)]);
       const pids = [...new Set([...inv, ...ref].map((r) => r.product_id && r.product_id[0]).filter(Boolean))];
-      const { costOf: std } = pids.length ? await loadUnitCosts(exec, cid, pids, { dropship: cid === NORTH }) : { costOf: new Map() };
+      const { costOf: std, prods } = pids.length ? await loadUnitCosts(exec, cid, pids, { dropship: cid === NORTH }) : { costOf: new Map(), prods: [] };
+      const qtyOf = await makeQtyInProductUnit(exec, prods, cid !== NORTH);   // Oceania: metres vs yards
       for (const r of [...inv, ...ref]) {
         const d = dayOf(r.__range?.['date:day']?.from); if (!d) continue;
         const unit = std.get(r.product_id && r.product_id[0]) || 0;
         const k = `${name}|${weekOf(d)}`;
         if (financeBasis) revenue.set(k, (revenue.get(k) || 0) + toCents(r.price_subtotal ?? 0) * r._sign);
-        cost.set(k, (cost.get(k) || 0) + toCents((Number(r.quantity) || 0) * unit) * r._sign);
+        cost.set(k, (cost.get(k) || 0) + toCents(qtyOf(r) * unit) * r._sign);
         /* Only a product that carries a standard cost can back its own revenue.
            Freight and service lines sell for real money at cost zero, and
            counting them as costed is what turns a week into a 100% margin. */

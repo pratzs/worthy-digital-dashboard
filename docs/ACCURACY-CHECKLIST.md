@@ -737,3 +737,10 @@ Teams, months, reps and the currency split each add up to the company total, and
       Credit Notes, Debtors) did not carry the company, year and view, so opening another tab on Worthy
       Products South landed on Worthy Products North. They now carry them in the address; checked by clicking
       through all four tabs on South: each stays on South.
+- [x] **49. Oceania margin switched on (28 Oct 2026).** Oceania costs sit in company 1 and the
+      old cost read (no company context) returned zero, so its gross profit and margin were
+      blank everywhere. Every Odoo read now runs in the company being reported (lib/odooFy.js,
+      app/api/odoo/weeks/route.js). Oceania sells fabric in metres and yards but holds cost per
+      product unit, so line quantities are converted to the product's own unit before costing
+      (lib/odooCost.js makeQtyInProductUnit); October on a test read: 31.1% unconverted, 31.6%
+      converted, 99% of sales costed. North is unchanged: raw quantities, dropship costing kept.
