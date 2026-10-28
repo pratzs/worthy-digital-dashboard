@@ -116,6 +116,10 @@ export async function POST(request) {
   } catch (e) {
     // The reason goes to the server log only (never to the rep): an AI service message or a step name, no figures.
     console.log(JSON.stringify({ evt: 'rep_chat', rep: rep.key, ok: false, ms: Date.now() - started, why: String(e?.message || e).slice(0, 300) }));
+    // A billing or key problem on the AI account is not the rep's to fix: say so plainly instead of "try again".
+    if (/credit balance|authentication|invalid x-api-key|permission|billing/i.test(String(e?.message))) {
+      return NextResponse.json({ error: 'The assistant is paused at the moment. Please let Pratham know.' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Sorry, I could not get your figures just now. Please try again in a minute.' }, { status: 502 });
   }
 }
