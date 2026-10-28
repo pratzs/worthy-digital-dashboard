@@ -24,7 +24,9 @@ export async function middleware(request) {
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/static/') ||
     pathname.startsWith('/api/mcp') ||
-    pathname.startsWith('/api/rep-mcp') || // the rep-only connector authenticates itself with its own tokens
+    // the rep-only connector and the My Sales chat page sign reps in themselves, with their own tokens
+    pathname.startsWith('/api/rep-mcp') ||
+    pathname === '/my-sales' || pathname.startsWith('/my-sales/') || pathname.startsWith('/api/my-sales') ||
     pathname.startsWith('/.well-known/')
   ) {
     return NextResponse.next();
