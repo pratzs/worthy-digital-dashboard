@@ -1977,6 +1977,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
       if (storeId === "nova") {
         await fetchFYFor("nova", selectedYear);
         if (advStoreRef.current === storeId) setAdvLoading(false);
+        // Weekly margin comes from the per-week cost read, same as North.
+        if (section === "overview" && advStoreRef.current === storeId) {
+          const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
+          fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
+        }
         return;
       }
 
