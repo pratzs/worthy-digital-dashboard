@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 import { repForCode } from '@/lib/repAccess';
 import { issueSession } from '@/lib/repOauth';
 import { REP_COOKIE, cookieOptions } from '@/lib/repSession';
-import { logSignin } from '@/lib/repStore';
+import { logSignin, signinBlocked, noteSigninFail } from '@/lib/repStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,13 @@ export async function POST(request) {
   let hit = null;
   try { hit = repForCode(code, email); } catch { hit = null; }
   const ua = request.headers.get('user-agent') || '';
+  if (await signinBlocked(email)) {
+    await new Promise((r) => setTimeout(r, 1500));
+    await logSignin({ t: new Date().toISOString(), rep: null, email, how: 'page', ok: false, ua: `${ua} [blocked: too many tries]` }).catch(() => {});
+    return NextResponse.json({ error: 'Too many tries. Please wait 15 minutes and try again, or ask Pratham.' }, { status: 429, headers: { 'Cache-Control': 'no-store' } });
+  }
   if (!hit) {
+    await noteSigninFail(email);
     await new Promise((r) => setTimeout(r, 1500));
     console.log(JSON.stringify({ evt: 'rep_chat_signin', ok: false }));
     await logSignin({ t: new Date().toISOString(), rep: null, email, how: 'page', ok: false, ua }).catch(() => {});

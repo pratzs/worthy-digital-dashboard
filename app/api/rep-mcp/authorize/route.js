@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { clientRedirectUris, issueCode, redirectAllowed } from '@/lib/repOauth';
 import { repForCode } from '@/lib/repAccess';
-import { logSignin } from '@/lib/repStore';
+import { logSignin, signinBlocked, noteSigninFail } from '@/lib/repStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +72,12 @@ export async function POST(request) {
   const email = String(form.get('email') || '');
   const hit = repForCode(form.get('access_code'), email);
   const ua = request.headers.get('user-agent') || '';
+  if (await signinBlocked(email)) {
+    await new Promise((r) => setTimeout(r, 1500));
+    return html(page({ error: 'Too many tries. Please wait 15 minutes and try again.', fields }), 429);
+  }
   if (!hit) {
+    await noteSigninFail(email);
     await new Promise((r) => setTimeout(r, 1500)); // slow down guessing
     console.log(JSON.stringify({ evt: 'rep_mcp_signin', ok: false }));
     await logSignin({ t: new Date().toISOString(), rep: null, email, how: 'connector', ok: false, ua }).catch(() => {});
