@@ -1,6 +1,6 @@
 "use client";
 
-import { REP_TARGETS, fyTargetOf } from "@/lib/repTargets";
+import { fyTargetOf } from "@/lib/repTargetMath";
 import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
 import {
@@ -1206,7 +1206,10 @@ const GroupTitle = ({ text }) => (
    that has passed. */
 const SalesVsTargetTable = ({ theme, payload, company = "north" }) => {
   const year = payload?.fy;
-  const targets = REP_TARGETS.filter(t => t.fy === year && (t.company || "north") === company);
+  // Targets are private: loaded from the dashboard-login-only /api/targets, never built into the page's JavaScript.
+  const [allTargets, setAllTargets] = useState([]);
+  useEffect(() => { fetch("/api/targets", { cache: "no-store" }).then(r => (r.ok ? r.json() : { targets: [] })).then(j => setAllTargets(Array.isArray(j.targets) ? j.targets : [])).catch(() => setAllTargets([])); }, []);
+  const targets = allTargets.filter(t => t.fy === year && (t.company || "north") === company);
   const barColor = (p) => (p >= 100 ? "#16a34a" : p >= 90 ? "#65a30d" : p >= 75 ? "#f59e0b" : "#dc2626");
   const rows = !payload ? [] : targets.map(t => {
     const rep = (payload.reps || []).find(r => r.name === t.rep);
