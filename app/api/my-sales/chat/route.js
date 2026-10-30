@@ -151,7 +151,9 @@ async function callModel(messages, rep, send) {
       outTok = Number(ev.usage?.output_tokens) || outTok;
     } else if (ev.type === 'error') throw new Error(`AI service ${ev.error?.type || ''}: ${ev.error?.message || 'error'}`);
   }
-  const content = blocks.filter(Boolean).map((b) => {
+  // The AI sometimes opens with an empty text block before a lookup. The AI service rejects empty text blocks when they
+  // are sent back on the next step, so they are dropped here.
+  const content = blocks.filter((b) => b && (b.type !== 'text' || b.text.trim())).map((b) => {
     if (b.type !== 'tool_use') return b;
     let input = {};
     try { input = b.raw ? JSON.parse(b.raw) : {}; } catch { input = {}; }
