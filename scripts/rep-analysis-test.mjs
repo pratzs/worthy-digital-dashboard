@@ -95,14 +95,24 @@ test('quota: the daily limit is exact, refunds give a question back, reps are se
   await store.refundQuestion('jerry', day);
   assert.equal((await store.quotaNow('jerry', day)).remaining, 1);
   assert.equal((await store.takeQuestion('keith', day)).remaining, 2, 'another rep has their own allowance');
-  assert.equal((await store.takeQuestion('jerry', '2099-01-02')).remaining, 2, 'a new day starts fresh');
+  // day 1 ended with 2 of 3 used, so 1 rolls over: day 2 allows 3 + 1
+  const d2 = await store.takeQuestion('jerry', '2099-01-02');
+  assert.equal(d2.carried, 1, 'unused questions roll over'); assert.equal(d2.remaining, 3);
+  for (let i = 0; i < 3; i++) await store.takeQuestion('jerry', '2099-01-02');
+  assert.equal((await store.takeQuestion('jerry', '2099-01-02')).allowed, false, 'carried questions are used up, then it stops');
+  // day 2 used 4 of 3 (one carried), day 1 left 1: nothing carries into day 3
+  assert.equal((await store.quotaNow('jerry', '2099-01-03')).carried, 0, 'a carried question is only spent once');
+  assert.equal((await store.takeQuestion('newlead', '2099-01-05')).carried, 0, 'a new lead does not start with saved questions');
+  // a quiet week saves up to 7 days' worth; a day more than 7 days back no longer counts
+  assert.equal((await store.quotaNow('jerry', '2099-01-09')).carried, 17, 'days 2 to 8: one over on day 2, six unused days');
+  assert.equal((await store.quotaNow('jerry', '2099-01-10')).carried, 21, 'only the last 7 days count');
 });
 
 test('usage and feedback are recorded newest first, questions shortened', async () => {
   await store.logUsage({ t: '2026-10-29T01:00:00Z', rep: 'jerry', question: 'q1', tools: ['my_sales'], ok: true, ms: 4000, inTok: 100, outTok: 50 });
   await store.logUsage({ t: '2026-10-29T02:00:00Z', rep: 'jerry', question: 'x'.repeat(900), tools: [], ok: false, ms: 100, why: 'boom' });
   const u = await store.recentUsage(10);
-  assert.equal(u[0].question.length, 300); assert.equal(u[1].question, 'q1');
+  assert.equal(u[0].question.length, 500); assert.equal(u[1].question, 'q1');
   const st = await store.repStats('jerry');
   assert.equal(st.ok, 1); assert.equal(st.fail, 1); assert.equal(st.inTok, 100);
   await store.logFeedback({ t: 'x', rep: 'jerry', kind: 'wrong', question: 'q', answer: 'a'.repeat(5000), note: 'n' });

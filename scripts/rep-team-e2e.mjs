@@ -40,8 +40,8 @@ async function michelle() {
   const list = (await rpc(t, 'tools/list')).tools;
   const names = list.map((x) => x.name);
   ok(names.includes('team_overview') && names.includes('team_attention') && names.includes('my_sales'), 'team tools are offered');
-  ok(names.length === 11, `11 tools (have ${names.length})`);
-  ok(list.filter((x) => x.name !== 'my_profile' && !x.name.startsWith('team_')).every((x) => x.inputSchema.properties.person), 'person argument on each person tool');
+  ok(names.length === 13, `13 tools (have ${names.length})`);
+  ok(list.filter((x) => x.name !== 'my_profile' && x.name !== 'product_cost' && !x.name.startsWith('team_')).every((x) => x.inputSchema.properties.person), 'person argument on each person tool');
 
   const prof = await call(t, 'my_profile');
   ok(!prof.err && prof.data.teamMembers.length === 3 && prof.data.team === 'Team 2', 'profile shows lead and 3 team members');

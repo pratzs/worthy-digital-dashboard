@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { clientRedirectUris, issueCode, redirectAllowed } from '@/lib/repOauth';
 import { repForCode } from '@/lib/repAccess';
 import { logSignin, signinBlocked, noteSigninFail } from '@/lib/repStore';
+import { clientInfo } from '@/lib/repClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,11 +81,11 @@ export async function POST(request) {
     await noteSigninFail(email);
     await new Promise((r) => setTimeout(r, 1500)); // slow down guessing
     console.log(JSON.stringify({ evt: 'rep_mcp_signin', ok: false }));
-    await logSignin({ t: new Date().toISOString(), rep: null, email, how: 'connector', ok: false, ua }).catch(() => {});
+    await logSignin({ t: new Date().toISOString(), rep: null, email, how: 'connector', ok: false, ...clientInfo(request) }).catch(() => {});
     return html(page({ error: 'That email or password is not recognised.', fields }), 401);
   }
   console.log(JSON.stringify({ evt: 'rep_mcp_signin', ok: true, rep: hit.rep.key }));
-  await logSignin({ t: new Date().toISOString(), rep: hit.rep.key, email, how: 'connector', ok: true, ua }).catch(() => {});
+  await logSignin({ t: new Date().toISOString(), rep: hit.rep.key, email, how: 'connector', ok: true, ...clientInfo(request) }).catch(() => {});
 
   const code = issueCode({
     client_id: fields.client_id, redirect_uri: fields.redirect_uri, code_challenge: fields.code_challenge,

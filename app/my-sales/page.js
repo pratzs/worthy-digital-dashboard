@@ -386,7 +386,7 @@ export default function MySales() {
             style={{ flexShrink: 0, minHeight: 48, padding: "0 22px", fontSize: 16, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 12, cursor: "pointer", opacity: busy || !input.trim() ? 0.6 : 1 }}>Ask</button>
         </div>
         <div style={{ maxWidth: 760, margin: "6px auto 0", fontSize: 13, color: noneLeft ? BRAND.rust : (quota && quota.remaining <= 5 ? "#B26A00" : BRAND.muted), display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <span>{quota ? (noneLeft ? `You have used all ${quota.limit} of today's questions. They start again tomorrow.` : `Questions left today: ${quota.remaining} of ${quota.limit}`) : ""}</span>
+          <span>{quota ? (noneLeft ? `You have used all of today's questions. You get ${quota.limit} more tomorrow.` : `Questions left today: ${quota.remaining}${quota.carried ? ` (${quota.limit} a day + ${quota.carried} saved from earlier days)` : ` of ${quota.limit}`}`) : ""}</span>
           <span>Your questions are saved so we can improve this.</span>
         </div>
       </form>

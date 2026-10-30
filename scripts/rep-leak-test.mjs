@@ -112,8 +112,12 @@ test('the other nine reps cannot sign in even with a valid entry', () => {
   for (const c of ['J', 'S']) assert.equal(repForCode(c.repeat(24)), null);
   for (const k of ['jerry', 'savan', 'keith', 'chris', 'ravi', 'lynette', 'nimesh', 'nayan', 'naitik']) assert.equal(currentVer(k), 0, k);
 });
-test('Team 1 lead is switched off even if someone puts an entry in', () => {
-  assert.equal(repForCode('L'.repeat(24)), null); assert.equal(currentVer('lead1'), 0);
+test('Team 1 lead signs in, sees exactly the six Team 1 people and none of Team 2', () => {
+  const hit = repForCode('L'.repeat(24));
+  assert.equal(hit.rep.key, 'lead1'); assert.equal(hit.rep.self, null);
+  assert.deepEqual(hit.rep.people.map((p) => p.key).sort(), ['jerry', 'keith', 'naitik', 'nayan', 'nimesh', 'savan']);
+  for (const q of ['Michelle', 'Chris', 'Ravi', 'Lynette', 'Leith']) assert.throws(() => resolvePerson(hit.rep, q), /not on your team/, q);
+  assert.equal(hit.rep.system, 'mixed');
 });
 test('the test lead only exists when REP_ALLOW_TEST_LEAD=1', () => {
   assert.equal(principalByKey('testlead'), null);
