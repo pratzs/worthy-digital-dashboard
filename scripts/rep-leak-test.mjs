@@ -384,4 +384,25 @@ console.log('Marketing login (Vishva): costing and account sales only');
   });
 }
 
+console.log('System names (Odoo, Ostendo, Dutch Rusk, Worthy Products North and South)');
+{
+  const { resolveSystem, MARKETING_INSTRUCTIONS, NORTH_LABEL, SOUTH_LABEL } = await import('../lib/systemNames.js');
+  test('every name for Worthy Products North means north', () => {
+    for (const v of ['north', 'North', 'NORTH', 'odoo', 'Odoo', 'Worthy Products North', 'worthy products north', 'Worthy North', 'worthy-products-north', 'WPN']) assert.equal(resolveSystem(v), 'north', v);
+  });
+  test('every name for Worthy Products South and Dutch Rusk means south', () => {
+    for (const v of ['south', 'South', 'ostendo', 'Ostendo', 'Dutch Rusk', 'dutch rusk', 'DutchRusk', 'Dutch Rusk Worthy Products South', 'Worthy Products South', 'worthy south', 'worthy-products-south', 'DR']) assert.equal(resolveSystem(v), 'south', v);
+  });
+  test('blank, both, or plain "Worthy Products" mean both, never a silent pick', () => {
+    for (const v of [undefined, null, '', ' ', 'both', 'all', 'Worthy Products', 'worthy', 'combined', 'north and south', 'Odoo and Ostendo', 'north & south']) assert.equal(resolveSystem(v), null, String(v));
+  });
+  test('anything else is refused with a plain sentence', () => {
+    for (const v of ['Oceania', 'Worthy Oceania', 'fabric', 'mars', 'xyz']) assert.throws(() => resolveSystem(v), /system must be/, v);
+  });
+  test('the labels carry both names, and the instructions explain every alias and forbid mixing them up', () => {
+    assert.ok(/North/.test(NORTH_LABEL) && /Odoo/.test(NORTH_LABEL)); assert.ok(/South/.test(SOUTH_LABEL) && /Dutch Rusk/.test(SOUTH_LABEL) && /Ostendo/.test(SOUTH_LABEL));
+    for (const w of ['Worthy Products North', 'Worthy Products South', 'Dutch Rusk', 'Odoo', 'Ostendo', 'Oceania', 'side by side', 'Never add North and South']) assert.ok(MARKETING_INSTRUCTIONS.includes(w), w);
+  });
+}
+
 console.log(`\n${passed} passed${process.exitCode ? ', with FAILURES' : ''}`);

@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { checkAccessToken } from '@/lib/repOauth';
 import { principalByKey, currentVer } from '@/lib/repAccess';
 import { toolsFor, runRepTool } from '@/lib/repTools';
+import { MARKETING_INSTRUCTIONS } from '@/lib/systemNames';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -85,6 +86,7 @@ export async function POST(request) {
       protocolVersion: negotiateVersion(params.protocolVersion),
       capabilities: { tools: {} },
       serverInfo: { name: 'worthy-my-sales', version: '1.0.0' },
+      ...(rep.role === 'marketing' ? { instructions: MARKETING_INSTRUCTIONS } : {}),
     }, sse);
   }
   if (method === 'ping') return rpcResult(id, {}, sse);

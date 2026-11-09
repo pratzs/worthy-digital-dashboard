@@ -41,14 +41,16 @@ ok(Boolean(t), 'signs in with email and password');
 if (t) {
   const P = '/api/rep-mcp';
   const names = (await rpc(P, t, 'tools/list')).tools.map((x) => x.name).sort();
-  const WANT = 'account_sales,cost_basket,group_accounts,lapsed_accounts,my_profile,new_customers,product_cost,top_groups,top_products';
-  ok(names.join() === WANT, `offers exactly the nine business development tools (have ${names.join(', ')})`);
+  const WANT = 'account_sales,cost_basket,group_accounts,lapsed_accounts,my_profile,new_customers,product_cost,system_overview,top_groups,top_products';
+  ok(names.join() === WANT, `offers exactly the ten business development tools (have ${names.join(', ')})`);
   for (const n of ['my_sales', 'my_debtors', 'my_customers', 'my_best_sellers', 'my_action_plan', 'team_overview', 'team_attention', 'team_product_gaps', 'my_recent_orders', 'get_financial_year', 'odoo_search']) {
     const r = await call(P, t, n, { person: 'Savan', sql: 'select 1' });
     ok(r.err && /Unknown tool/.test(r.text), `${n} is refused`);
   }
   const prof = await call(P, t, 'my_profile');
   ok(!prof.err && prof.data.role === 'Marketing', 'profile says Marketing');
+  const ptxt = JSON.stringify(prof.data);
+  ok(prof.data.systems.length === 2 && /Dutch Rusk/.test(ptxt) && /Odoo/.test(ptxt) && /Ostendo/.test(ptxt) && /Worthy Products South/.test(ptxt) && prof.data.terms.banner && prof.data.terms.channel, 'the profile explains the two systems, their other names, and the terms group, banner, channel');
 
   const cost = await call(P, t, 'product_cost', { name: 'Musashi' });
   ok(!cost.err && cost.data.items.length > 0, `product_cost finds products (${cost.data?.items?.length})`);
@@ -77,7 +79,7 @@ if (t) {
     ok(!/"(rep|reps|salesperson|week|weeks|weekly|person|members)"\s*:/i.test(r.text), `${label}: no rep, salesperson or weekly key`);
     ok(FULL_NAMES.every((n) => !r.text.includes(n)), `${label}: no rep name anywhere`);
   };
-  const North = 'Worthy Products North', South = 'Worthy Products South (Dutch Rusk)';
+  const North = 'Worthy Products North (Odoo)', South = 'Worthy Products South (Dutch Rusk, Ostendo)';
   const sum = (a, k) => a.reduce((x, y) => x + (y[k] || 0), 0);
 
   const tg = await call(P, t, 'top_groups', { by: 'group', limit: 100 });
@@ -105,6 +107,30 @@ if (t) {
   ok((await call(P, t, 'top_groups', { months: 99 })).err, 'a bad month count is refused');
   const one = await call(P, t, 'top_groups', { by: 'group', system: 'south', limit: 3 });
   ok(!one.err && one.data.groups.every((g) => g.systems.length === 1 && g.systems[0] === South), 'the system filter limits to South');
+
+  // every name people use for the two systems resolves to the right one
+  for (const [alias, want] of [['Dutch Rusk', South], ['dutch rusk', South], ['ostendo', South], ['Ostendo', South], ['Worthy Products South', South], ['South', South], ['odoo', North], ['Odoo', North], ['Worthy Products North', North], ['north', North]]) {
+    const r = await call(P, t, 'top_groups', { by: 'group', system: alias, limit: 3 });
+    ok(!r.err && r.data.groups.length > 0 && r.data.groups.every((g) => g.systems.length === 1 && g.systems[0] === want), `system "${alias}" means ${want}`);
+  }
+  const bothNames = await call(P, t, 'top_groups', { by: 'group', system: 'Worthy Products', limit: 100 });
+  ok(!bothNames.err && bothNames.data.groups.some((g) => g.systems.includes(North)) && bothNames.data.groups.some((g) => g.systems.includes(South)), 'plain "Worthy Products" shows both systems rather than picking one');
+  ok((await call(P, t, 'top_groups', { system: 'Oceania' })).err, 'an unknown system is refused with a plain message');
+  const sOnly = await call(P, t, 'new_customers', { days: 90, system: 'Dutch Rusk' });
+  ok(!sOnly.err && sOnly.data.customers.every((c) => c.system === South), 'new_customers accepts "Dutch Rusk"');
+  const lOnly = await call(P, t, 'lapsed_accounts', { system: 'odoo' });
+  ok(!lOnly.err && lOnly.data.accounts.every((c) => c.system === North), 'lapsed_accounts accepts "odoo"');
+
+  const so = await call(P, t, 'system_overview', {});
+  ok(!so.err, 'system_overview answers');
+  if (!so.err) {
+    const d = so.data; clean(so, 'system_overview');
+    console.log('     overview:', d.systems.map((x) => x.system + ' ' + x.revenue + ' (' + x.changeVsLastYearPct + '%)').join(' | '));
+    ok(d.systems.length === 2 && d.systems[0].system === North && d.systems[1].system === South, 'the overview shows North (Odoo) and South (Dutch Rusk, Ostendo) side by side');
+    ok(Math.abs(d.combinedRevenue - tg.data.totalExternalRevenue) <= 1, 'combined revenue equals the external total in top_groups');
+    ok(d.systems.every((x) => x.revenue > 0 && x.accountsWithSales > 0 && x.topGroups.length > 0 && x.activeAccounts <= x.accountsWithSales), 'each system has revenue, accounts and top groups, and active never exceeds accounts');
+    ok(Math.abs(d.systems.reduce((s, x) => s + x.shareOfCombinedRevenuePct, 0) - 100) <= 0.2, 'shares of combined revenue add up to 100%');
+  }
 
   const ga = await call(P, t, 'group_accounts', { name: 'Mobil', limit: 150 });
   ok(!ga.err, 'group_accounts "Mobil" answers');
@@ -171,6 +197,10 @@ if (t) {
   ok((await call(P, t, 'cost_basket', { items: [] })).err, 'an empty basket is refused');
   const pc = await call(P, t, 'product_cost', { name: 'RUSS4' });
   ok(!pc.err && pc.data.items.some((i) => i.code === 'RUSS4'), 'product_cost finds a product by its code');
+  ok(pc.data.items.every((i) => i.system === North || i.system === South), 'every product cost says which system it came from, by full name');
+  const init = await rpc(P, t, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
+  ok(/Dutch Rusk/.test(init.instructions) && /Odoo/.test(init.instructions) && /Ostendo/.test(init.instructions) && /Worthy Products South/.test(init.instructions), 'the connector tells Claude what Dutch Rusk, Worthy Products South, Odoo and Ostendo mean');
+  ok(/never add North and South together without saying/i.test(init.instructions) || /Never add North and South/.test(init.instructions), 'the instructions forbid mixing the two systems up');
 
   const ly = await call(P, t, 'account_sales', { name: 'CSB', fy: 2025 });
   ok(!ly.err && ly.data.period.from === '2025-04-01' && ly.data.period.to === '2026-03-31', 'a full past financial year can be asked for');
