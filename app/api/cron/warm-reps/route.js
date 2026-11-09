@@ -7,6 +7,7 @@ const teamPeople = () => [...new Map(activePrincipals().flatMap((p) => p.people)
 import { nzFinancialYear } from '@/lib/ostendo';
 import { warmRepData, REP_DATA_TAG } from '@/lib/repData';
 import { getStamp, setStamp } from '@/lib/repStore';
+import { bdDataset } from '@/lib/bdData';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -37,6 +38,12 @@ export async function GET(request) {
     const t = Date.now();
     try { await warmRepData(rep, fy); out.push({ rep: rep.key, ms: Date.now() - t }); }
     catch (e) { out.push({ rep: rep.key, ms: Date.now() - t, error: String(e.message).slice(0, 80) }); }
+  }
+  // The Marketing login's customer dataset (groups, banners, new and lapsed accounts) is refreshed here too, so its first question is quick.
+  if (activePrincipals().some((p) => p.role === 'marketing') && Date.now() - began < BUDGET_MS) {
+    const t = Date.now();
+    try { await bdDataset(); out.push({ dataset: 'business development', ms: Date.now() - t }); }
+    catch (e) { out.push({ dataset: 'business development', ms: Date.now() - t, error: String(e.message).slice(0, 80) }); }
   }
   return NextResponse.json({ ok: out.every((o) => !o.error), done: out.filter((o) => o.ms != null && !o.error).length, of: REPS.length, ms: Date.now() - began, results: out });
 }

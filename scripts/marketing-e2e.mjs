@@ -4,7 +4,7 @@
  *
  *   node scripts/marketing-e2e.mjs <base url> <vishva password> <vishva email> <management password>
  *
- * Marketing must offer exactly my_profile, product_cost and account_sales; refuse every rep/team tool; return account
+ * Marketing must offer exactly the nine business development tools (profile, product cost, cost basket, account sales, top groups, group accounts, new customers, lapsed accounts, top products); refuse every rep/team tool; return account
  * sales that add up (accounts = months = total) with no rep, salesperson or weekly figure. The expense tool must answer
  * Kishan's question shape exactly and add up. Passwords come from arguments and are never printed.
  */
@@ -41,7 +41,8 @@ ok(Boolean(t), 'signs in with email and password');
 if (t) {
   const P = '/api/rep-mcp';
   const names = (await rpc(P, t, 'tools/list')).tools.map((x) => x.name).sort();
-  ok(names.join() === 'account_sales,my_profile,product_cost', `offers exactly account_sales, my_profile, product_cost (have ${names.join(', ')})`);
+  const WANT = 'account_sales,cost_basket,group_accounts,lapsed_accounts,my_profile,new_customers,product_cost,top_groups,top_products';
+  ok(names.join() === WANT, `offers exactly the nine business development tools (have ${names.join(', ')})`);
   for (const n of ['my_sales', 'my_debtors', 'my_customers', 'my_best_sellers', 'my_action_plan', 'team_overview', 'team_attention', 'team_product_gaps', 'my_recent_orders', 'get_financial_year', 'odoo_search']) {
     const r = await call(P, t, n, { person: 'Savan', sql: 'select 1' });
     ok(r.err && /Unknown tool/.test(r.text), `${n} is refused`);
@@ -69,6 +70,108 @@ if (t) {
     ok(REP_NAMES.every((n) => !r.text.includes(n)), `${acct}: no rep name appears anywhere in the answer`);
     ok(d.byMonth.every((m) => /^\d{4}-\d{2}$/.test(m.month)), `${acct}: months are YYYY-MM`);
   }
+
+  // ── business development tools: both systems, totals that add up, no rep or weekly information ──
+  const FULL_NAMES = ['Nimesh Darjee', 'Nayan Patel', 'Savan Patel', 'Naitik Trivedi', 'Hari Patel', 'Rubin Monpara', 'Albert Lee', 'Nish Jha', 'Ravi Kumar'];
+  const clean = (r, label) => {
+    ok(!/"(rep|reps|salesperson|week|weeks|weekly|person|members)"\s*:/i.test(r.text), `${label}: no rep, salesperson or weekly key`);
+    ok(FULL_NAMES.every((n) => !r.text.includes(n)), `${label}: no rep name anywhere`);
+  };
+  const North = 'Worthy Products North', South = 'Worthy Products South (Dutch Rusk)';
+  const sum = (a, k) => a.reduce((x, y) => x + (y[k] || 0), 0);
+
+  const tg = await call(P, t, 'top_groups', { by: 'group', limit: 100 });
+  ok(!tg.err, 'top_groups (group) answers');
+  if (!tg.err) {
+    const d = tg.data; clean(tg, 'top_groups');
+    console.log('     top group:', d.groups[0].group, d.groups[0].revenue, '| external total', d.totalExternalRevenue, '| groups', d.of);
+    ok(d.groups.every((g, i, a) => i === 0 || a[i - 1].revenue >= g.revenue), 'groups are ranked by revenue');
+    ok(d.groups.some((g) => g.systems.includes(North)) && d.groups.some((g) => g.systems.includes(South)), 'groups come from BOTH Worthy Products North (Odoo) and South (Ostendo)');
+    ok(!d.groups.some((g) => /^worthy\b|dutch rusk/i.test(g.group)), 'intercompany and staff accounts are not ranked');
+    ok(sum(d.groups, 'shareOfRevenuePct') <= 100.5, 'shares add up to 100% or less');
+  }
+  for (const by of ['channel', 'banner']) {
+    const r = await call(P, t, 'top_groups', { by, limit: 100 });
+    ok(!r.err, `top_groups by ${by} answers`);
+    if (r.err) continue;
+    clean(r, `top_groups ${by}`);
+    const covered = sum(r.data.groups, 'revenue') + (r.data.noBannerOrGroupRecorded?.revenue || 0);
+    ok(Math.abs(covered - r.data.totalExternalRevenue) <= 1, `${by}: ranked revenue plus the unassigned adds up to the total (${covered.toFixed(2)} vs ${r.data.totalExternalRevenue})`);
+    if (by === 'banner') ok(r.data.groups.some((g) => g.banner === 'Mobil' && g.systems.includes(North) && g.systems.includes(South)), 'Mobil is one banner across both systems');
+  }
+  const lyr = await call(P, t, 'top_groups', { by: 'banner', fy: 2025, limit: 5 });
+  ok(!lyr.err && /FY25/.test(lyr.data.period), 'a past financial year can be asked for');
+  ok((await call(P, t, 'top_groups', { by: 'rep' })).err, 'ranking by rep is refused');
+  ok((await call(P, t, 'top_groups', { months: 99 })).err, 'a bad month count is refused');
+  const one = await call(P, t, 'top_groups', { by: 'group', system: 'south', limit: 3 });
+  ok(!one.err && one.data.groups.every((g) => g.systems.length === 1 && g.systems[0] === South), 'the system filter limits to South');
+
+  const ga = await call(P, t, 'group_accounts', { name: 'Mobil', limit: 150 });
+  ok(!ga.err, 'group_accounts "Mobil" answers');
+  if (!ga.err) {
+    const d = ga.data; clean(ga, 'group_accounts');
+    const st = Object.values(d.totals.byStatus).reduce((x, y) => x + y, 0);
+    console.log('     Mobil:', d.totals.accountsWithSales, 'accounts with sales, revenue', d.totals.revenue, 'avg per active', d.totals.averageRevenuePerActiveAccount, JSON.stringify(d.totals.byStatus));
+    ok(Math.abs(sum(d.accounts, 'revenue') - d.totals.revenue) <= 0.5, 'Mobil accounts add up to the Mobil total');
+    ok(st === d.totals.accountsWithSales, 'status counts add up to the accounts with sales');
+    ok(d.accounts.some((a) => a.system === North) && d.accounts.some((a) => a.system === South), 'Mobil includes North and South accounts');
+    ok(d.accounts.every((a) => ['Active', 'At risk (45-90 days quiet)', 'Lapsed (over 90 days quiet)', 'No invoices'].includes(a.status)), 'every account has a status');
+  }
+  ok((await call(P, t, 'group_accounts', { name: '' })).err, 'group_accounts with no name is refused');
+  const nomatch = await call(P, t, 'group_accounts', { name: 'qqqzzzxxx' });
+  ok(!nomatch.err && nomatch.data.matched.accounts === 0 && nomatch.data.notes.some((n) => /No customer/.test(n)), 'an unknown group says so plainly');
+
+  const nc = await call(P, t, 'new_customers', { days: 90 });
+  ok(!nc.err, 'new_customers answers');
+  if (!nc.err) {
+    const d = nc.data; clean(nc, 'new_customers');
+    console.log('     new customers (90 days):', d.newCustomersWithSales, 'revenue', d.revenueFromThem);
+    ok(d.customers.every((c) => c.joined >= d.window.from && c.revenueSinceJoining > 0), 'every new customer joined inside the window and has sales');
+    ok(d.newCustomersWithSales > 0 && d.customers.some((c) => c.system === North) && d.customers.some((c) => c.system === South), 'new customers appear from both systems');
+  }
+  ok((await call(P, t, 'new_customers', { days: 2 })).err, 'a too-short window is refused');
+
+  const lp = await call(P, t, 'lapsed_accounts', {});
+  ok(!lp.err, 'lapsed_accounts answers');
+  if (!lp.err) {
+    const d = lp.data; clean(lp, 'lapsed_accounts');
+    console.log('     lapsed:', d.accountsFound, 'accounts, value at stake', d.valueAtStake);
+    ok(d.accounts.every((a) => a.daysQuiet > 90), 'every lapsed account has been quiet more than 90 days');
+    ok(d.accounts.every((a, i, arr) => i === 0 || arr[i - 1].spendInTheYearBeforeTheirLastOrder >= a.spendInTheYearBeforeTheirLastOrder), 'ranked by past spend');
+    ok(d.accounts.some((a) => a.system === North) && d.accounts.some((a) => a.system === South), 'lapsed accounts come from both systems');
+  }
+  ok((await call(P, t, 'lapsed_accounts', { quietDays: 5 })).err, 'a bad quiet period is refused');
+
+  const tp = await call(P, t, 'top_products', { limit: 20 });
+  ok(!tp.err, 'top_products answers');
+  if (!tp.err) {
+    const d = tp.data; clean(tp, 'top_products');
+    ok(d.products.every((p, i, a) => i === 0 || a[i - 1].revenue >= p.revenue), 'products ranked by revenue');
+    ok(d.products.some((p) => p.system === North) && d.products.some((p) => p.system === South), 'products come from both systems');
+    ok(d.products.every((p) => !p.units || Math.abs(p.averagePricePerUnit - p.revenue / p.units) <= 0.02), 'average price is revenue over units');
+  }
+  const tpf = await call(P, t, 'top_products', { name: 'coconut water', limit: 5 });
+  ok(!tpf.err && tpf.data.products.length > 0 && tpf.data.products.every((p) => /coco/i.test(p.product)), 'a product name filter works');
+
+  const cb = await call(P, t, 'cost_basket', { items: [{ name: 'B0008', quantity: 20 }, { name: 'C0422', quantity: 10, system: 'north' }, { name: 'C0422', quantity: 10, system: 'south' }, { name: 'C0422', quantity: 1 }, { name: 'zzzznotfound', quantity: 2 }], targetMarginPct: 20 });
+  ok(!cb.err, 'cost_basket answers');
+  if (!cb.err) {
+    const d = cb.data; clean(cb, 'cost_basket');
+    const costed = d.lines.filter((l) => l.status === 'costed');
+    ok(costed.length === 3 && d.complete === false, 'three lines costed, the unclear and unknown ones are flagged');
+    ok(costed.every((l) => Math.abs(l.lineCost - l.unitCost * l.quantity) <= 0.02), 'line cost is unit cost times quantity');
+    ok(costed.every((l) => Math.abs(l.suggestedPricePerUnit - l.unitCost / 0.8) <= 0.02), 'price for 20% margin is cost divided by 0.8');
+    ok(Math.abs(d.totals.totalCost - sum(costed, 'lineCost')) <= 0.02 && Math.abs(d.totals.grossProfit - d.totals.suggestedPrice * 0.2) <= 0.05, 'totals and gross profit add up');
+    ok(d.lines.some((l) => l.status === 'choose one' && l.candidates.length >= 2) && d.lines.some((l) => l.status === 'not found'), 'an ambiguous code asks which one; an unknown product says not found');
+    const north = costed.find((l) => l.system === North && l.code === 'C0422'), south = costed.find((l) => l.system === South && l.code === 'C0422');
+    ok(north && south && north.unitCost !== south.unitCost, 'the same code is costed separately in North and South');
+  }
+  ok((await call(P, t, 'cost_basket', { items: [{ name: 'B0008', quantity: -3 }] })).err, 'a negative quantity is refused');
+  ok((await call(P, t, 'cost_basket', { items: [{ name: 'B0008', quantity: 1 }], targetMarginPct: 95 })).err, 'a 95% margin target is refused');
+  ok((await call(P, t, 'cost_basket', { items: [] })).err, 'an empty basket is refused');
+  const pc = await call(P, t, 'product_cost', { name: 'RUSS4' });
+  ok(!pc.err && pc.data.items.some((i) => i.code === 'RUSS4'), 'product_cost finds a product by its code');
+
   const ly = await call(P, t, 'account_sales', { name: 'CSB', fy: 2025 });
   ok(!ly.err && ly.data.period.from === '2025-04-01' && ly.data.period.to === '2026-03-31', 'a full past financial year can be asked for');
   const dr = await call(P, t, 'account_sales', { name: 'CSB', from: '2026-10-01', to: '2026-10-31' });
@@ -81,6 +184,24 @@ if (t) {
   ok(!inj.err || /No customer|Tell me which/.test(inj.text), 'an injection-style name is harmless');
   const mgmtOnRep = await fetch(`${base}/api/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${t}` }, body: '{}' });
   ok(mgmtOnRep.status === 401, 'the marketing token is refused by the management connector');
+}
+
+if (mgmtPw && t) {
+  console.log('Marketing totals against the dashboard');
+  const lg = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: mgmtPw }) });
+  const cookie = (lg.headers.get('set-cookie') || '').split(';')[0];
+  const dash = async (p) => (await fetch(base + p, { headers: { cookie } })).json();
+  const [nf, sf] = await Promise.all([dash('/api/odoo/fy?fy=2026&fresh=1'), dash('/api/ostendo/fy?fy=2026&fresh=1')]);
+  const tg2 = (await call('/api/rep-mcp', t, 'top_groups', { limit: 1 })).data;
+  const dashTotal = nf.totals.revenue + sf.totals.revenue;
+  console.log('     BD external total', tg2.totalExternalRevenue, '| dashboard North + South', dashTotal.toFixed(2));
+  // The gap between the dashboard and the external total must be exactly our own intercompany and staff accounts (found by name, both systems).
+  const own = async (name) => (await call('/api/rep-mcp', t, 'account_sales', { name })).data?.total?.revenue || 0;
+  const internal = (await own('worthy')) + (await own('dutch rusk')) - (await own('worthy dutch rusk')) + (await own('price check'));
+  const gap = dashTotal - tg2.totalExternalRevenue;
+  console.log('     gap', gap.toFixed(2), '| our own intercompany and staff accounts', internal.toFixed(2));
+  // The business development figures are kept for up to 30 minutes, so invoices raised since can differ by a little; 0.1% of sales is far below the $1.7m being explained.
+  ok(Math.abs(gap - internal) <= dashTotal * 0.001, 'the gap to the dashboard is our own intercompany and staff accounts (within 0.1% of sales, the 30 minute cache)');
 }
 
 if (mgmtPw) {
