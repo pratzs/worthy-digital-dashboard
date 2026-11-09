@@ -137,3 +137,16 @@ Vishva Dave finds new groups, corporates and customers. Kishan's limits: custome
 **Verified 9 Nov against independent Odoo and Ostendo queries:** external revenue FY26 to date $19,791,546.19 = North $10,519,174.13 + South $11,012,319.22 less intercompany and staff accounts, and North equals the dashboard's North revenue exactly. Mobil banner $577,298.16, same months last year $296,130.42, +88.0%. Lapsed list matches the dashboard's own lapsed customers (Merry's Berries $70,283, Canary Distributor $56,052, IJH $53,323). BIC FLIK top product 4,061 units $204,376 = Analytics tab. `scripts/marketing-e2e.mjs` (153 checks on real data, includes the dashboard reconciliation when given the management password).
 
 **Open points:** channel is recorded for South only (North only for fuel and liquor-store tags); regions are each system's own records and not harmonised; "Standard" in South is the default customer type; 1,495 accounts have no banner. Vishva's access code is in `Worthy Rep Access\vishva`; `REP_ACCESS` in Vercel needs michelle, lead1 and vishva together (merged file provided).
+
+## 9 Nov 2026: who can see what (access audit)
+
+Four separate doors, each with its own credential. `node scripts/access-matrix.mjs <url> <vishva pw> <vishva email> <test lead pw> <test lead email> <mgmt pw> [bdm pw] [purchasing pw]` tests every credential against every door (124 checks, run against a local server with `REP_ALLOW_TEST_LEAD=1`; `REP_ALLOW_TEST_LEAD` must never be set in Vercel, and is not).
+
+| Credential | What it opens | What it cannot open |
+|---|---|---|
+| Management dashboard cookie / management connector token (`/api/mcp`) | Everything on the dashboard, `/rep-usage`, `/api/targets`, all management tools incl. Odoo/Ostendo queries, expenses, cost gaps | The rep connector (`/api/rep-mcp`) refuses a management token |
+| Team lead (My Account cookie, or rep connector token), e.g. Michelle, Team 1 | Own sales and each person on their own team, team totals, product cost in their own system | Another team's people ("not on your team"), company totals, any marketing or management tool, any dashboard page or API |
+| Marketing (rep connector token), Vishva | Ten business development tools over both systems (groups, banners, channels, accounts, new, lapsed, products, costing) | Any rep, team or weekly figure, any lead tool, any management tool, the My Account page (403, no session), the dashboard, the management connector |
+| BDM / Purchasing dashboard cookies | Their listed pages and APIs only | `/rep-usage`, `/api/targets`, `/api/chat`, any rep session |
+
+Findings (9 Nov, existing design, not changed): the BDM role includes Sales by Rep by design, and the Purchasing role can read `/api/odoo/fy` and `/api/ostendo/fy` directly, which return every rep's revenue, weekly figures and customer rankings (its pages hide them, the API does not). So: never give Vishva the BDM or Purchasing dashboard password; to stop rep revenue reaching Purchasing, strip `reps`, `weeks`, `customers` and `clv` from those two payloads for that role (needs the role passed from middleware to the routes).
