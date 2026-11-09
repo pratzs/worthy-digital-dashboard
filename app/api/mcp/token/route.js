@@ -44,7 +44,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'invalid_target', error_description: 'resource does not match the authorization request.' }, { status: 400 });
   }
 
-  const access_token = await issueAccessToken(code.resource || params.resource);
+  const access_token = await issueAccessToken(code.resource || params.resource, code.role);
   return NextResponse.json({
     access_token,
     token_type: 'Bearer',

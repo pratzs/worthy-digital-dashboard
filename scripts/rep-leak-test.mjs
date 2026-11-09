@@ -384,6 +384,40 @@ console.log('Marketing login (Vishva): costing and account sales only');
   });
 }
 
+console.log('Department data limits (Purchasing sees no rep, weekly or customer data)');
+{
+  const { filterForRole, PURCH_STRIPPED_KEYS } = await import('../lib/roleData.js');
+  const sample = () => ({
+    fy: 2026, totals: { revenue: 100, newCustomers: 3 }, months: [{ key: '2026-10', revenue: 50, newCustomers: 2, weeks: [{ week: 1 }] }],
+    products: [{ code: 'A', revenue: 5 }], categories: [{ category: 'Gum' }], fastMoving: [{ code: 'A' }], slowMoving: [{ code: 'B' }],
+    reps: [{ name: 'Savan Patel', revenue: 9, weeks: [{ week: 1, revenue: 1 }], months: [{ revenue: 2 }] }], weeks: [{ week: 1, revenue: 1 }], weekly: [{ week: 1 }],
+    repMargins: [{ name: 'Savan Patel' }], repMarginAvailable: true, repMarginNote: 'x',
+    salespeople: [{ name: 'Nimesh Darjee' }], salespeopleMonthly: [], salespeopleWeekly: [],
+    customers: [{ customer: 'CSB' }], clv: [{ customer: 'CSB' }], churned: [], atRisk: [{ customer: 'X' }], lapsed: [{ name: 'Y' }],
+    metrics: { customersInPeriod: 5 },
+  });
+  const hasKey = (v, set) => Array.isArray(v) ? v.some((x) => hasKey(x, set)) : v && typeof v === 'object' ? Object.entries(v).some(([k, x]) => set.has(k) || hasKey(x, set)) : false;
+  test('Purchasing loses every rep, weekly, rep margin and customer carrier, at any depth', () => {
+    const out = filterForRole('purch', 'fy', sample());
+    assert.equal(hasKey(out, new Set(PURCH_STRIPPED_KEYS)), false);
+    assert.ok(!/Savan|Nimesh|CSB/.test(JSON.stringify(out)));
+  });
+  test('Purchasing keeps what it needs: totals, months, products, categories, movers, counts', () => {
+    const out = filterForRole('purch', 'fy', sample());
+    assert.equal(out.totals.revenue, 100); assert.equal(out.months[0].revenue, 50); assert.equal(out.months[0].newCustomers, 2);
+    assert.ok(out.products.length && out.categories.length && out.fastMoving.length && out.slowMoving.length); assert.equal(out.metrics.customersInPeriod, 5);
+  });
+  test('Management and Business Development see the payload unchanged (as designed)', () => {
+    for (const r of ['mgmt', 'bdm']) assert.deepEqual(filterForRole(r, 'fy', sample()), sample());
+  });
+  test('an unknown, missing or made-up department is treated as Purchasing (fails closed)', () => {
+    for (const r of [undefined, null, '', 'admin', 'MGMT', 'marketing', 'lead', 'true']) assert.equal(hasKey(filterForRole(r, 'fy', sample()), new Set(PURCH_STRIPPED_KEYS)), false, String(r));
+  });
+  test('the filter never changes the caller\'s own object', () => {
+    const s = sample(); filterForRole('purch', 'fy', s); assert.ok(s.reps && s.customers);
+  });
+}
+
 console.log('System names (Odoo, Ostendo, Dutch Rusk, Worthy Products North and South)');
 {
   const { resolveSystem, MARKETING_INSTRUCTIONS, NORTH_LABEL, SOUTH_LABEL } = await import('../lib/systemNames.js');

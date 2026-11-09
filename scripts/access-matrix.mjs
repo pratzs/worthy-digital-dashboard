@@ -107,11 +107,86 @@ const APIS = ['/api/odoo/fy?fy=2026', '/api/ostendo/fy?fy=2026', '/api/odoo/cred
     ok(d.status === 200, `${name} department can sign in`);
     for (const p of ['/api/rep-usage', '/api/targets', '/api/chat', '/rep-usage', '/credits', '/debtors']) ok(denied(await get(p, { cookie: d.cookie })) || (await get(p, { cookie: d.cookie })) === 403, `${name} cookie does not open ${p}`);
     ok(denied(await get('/api/my-sales/me', { cookie: d.cookie })), `${name} cookie is not a rep session`);
-    const reps = await get('/api/odoo/fy?fy=2026', { cookie: d.cookie });
-    console.log(`     info: ${name} can open the Sales by Rep data (/api/odoo/fy) = ${reps === 200}${name === 'BDM' ? '  <- do NOT give Vishva the BDM dashboard password if rep revenue must stay hidden' : ''}`);
+    // what each department gets in the data itself is checked in the sections below
   }
   ok(await get('/api/my-sales/me', { cookie: lead.cookie }) === 200, 'the lead\'s own session works on the My Account page');
   const warm = await fetch(`${base}/api/cron/cost-health`); const wj = await warm.json();
   ok(!('items' in wj) && !('customers' in wj), 'the public daily check returns totals only');
+}
+
+const STRIPPED = new Set(['reps', 'weeks', 'weekly', 'repMargins', 'repMarginAvailable', 'repMarginNote', 'salespeople', 'salespeopleMonthly', 'salespeopleWeekly', 'customers', 'clv', 'churned', 'atRisk', 'lapsed']);
+const hasKey = (v, set) => Array.isArray(v) ? v.some((x) => hasKey(x, set)) : v && typeof v === 'object' ? Object.entries(v).some(([k, x]) => set.has(k) || hasKey(x, set)) : false;
+const getJson = async (path, headers = {}) => { const r = await fetch(`${base}${path}`, { headers }); return r.status === 200 ? r.json() : null; };
+const DEPT = ['fetch', 'get_financial_year', 'get_product_analytics', 'get_south_financial_year', 'search'];
+
+if (bdmPw && purchPw) {
+  console.log('Department connector: choose your department');
+  const B = await signIn('/api/mcp', { password: bdmPw, department: 'bdm' });
+  const P = await signIn('/api/mcp', { password: purchPw, department: 'purch' });
+  const M2 = await signIn('/api/mcp', { password: mPw, department: 'mgmt' });
+  const M0 = await signIn('/api/mcp', { password: mPw });
+  ok(Boolean(B) && Boolean(P) && Boolean(M2) && Boolean(M0), 'each department signs in with its own password (and management with none chosen, as before)');
+  const combos = [[purchPw, 'mgmt'], [purchPw, 'bdm'], [bdmPw, 'purch'], [bdmPw, 'mgmt'], [mPw, 'purch'], [mPw, 'bdm'], [purchPw, 'nonsense'], [purchPw, '__proto__'], [purchPw, 'constructor']];
+  for (const [pw, dept] of combos) ok((await signIn('/api/mcp', { password: pw, department: dept })) === null, `a password does not open the wrong department (${dept})`);
+  const namesOf = async (tok) => (await rpc('/api/mcp', tok, 'tools/list')).body.tools.map((x) => x.name).sort();
+  const full = await namesOf(M2);
+  ok(JSON.stringify(await namesOf(B)) === JSON.stringify(DEPT) && JSON.stringify(await namesOf(P)) === JSON.stringify(DEPT), 'Business Development and Purchasing are each offered only the five department tools');
+  ok(JSON.stringify(await namesOf(M0)) === JSON.stringify(full) && full.length > DEPT.length && full.includes('odoo_search') && full.includes('get_expenses'), 'management is offered everything, whether or not it chose a department');
+  for (const [who, tok] of [['Business Development', B], ['Purchasing', P]]) {
+    for (const n of ['get_debtors', 'get_south_debtors', 'get_expenses', 'get_south_cost_gaps', 'odoo_search', 'odoo_aggregate', 'odoo_list_models', 'odoo_describe_model', 'odoo_count', 'ostendo_query']) {
+      const r = await call('/api/mcp', tok, n, { company: 'north', sql: 'select 1', model: 'res.partner' });
+      ok(r.err && /not available to your department/.test(r.text), `${who} cannot call ${n}`);
+    }
+    for (const n of [...MKT_TOOLS, ...LEAD_TOOLS]) { const r = await call('/api/mcp', tok, n, {}); ok(r.err, `${who} cannot call ${n}`); }
+    ok((await rpc('/api/rep-mcp', tok, 'tools/list')).status === 401, `${who} token is refused by the rep connector`);
+    const init = await rpc('/api/mcp', tok, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'd', version: '1' } });
+    ok(Boolean(init.body.instructions) && /department/.test(init.body.instructions), `${who} is told which department it is`);
+  }
+  ok(!(await rpc('/api/mcp', M2, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'm', version: '1' } })).body.instructions, 'management gets no department restrictions text');
+
+  console.log('What each department gets in the data');
+  for (const [co, tool] of [['north', 'get_financial_year'], ['oceania', 'get_financial_year']]) {
+    const pf = await call('/api/mcp', P, tool, { company: co });
+    ok(!pf.err && !hasKey(pf.data, STRIPPED) && pf.data.months?.length && pf.data.totals, `Purchasing ${tool} (${co}): totals and months, no rep, weekly or customer data`);
+  }
+  const ps = await call('/api/mcp', P, 'get_south_financial_year', {});
+  ok(!ps.err && !hasKey(ps.data, STRIPPED) && ps.data.months?.length, 'Purchasing south year: no rep or weekly data');
+  const bf = await call('/api/mcp', B, 'get_financial_year', { company: 'north' });
+  ok(!bf.err && bf.data.reps?.length > 0, 'Business Development keeps Sales by Rep (as designed for that department)');
+  const mf = await call('/api/mcp', M2, 'get_financial_year', { company: 'north' });
+  ok(!mf.err && mf.data.reps?.length > 0 && mf.data.customers?.length > 0, 'management keeps everything');
+  for (const co of ['north', 'oceania', 'south']) {
+    const pa = await call('/api/mcp', P, 'get_product_analytics', { company: co });
+    ok(!pa.err && !hasKey(pa.data, STRIPPED) && (pa.data.products?.length > 0 || pa.data.topProducts?.length > 0), `Purchasing product analytics (${co}): products and movers, no rep or customer data`);
+  }
+  const ba = await call('/api/mcp', B, 'get_product_analytics', { company: 'south' });
+  ok(!ba.err && ba.data.customers?.length > 0, 'Business Development product analytics keep customers (their customers section)');
+  ok((await call('/api/mcp', P, 'get_product_analytics', { company: 'mars' })).err, 'an unknown company is refused');
+
+  const sp = await call('/api/mcp', P, 'search', { query: 'Musashi' });
+  ok(!sp.err && sp.data.results.every((x) => /^(odoo:product:|ostendo:item:|ostendo:supplier:)/.test(x.id)), 'Purchasing search returns products, items and suppliers only, never customers');
+  const sb = await call('/api/mcp', B, 'search', { query: 'CSB' });
+  const partner = sb.data?.results?.find((x) => /^odoo:partner:/.test(x.id));
+  ok(!sb.err && Boolean(partner), 'Business Development search can find a customer');
+  ok((await call('/api/mcp', P, 'fetch', { id: partner?.id || 'odoo:partner:1' })).err, 'Purchasing cannot fetch a customer record');
+  const fb = await call('/api/mcp', B, 'fetch', { id: partner.id });
+  ok(!fb.err && !/user_id/.test(fb.text), 'Business Development can fetch a customer, without the salesperson assigned');
+  ok((await call('/api/mcp', B, 'fetch', { id: 'ostendo:supplier:Anything' })).err, 'Business Development cannot fetch supplier records');
+
+  console.log('Dashboard data routes: the same limits, even if the caller tries to claim another department');
+  const pc = (await login('/api/auth/login', { password: purchPw })).cookie;
+  const bc = (await login('/api/auth/login', { password: bdmPw })).cookie;
+  const mc = (await login('/api/auth/login', { password: mPw })).cookie;
+  for (const p of ['/api/odoo/fy?fy=2026', '/api/ostendo/fy?fy=2026', '/api/odoo/advanced?fy=2026', '/api/ostendo/advanced?fy=2026', '/api/odoo?year=2026']) {
+    const pj = await getJson(p, { cookie: pc });
+    ok(pj && !hasKey(pj, STRIPPED), `Purchasing cookie: ${p} has no rep, weekly or customer data`);
+    const spoof = await getJson(p, { cookie: pc, 'x-worthy-role': 'mgmt' });
+    ok(spoof && !hasKey(spoof, STRIPPED), `Purchasing cookie claiming to be management still gets the limited answer: ${p}`);
+    const mj = await getJson(p, { cookie: mc });
+    ok(mj && hasKey(mj, STRIPPED), `management cookie still gets the full answer: ${p}`);
+  }
+  const bj = await getJson('/api/odoo/fy?fy=2026', { cookie: bc });
+  ok(bj && bj.reps?.length > 0, 'Business Development cookie still gets Sales by Rep (as designed)');
+  ok((await getJson('/api/odoo/fy?fy=2026', { 'x-worthy-role': 'mgmt' })) === null, 'a request with no sign-in cannot claim a department');
 }
 console.log(`\n${pass} passed, ${fail} failed`);

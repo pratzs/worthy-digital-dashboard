@@ -7,6 +7,14 @@
  */
 import { NextResponse } from 'next/server';
 import { clientRedirectUris, issueCode, redirectAllowed } from '@/lib/oauth';
+import { ROLES } from '@/lib/auth';
+import { timingSafeEqual } from 'node:crypto';
+
+// Constant-time compare so a password cannot be guessed from how quickly it is refused.
+const sameString = (a, b) => {
+  const x = Buffer.from(String(a)), y = Buffer.from(String(b));
+  return x.length === y.length && timingSafeEqual(x, y);
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +37,7 @@ function page({ error, fields }) {
   .card{background:#fff;border:1px solid #e4e0da;border-radius:14px;padding:32px;width:320px}
   h1{font-size:17px;margin:0 0 6px}
   p{font-size:12.5px;color:#8a8178;margin:0 0 20px}
-  input[type=password]{width:100%;padding:11px 13px;border-radius:9px;border:1px solid #e4e0da;
+  select,input[type=password]{width:100%;padding:11px 13px;border-radius:9px;border:1px solid #e4e0da;
     font-size:14px;box-sizing:border-box;margin-bottom:12px}
   button{width:100%;padding:11px;border-radius:9px;border:none;background:#b13924;color:#fff;
     font-weight:700;font-size:13px;cursor:pointer}
@@ -37,11 +45,16 @@ function page({ error, fields }) {
 </style></head><body>
 <div class="card">
   <h1>Connect to Worthy Reports</h1>
-  <p>Sign in with the Management password to let this app read your financial reports.</p>
+  <p>Choose your department and enter its password. This app will then read the reports your department can see.</p>
   <form method="POST">
     ${hidden}
     ${error ? `<div class="err">${escapeHtml(error)}</div>` : ''}
-    <input type="password" name="password" placeholder="Management password" autofocus required>
+    <select name="department" aria-label="Department">
+      <option value="mgmt">Management</option>
+      <option value="bdm">Business Development &amp; Marketing</option>
+      <option value="purch">Purchasing &amp; Stock</option>
+    </select>
+    <input type="password" name="password" placeholder="Department password" autofocus required>
     <button type="submit">Authorize</button>
   </form>
 </div>
@@ -96,10 +109,14 @@ export async function POST(request) {
   const err = await validate(fields);
   if (err) return html(page({ error: err, fields }), 400);
 
-  const password = form.get('password');
-  if (!process.env.DASHBOARD_PASSWORD || password !== process.env.DASHBOARD_PASSWORD) {
+  // The department they chose decides which password is checked. No department means Management (existing connectors and tests).
+  const asked = String(form.get('department') || 'mgmt');
+  const role = Object.prototype.hasOwnProperty.call(ROLES, asked) ? asked : null;
+  const expected = role ? process.env[ROLES[role].env] : '';
+  const password = String(form.get('password') || '');
+  if (!role || !expected || !sameString(password, expected)) {
     await new Promise((r) => setTimeout(r, 1500));   // slow down password guessing
-    return html(page({ error: 'Wrong password.', fields }), 401);
+    return html(page({ error: 'Wrong department or password.', fields }), 401);
   }
 
   const code = await issueCode({
@@ -107,6 +124,7 @@ export async function POST(request) {
     redirect_uri: fields.redirect_uri,
     code_challenge: fields.code_challenge,
     resource: fields.resource,
+    role,
   });
   const dest = new URL(fields.redirect_uri);
   dest.searchParams.set('code', code);

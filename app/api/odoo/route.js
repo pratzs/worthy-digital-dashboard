@@ -1,4 +1,5 @@
 import { cachedAuth } from '@/lib/odooAuth';
+import { withRoleFilter } from '@/lib/roleResponse';
 import { NextResponse } from 'next/server';
 import { weekOfMonth } from '@/lib/weekOfMonth';
 
@@ -17,7 +18,7 @@ async function odooCall(url, payload, timeoutMs = 45000) {
   return res.json();
 }
 
-export async function GET(request) {
+async function handler(request) {
   const { searchParams } = new URL(request.url);
   const year      = parseInt(searchParams.get('year')    || new Date().getFullYear());
   const companyId = parseInt(searchParams.get('company') || 4);
@@ -336,3 +337,6 @@ export async function GET(request) {
     }, { status: 500 });
   }
 }
+
+// Limited to what the caller's department may see (lib/roleData.js).
+export const GET = withRoleFilter('main', handler);

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { withRoleFilter } from '@/lib/roleResponse';
 import { nzFinancialYear } from '@/lib/ostendo';
 import { readFY } from '@/lib/odooFyCache';
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
    lib/odooFyCache.js - and only a slot nobody has filled yet pays this cost. */
 export const maxDuration = 90;
 
-export async function GET(request) {
+async function handler(request) {
   const { searchParams } = new URL(request.url);
   const cid = parseInt(searchParams.get('company') || '4', 10);
   const fy = parseInt(searchParams.get('fy') || '', 10) || nzFinancialYear();
@@ -21,3 +22,6 @@ export async function GET(request) {
       { status: 502 });
   }
 }
+
+// Limited to what the caller's department may see (lib/roleData.js).
+export const GET = withRoleFilter('fy', handler);

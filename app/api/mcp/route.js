@@ -7,7 +7,8 @@
  */
 import { NextResponse } from 'next/server';
 import { checkAccessToken } from '@/lib/oauth';
-import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
+import { toolListFor, runForRole, instructionsFor } from '@/lib/mcpRoles';
+import { ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ const negotiateVersion = (requested) => (SUPPORTED_VERSIONS.includes(requested) 
 // field is inputSchema - Claude's connector tolerated the wrong name, but a
 // strict client (ChatGPT) finds no schema on any tool and drops them all,
 // which is exactly "authenticated, but no callable tools".
-const MCP_TOOLS = DATA_TOOLS.map(({ input_schema, ...tool }) => ({ ...tool, inputSchema: input_schema }));
+// (the department-scoped list is built in lib/mcpRoles.js, with the same field rename)
 
 // Some MCP clients (confirmed: a ChatGPT "Developer Mode" connector) call
 // this endpoint directly from the person's browser rather than from their own
@@ -91,6 +92,9 @@ export async function POST(request) {
   const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : null;
   const session = token && await checkAccessToken(token);
   if (!session) return unauthorized(request);
+  // The department chosen at sign-in. A token naming anything else is refused.
+  const role = session.role;
+  if (!Object.prototype.hasOwnProperty.call(ROLES, role)) return unauthorized(request);
 
   const sse = wantsEventStream(request);
 
@@ -118,18 +122,19 @@ export async function POST(request) {
       protocolVersion: negotiateVersion(params.protocolVersion),
       capabilities: { tools: {} },
       serverInfo: { name: 'worthy-reports', version: '1.0.0' },
+      ...(instructionsFor(role) ? { instructions: instructionsFor(role) } : {}),
     }, sse);
   }
   if (method === 'ping') {
     return rpcResult(id, {}, sse);
   }
   if (method === 'tools/list') {
-    return rpcResult(id, { tools: MCP_TOOLS }, sse);
+    return rpcResult(id, { tools: toolListFor(role) }, sse);
   }
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params;
     try {
-      const result = await runDataTool(name, args);
+      const result = await runForRole(role, name, args);
       // structuredContent must be a plain object per the MCP spec - most tools
       // here already return one (search/fetch/get_*/odoo_aggregate etc), but
       // ostendo_query can return a bare array, which isn't valid there.

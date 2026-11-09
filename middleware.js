@@ -17,6 +17,14 @@ const PUBLIC_PATHS = [
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
+  // The department the data routes filter by (lib/roleResponse.js). Set only from the verified sign-in cookie; a value sent by the caller is always discarded.
+  const pass = (role) => {
+    const h = new Headers(request.headers);
+    h.delete('x-worthy-role');
+    if (role) h.set('x-worthy-role', role);
+    return NextResponse.next({ request: { headers: h } });
+  };
+
   // Allow public paths and all Next.js internals straight through.
   // /api/mcp/* and /.well-known/* authenticate themselves (OAuth Bearer
   // tokens, not the worthy_auth cookie) - an AI client calling them has no
@@ -32,16 +40,16 @@ export async function middleware(request) {
     pathname === '/my-sales' || pathname.startsWith('/my-sales/') || pathname.startsWith('/api/my-sales') ||
     pathname.startsWith('/.well-known/')
   ) {
-    return NextResponse.next();
+    return pass(null);
   }
 
   const role = await verifyRole(request.cookies.get('worthy_auth')?.value);
   if (role) {
     if (pathname.startsWith('/api/')) {
-      if (apiAllowed(role, pathname)) return NextResponse.next();
+      if (apiAllowed(role, pathname)) return pass(role);
       return NextResponse.json({ error: 'Not available to your department' }, { status: 403 });
     }
-    if (pageAllowed(role, pathname)) return NextResponse.next();
+    if (pageAllowed(role, pathname)) return pass(role);
     return NextResponse.redirect(new URL(homeFor(role), request.url));
   }
 
