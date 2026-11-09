@@ -753,6 +753,11 @@ Teams, months, reps and the currency split each add up to the company total, and
       still have no usable cost and stay out); other months move by 0.0 to 0.1 points, FY26 17.9% to 18.0%. The page note says
       how many lines were costed this way and how many are left out; payload fields `recostedLines/Revenue/Cost`.
       Daily check: `.github/workflows/cost-health.yml` calls `/api/cron/cost-health` (totals only, public) and fails, which
-      GitHub emails, when $5,000 was recosted or $3,000 left out in the last 14 days (env `COST_HEALTH_RECOSTED`,
-      `COST_HEALTH_UNCOSTED`). The names are in the management tool `get_south_cost_gaps`. The real fix is still to enter
-      the cost in Ostendo. Not changed: category and product margins in lib/ostendoAdvanced.js still use the invoiced cost.
+      GitHub emails, when $5,000 was recosted, or $8,000 / 1.5% of sales left out, in the last 14 days (env
+      `COST_HEALTH_RECOSTED`, `COST_HEALTH_UNCOSTED`, `COST_HEALTH_UNCOSTED_PCT`; a trickle of new products with no cost yet,
+      about $3k a fortnight, is normal and does not alert). The names are in the management tool `get_south_cost_gaps`. The
+      real fix is still to enter the cost in Ostendo. The Analytics category and product margins (lib/ostendoAdvanced.js) use
+      the same rule: their clean revenue equals the Overview margin base exactly and gross profit agrees to 2 cents.
+      Verified 9 Nov against independent SQL: Aug, Sep, Oct and FY26 margin and gross profit, Jerry's year and top customers
+      to the cent; the item master average cost equalled the cost Ostendo recorded on the same items elsewhere (Russ
+      Energy $59.56 exactly) for all $68.9k recosted (only 4 minor items, about $281, differ by more than 20%).
