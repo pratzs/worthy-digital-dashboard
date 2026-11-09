@@ -10,7 +10,7 @@
  * questions are left today) or "error". Each question counts against an exact daily limit that is kept in the
  * shared store (lib/repStore.js); a question that fails because of us is given back. A short usage record
  * (who, when, which tools, ok or not, how long, how big) is kept for management; answers are not.
- * AI usage is billed to Worthy's own Anthropic key (REP_CHAT_API_KEY).
+ * AI usage is billed to Worthy's one Anthropic key (ANTHROPIC_API_KEY, the same as the rest of the dashboard).
  */
 import { repFromSession } from '@/lib/repSession';
 import { REP_TOOLS, runRepTool } from '@/lib/repTools';
@@ -24,7 +24,8 @@ export const maxDuration = 120;
 const MODEL = process.env.REP_CHAT_MODEL || 'claude-sonnet-5-5';
 const API_URL = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
 // The rep chat has its own key setting so its usage and limits are separate from the dashboard's other AI features.
-const apiKey = () => process.env.REP_CHAT_API_KEY || process.env.ANTHROPIC_API_KEY;
+// ONE key for the whole dashboard: ANTHROPIC_API_KEY. REP_CHAT_API_KEY is only a fallback for a deployment that has no ANTHROPIC_API_KEY, so rotating the key means changing one variable.
+const apiKey = () => process.env.ANTHROPIC_API_KEY || process.env.REP_CHAT_API_KEY;
 const MAX_TURNS = 8;            // ask -> tool -> answer; more than this means something is wrong
 const MAX_HISTORY = 12;         // recent messages kept
 const MAX_CHARS = 2000;         // per message

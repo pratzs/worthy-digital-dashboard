@@ -180,6 +180,14 @@ async function runTool(name, args) {
  * browser, using the person's own API key - Anthropic's documented "bring
  * your own key" pattern (the anthropic-dangerous-direct-browser-access
  * header exists specifically for this). Returns { text, table, history }. */
+/** Everyone uses Worthy's own key, through the server (/api/chat), so nobody needs a key of their own. The server runs the tools and returns the same shape. */
+async function askWorthy(_key, userMessage, history) {
+  const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: userMessage, history }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `The assistant could not answer just now (${res.status}).`);
+  return { text: data.text, table: data.table, history: data.history };
+}
+
 async function askClaude(apiKey, userMessage, history, dataTools) {
   const tools = [...dataTools, PRESENT_TABLE_TOOL];
   const messages = [...history, { role: "user", content: userMessage }];
@@ -422,9 +430,8 @@ export default function ChatPage() {
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then(setMe).catch(() => {});
     fetch("/api/tools/list").then((r) => r.json()).then((d) => setDataTools(d.tools)).catch(() => setDataTools([]));
-    const p = localStorage.getItem(LS_PROVIDER);
-    const k = p && localStorage.getItem(LS_KEY_PREFIX + p);
-    if (p && k) { setProvider(p); setApiKey(k); }
+    // One key for everyone: questions go through the server's key (ANTHROPIC_API_KEY). A personal key saved in this browser by the old page is ignored.
+    setProvider("worthy"); setApiKey("worthy");
     try {
       const savedMessages = JSON.parse(sessionStorage.getItem(SS_MESSAGES) || "null");
       const savedHistory = JSON.parse(sessionStorage.getItem(SS_HISTORY) || "null");
@@ -475,7 +482,7 @@ export default function ChatPage() {
     setMessages((m) => [...m, { role: "user", text: q }]);
     setBusy(true);
     try {
-      const ask = provider === "claude" ? askClaude : askChatGpt;
+      const ask = provider === "worthy" ? askWorthy : provider === "claude" ? askClaude : askChatGpt;
       const { text: answer, table, history } = await ask(apiKey, q, historyRef.current, dataTools);
       historyRef.current = history;
       setMessages((m) => [...m, { role: "assistant", text: answer, table }]);
@@ -507,7 +514,7 @@ export default function ChatPage() {
               New conversation
             </button>
           )}
-          {apiKey && (
+          {apiKey && provider !== "worthy" && (
             <button onClick={forgetKey} style={{ fontSize: 11, color: "#8a8178", background: "none",
               border: "1px solid #e4e0da", borderRadius: 7, padding: "5px 10px", cursor: "pointer" }}>
               Forget {KEY_HELP[provider]?.label} key

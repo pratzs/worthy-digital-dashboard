@@ -164,3 +164,13 @@ Findings (9 Nov, existing design, not changed): the BDM role includes Sales by R
 - Vishva's Marketing login is unchanged and separate (rep connector). Never give him the BDM or Purchasing dashboard password.
 
 **Checks:** `node scripts/rep-leak-test.mjs` (71 offline, includes the filter), `node scripts/access-matrix.mjs ...` (229 on a local server: every credential against every door, spoofed role header, wrong-department passwords, `__proto__` and `constructor` as department), and `scripts/department-check.mjs` which Pratham can run against production with only the three department passwords in environment variables.
+
+## 10 Nov 2026: one Anthropic key for the whole dashboard
+
+Every AI feature now uses the single Vercel variable `ANTHROPIC_API_KEY`, so rotating the key means changing one value (and redeploying):
+- Dashboard "AI Insights" (`/api/ai`) and the management chat route (`/api/chat`): `ANTHROPIC_API_KEY`.
+- The team leads' My Account assistant (`/api/my-sales/chat`): `ANTHROPIC_API_KEY` first. `REP_CHAT_API_KEY` is now only a fallback when `ANTHROPIC_API_KEY` is missing (it used to take priority, which is how a rotated key can be missed). The old setup note that rep AI usage is billed to `REP_CHAT_API_KEY` is superseded.
+- The management "Ask a Question" page (`/chat`): it used to make every person paste their own Claude or ChatGPT key, stored in their browser, and call the AI from the browser. It now sends every question through the server (`/api/chat`, management only), so it uses the same shared key and nobody needs a key of their own. A personal key saved in a browser by the old page is ignored.
+- The connectors for Claude and ChatGPT (`/api/mcp`, `/api/rep-mcp`) use no Worthy key at all: each person's own Claude or ChatGPT account does the AI work.
+
+Rotation checklist: create the new key, paste it into `ANTHROPIC_API_KEY` (type Secret) and, if it still exists, the same key into `REP_CHAT_API_KEY`, redeploy, ask one question in "Ask a Question" and one as a team lead, then revoke the old key in the Anthropic console. A new key in an account with no credit still fails ("credit balance is too low"): check Plans & Billing and set a monthly spend limit, because the management chat and the leads now share it.
