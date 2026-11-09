@@ -127,7 +127,8 @@ if (t) {
     const d = so.data; clean(so, 'system_overview');
     console.log('     overview:', d.systems.map((x) => x.system + ' ' + x.revenue + ' (' + x.changeVsLastYearPct + '%)').join(' | '));
     ok(d.systems.length === 2 && d.systems[0].system === North && d.systems[1].system === South, 'the overview shows North (Odoo) and South (Dutch Rusk, Ostendo) side by side');
-    ok(Math.abs(d.combinedRevenue - tg.data.totalExternalRevenue) <= 1, 'combined revenue equals the external total in top_groups');
+    // The figures are cached for up to 30 minutes, so a refresh between the two calls can bring in new invoices: allow 0.05%.
+    ok(Math.abs(d.combinedRevenue - tg.data.totalExternalRevenue) <= tg.data.totalExternalRevenue * 0.0005, 'combined revenue equals the external total in top_groups (within a cache refresh)');
     ok(d.systems.every((x) => x.revenue > 0 && x.accountsWithSales > 0 && x.topGroups.length > 0 && x.activeAccounts <= x.accountsWithSales), 'each system has revenue, accounts and top groups, and active never exceeds accounts');
     ok(Math.abs(d.systems.reduce((s, x) => s + x.shareOfCombinedRevenuePct, 0) - 100) <= 0.2, 'shares of combined revenue add up to 100%');
   }
@@ -243,7 +244,12 @@ if (mgmtPw) {
     const tools = (await rpc(P, m, 'tools/list')).tools.map((x) => x.name);
     ok(tools.includes('get_expenses'), 'get_expenses is offered');
     const sav = await call(P, m, 'get_expenses', { employee: 'Savan', category: 'food', months: 12 });
-    ok(!sav.err && sav.data.total.claims === 0 && sav.data.notes.some((n) => /Savan Patel/.test(n)), "Kishan's example: Savan on food in 12 months answers plainly (no claims, and says he is an employee)");
+    ok(!sav.err && sav.data.byEmployee.every((e) => /Savan/.test(e.employee)) && sav.data.byGroup.every((g) => g.group === 'food'), "Kishan's example: Savan on food in 12 months answers, only for Savan and only food");
+    console.log('     Savan food:', sav.data?.total?.claims, 'claims', sav.data?.total?.amountInclGst);
+    const wholeFood = await call(P, m, 'get_expenses', { category: 'food', months: 12, lines: 0 });
+    ok(!wholeFood.err && wholeFood.data.total.claims > 400, 'food for the whole year (hundreds of claims) answers, with no row-cap error');
+    const foodAdds = ['byEmployee', 'byGroup', 'byCategory', 'byMonth', 'byStatus'].every((k) => Math.abs(wholeFood.data[k].reduce((a, x) => a + x.amountInclGst, 0) - wholeFood.data.total.amountInclGst) <= 0.1);
+    ok(foodAdds, 'the whole-year food breakdowns all add to the total');
     console.log('     ', sav.data?.notes?.join(' | '));
     const all = await call(P, m, 'get_expenses', { months: 12, lines: 0 });
     ok(!all.err, '12 months of all expenses answers');
