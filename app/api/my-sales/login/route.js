@@ -29,6 +29,11 @@ export async function POST(request) {
     await logSignin({ t: new Date().toISOString(), rep: null, email, how: 'page', ok: false, ...clientInfo(request) }).catch(() => {});
     return NextResponse.json({ error: 'That email or password is not recognised. Check them and try again.' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   }
+  // The Marketing login is for the Claude connector only: the chat page is built and budgeted for team leads.
+  if (hit.rep.role === 'marketing') {
+    await logSignin({ t: new Date().toISOString(), rep: hit.rep.key, email, how: 'page', ok: false, ...clientInfo(request), ua: `${ua} [marketing: connector only]` }).catch(() => {});
+    return NextResponse.json({ error: 'This login is for the Claude connector, not this page. Add the Worthy connector in Claude and sign in there.' }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+  }
   let token;
   try { token = issueSession({ sub: hit.rep.key, ver: hit.ver }); } catch {
     return NextResponse.json({ error: 'This page is not switched on yet.' }, { status: 503 });

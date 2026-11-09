@@ -343,4 +343,45 @@ test('thin data gives an honest note, not invented advice', () => {
   assert.ok(plan.note);
 });
 
+console.log('Marketing login (Vishva): costing and account sales only');
+{
+  const { guardMarketing } = await import('../lib/repProject.js');
+  const { activePrincipals } = await import('../lib/repAccess.js');
+  const vishva = principalByKey('vishva');
+  test('Vishva exists as a marketing principal with no team, no own sales and no systems of a rep', () => {
+    assert.ok(vishva); assert.equal(vishva.role, 'marketing');
+    assert.deepEqual(vishva.people, []); assert.deepEqual(vishva.members, []); assert.equal(vishva.self, null);
+    assert.equal(vishva.system, 'both');
+  });
+  test('team leads keep the lead role; only the marketing entries are marketing', () => {
+    assert.equal(principalByKey('michelle').role, 'lead'); assert.equal(principalByKey('lead1').role, 'lead');
+    assert.deepEqual(activePrincipals().filter((p) => p.role === 'marketing').map((p) => p.key), ['vishva']);
+  });
+  test('Vishva cannot sign in until an access entry exists, then email and password both work', () => {
+    delete process.env.REP_ACCESS; assert.equal(repForCode('V'.repeat(24), 'vishva@worthy.test'), null);
+    assert.equal(currentVer('vishva'), 0);
+    const salt = 'cd'.repeat(8);
+    process.env.REP_ACCESS = JSON.stringify({ vishva: { salt, hash: hashCode('V'.repeat(24), salt), ver: 1, email: 'vishva@worthy.test' } });
+    assert.equal(repForCode('V'.repeat(24), 'VISHVA@worthy.test').rep.key, 'vishva');
+    for (const e of ['', 'michelle@worthy.test', 'vishva@worthy.test.evil']) assert.equal(repForCode('V'.repeat(24), e), null);
+    assert.equal(currentVer('vishva'), 1);
+  });
+  test('a team lead code never opens the marketing login, and the marketing code never opens a lead', () => {
+    const s1 = 'ab'.repeat(8), s2 = 'cd'.repeat(8);
+    process.env.REP_ACCESS = JSON.stringify({
+      michelle: { salt: s1, hash: hashCode('M'.repeat(24), s1), ver: 2 },
+      vishva: { salt: s2, hash: hashCode('V'.repeat(24), s2), ver: 1 },
+    });
+    assert.equal(repForCode('M'.repeat(24)).rep.key, 'michelle');
+    assert.equal(repForCode('V'.repeat(24)).rep.key, 'vishva');
+    assert.equal(repForCode('V'.repeat(24)).rep.role, 'marketing');
+  });
+  test('guardMarketing blocks rep, salesperson, weekly and team keys at any depth, and passes account data', () => {
+    guardMarketing({ accounts: [{ account: 'CSB Groups', revenue: 1 }], byMonth: [{ month: '2026-10', revenue: 1 }], topProducts: [{ product: 'X', units: 1 }] });
+    for (const key of ['rep', 'reps', 'salesperson', 'sales_rep', 'invoice_user_id', 'week', 'weeks', 'weekly', 'person', 'members', 'Rep', 'SALESPERSON']) {
+      assert.throws(() => guardMarketing({ ok: 1 , nested: [{ deep: { [key]: 'x' } }] }), /not available in this view/, key);
+    }
+  });
+}
+
 console.log(`\n${passed} passed${process.exitCode ? ', with FAILURES' : ''}`);

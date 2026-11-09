@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { checkAccessToken } from '@/lib/repOauth';
 import { principalByKey, currentVer } from '@/lib/repAccess';
-import { REP_TOOLS, runRepTool } from '@/lib/repTools';
+import { toolsFor, runRepTool } from '@/lib/repTools';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -88,7 +88,7 @@ export async function POST(request) {
     }, sse);
   }
   if (method === 'ping') return rpcResult(id, {}, sse);
-  if (method === 'tools/list') return rpcResult(id, { tools: REP_TOOLS }, sse);
+  if (method === 'tools/list') return rpcResult(id, { tools: toolsFor(rep) }, sse);
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params;
     const started = Date.now();
