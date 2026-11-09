@@ -16,7 +16,8 @@ export async function POST(request) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        // Same model as the other chats. The old claude-sonnet-4-20250514 has been retired and returned an error for every request.
+        model: process.env.AI_INSIGHTS_MODEL || "claude-sonnet-5-5",
         max_tokens: 1200,
         messages: [{ role: "user", content: prompt }],
       }),
