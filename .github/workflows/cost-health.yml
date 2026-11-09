@@ -1,0 +1,24 @@
+name: Check South invoice costs
+on:
+  schedule:
+    - cron: '0 20 * * *'   # 08:00 or 09:00 in New Zealand, every day
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the dashboard whether recent South invoices are missing costs
+        run: |
+          code=$(curl -sS --max-time 120 -o health.json -w '%{http_code}' https://worthy-digital-dashboard.vercel.app/api/cron/cost-health || echo 000)
+          echo "HTTP $code"; cat health.json 2>/dev/null | head -c 1500; echo
+          if [ "$code" != "200" ]; then
+            echo "::warning title=Cost check could not run::The dashboard answered HTTP $code. It will try again tomorrow."
+            exit 0
+          fi
+          # Fails (and GitHub emails the owner) only when sales are riding on a missing cost.
+          if grep -q '"attention":true' health.json; then
+            echo "::error title=South invoices are missing costs::See the figures above. In Claude or ChatGPT ask the Worthy connector: get_south_cost_gaps. Fix the cost in Ostendo."
+            exit 1
+          fi

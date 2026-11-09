@@ -2222,6 +2222,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
     marginCost:        m.marginCost,
     suspectLines:      m.suspectLines,
     suspectRevenue:    m.suspectRevenue,
+    recostedLines:     m.recostedLines,
+    recostedRevenue:   m.recostedRevenue,
   });
 
   // The "previous year" array is the matching slice of last year, day for day  - 
@@ -2796,7 +2798,10 @@ export default function EcommerceDashboard({ section = "overview" }) {
     if (activeStore.id === "luxe") {
       const n = view === "monthly" ? latestMonth?.suspectLines
               : view === "yoy" ? fyPayload(selectedYear)?.totals?.suspectLines : null;
-      return n > 0 ? `Margin leaves out ${n.toLocaleString()} invoice line${n === 1 ? "" : "s"} with no recorded cost, or one that cannot be right, in Ostendo. Revenue is in full.` : null;
+      const rc = view === "monthly" ? latestMonth : view === "yoy" ? fyPayload(selectedYear)?.totals : null;
+      const healed = rc?.recostedLines > 0 ? `${rc.recostedLines.toLocaleString()} line${rc.recostedLines === 1 ? "" : "s"} (${fmtK(rc.recostedRevenue, activeStore.currency)}) that Ostendo issued with no cost use the item master average cost. ` : "";
+      const left = n > 0 ? `Margin leaves out ${n.toLocaleString()} invoice line${n === 1 ? "" : "s"} with no usable cost, or one that cannot be right, in Ostendo. Revenue is in full.` : "";
+      return (healed + left).trim() || null;
     }
     const cover = partCost ? (partCost.full > 0 ? Math.round((partCost.rev / partCost.full) * 1000) / 10 : null)
                 : (yearCostedOK && totalRev > 0 ? Math.round((totalMargRev / totalRev) * 1000) / 10 : null);

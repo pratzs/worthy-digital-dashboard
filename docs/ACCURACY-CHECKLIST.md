@@ -744,3 +744,15 @@ Teams, months, reps and the currency split each add up to the company total, and
       product unit, so line quantities are converted to the product's own unit before costing
       (lib/odooCost.js makeQtyInProductUnit); October on a test read: 31.1% unconverted, 31.6%
       converted, 99% of sales costed. North is unchanged: raw quantities, dropship costing kept.
+- [x] **78. South margin heals a missing invoice cost, and a missing cost is reported (9 Nov 2026).** Finance read October
+      South at 22.3% and the dashboard 18.7%: same sales and cost, but 529 lines ($77.9k, mostly Russ Energy to one
+      customer on 22 Oct) were issued in Ostendo with a cost of 0. Finance's way counted them as pure profit; the dashboard
+      left them out. Now a line with no cost is costed from the item master's AVERAGECOST when that is safe (average cost
+      only, positive quantity and price, cost between 30% and 150% of the price: `RECOSTABLE` in lib/ostendo.js), used by
+      the South report, reps and the rep margins. October reads 19.4% (252 lines, $64,545 recosted at 35.9% margin; 248 lines
+      still have no usable cost and stay out); other months move by 0.0 to 0.1 points, FY26 17.9% to 18.0%. The page note says
+      how many lines were costed this way and how many are left out; payload fields `recostedLines/Revenue/Cost`.
+      Daily check: `.github/workflows/cost-health.yml` calls `/api/cron/cost-health` (totals only, public) and fails, which
+      GitHub emails, when $5,000 was recosted or $3,000 left out in the last 14 days (env `COST_HEALTH_RECOSTED`,
+      `COST_HEALTH_UNCOSTED`). The names are in the management tool `get_south_cost_gaps`. The real fix is still to enter
+      the cost in Ostendo. Not changed: category and product margins in lib/ostendoAdvanced.js still use the invoiced cost.

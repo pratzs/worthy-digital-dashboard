@@ -111,6 +111,17 @@ if (mgmtPw) {
     ok((await call(P, m, 'get_expenses', { from: '2026-02-30', to: '2026-03-01' })).err, 'a bad date is refused');
     ok((await call(P, m, 'get_expenses', { status: ['bogus'] })).err, 'a bad status is refused');
     ok((await call(P, m, 'get_expenses', { company: 'mars' })).err, 'a bad company is refused');
+    const gaps = await call(P, m, 'get_south_cost_gaps', { days: 45 });
+    ok(!gaps.err && tools.includes('get_south_cost_gaps'), 'get_south_cost_gaps answers for management');
+    if (!gaps.err) {
+      const g = gaps.data;
+      console.log('     recosted', g.recosted.lines, 'lines', g.recosted.revenue, '| uncosted', g.uncosted.lines, 'lines', g.uncosted.revenue, '| top item:', JSON.stringify(g.items[0]));
+      ok(g.items.length > 0 && g.items.every((i) => ['recosted', 'uncosted'].includes(i.status)), 'items are listed as recosted or uncosted');
+      ok(near(g.items.filter((i) => i.status === 'recosted').reduce((s, i) => s + i.revenue, 0), g.recosted.revenue, 0.5) || g.items.length >= 25, 'recosted items add up to the recosted total');
+      ok(g.customers.length > 0, 'customers involved are named for management');
+    }
+    const pub = await (await fetch(base + '/api/cron/cost-health?days=45')).json();
+    ok(pub.window && !('items' in pub) && !('customers' in pub) && !JSON.stringify(pub).match(/Night n Day|RUSS|nippys|Foodstores/i), 'the public daily check returns totals only, no names');
     const repOnMgmt = await signIn('/api/rep-mcp', { access_code: vCode, email: vEmail });
     const r2 = await fetch(`${base}/api/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${repOnMgmt}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_expenses', arguments: {} } }) });
     ok(r2.status === 401, 'expenses are unreachable with a marketing (rep connector) token');
