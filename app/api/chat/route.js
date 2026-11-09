@@ -20,8 +20,10 @@ export const maxDuration = 180;
 
 const MODEL = 'claude-sonnet-5-5';
 
+// The Anthropic Messages API rejects the `annotations` field the MCP connectors need on each tool ("Extra inputs are not permitted"), so it is removed here.
+// eslint-disable-next-line no-unused-vars
 const TOOLS = [
-  ...DATA_TOOLS,
+  ...DATA_TOOLS.map(({ annotations, ...tool }) => tool),
   {
     name: 'present_table',
     description: 'Show the user a table. Call this once, as your last step, whenever the answer is '
