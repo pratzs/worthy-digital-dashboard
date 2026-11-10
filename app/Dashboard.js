@@ -2799,7 +2799,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       const n = view === "monthly" ? latestMonth?.suspectLines
               : view === "yoy" ? fyPayload(selectedYear)?.totals?.suspectLines : null;
       const rc = view === "monthly" ? latestMonth : view === "yoy" ? fyPayload(selectedYear)?.totals : null;
-      const healed = rc?.recostedLines > 0 ? `${rc.recostedLines.toLocaleString()} line${rc.recostedLines === 1 ? "" : "s"} (${fmtK(rc.recostedRevenue, activeStore.currency)}) that Ostendo issued with no cost use the item master average cost. ` : "";
+      const healed = rc?.recostedLines > 0 ? `${rc.recostedLines.toLocaleString()} line${rc.recostedLines === 1 ? "" : "s"} (${fmtK(rc.recostedRevenue, activeStore.currency)}) that Ostendo issued with no cost use a fallback cost (the item master, or for non-coded clearance lines the cost finance supplied or the matching item's cost). ` : "";
       const left = n > 0 ? `Margin leaves out ${n.toLocaleString()} invoice line${n === 1 ? "" : "s"} with no usable cost, or one that cannot be right, in Ostendo. Revenue is in full.` : "";
       return (healed + left).trim() || null;
     }

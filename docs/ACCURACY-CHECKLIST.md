@@ -761,3 +761,21 @@ Teams, months, reps and the currency split each add up to the company total, and
       Verified 9 Nov against independent SQL: Aug, Sep, Oct and FY26 margin and gross profit, Jerry's year and top customers
       to the cent; the item master average cost equalled the cost Ostendo recorded on the same items elsewhere (Russ
       Energy $59.56 exactly) for all $68.9k recosted (only 4 minor items, about $281, differ by more than 20%).
+- [x] **79. South margin: fallback cost for every no-cost line from 1 October 2026 (11 Nov 2026).** After item 78 October read
+      19.4% and finance (Lakmal, after costing every line by hand) 18.37%. The gap was not a finance error, as first thought:
+      the lines the dashboard still left out were mostly non-coded `ZZZSTOCK` lines, near-dated cartons cleared BELOW cost
+      (a 36ct Nerds carton at $21.92 against a $47.71 cost; the same item sells at $58.78 coded). Their unit reads "Each"
+      but one Each is one carton, so finance's carton cost was right, and leaving them out overstated the month by a point.
+      Fallback order now, for invoices dated 1 Oct 2026 or later only (`FALLBACK_FROM` in lib/ostendo.js; April to September
+      were reconciled with finance and are identical to the cent before and after): (1) item master average cost, as item 78;
+      (2) where the master has no average cost, its standard buy price under the same 30% to 150% test (`RECOSTABLE_STD`);
+      (3) non-coded lines: the cost finance supplied for that line (lib/adhocSupplied.js, 82 October lines from Lakmal's
+      workbook), else a strict description match to the item master (lib/adhocMatch.js: pack count and size must agree, one
+      typing slip per long word, per-unit master costs multiplied by the count, cost within 30% to 8 times the price).
+      On October the match alone agrees with finance's hand costs to 0.2% on the lines it finds (lines it cannot place stay
+      out and are listed in `get_south_cost_gaps` under `nonCodedLines`). Result: October 18.4% (gross profit $325,245 on
+      $1,771,624; finance $325,690 on $1,773,028, 18.37%), 18 lines ($482) still out; November 18.3% to 18.2%; FY26 18.0% to
+      17.8%. Used by the company figures, months, weeks and Sales by Rep (lib/ostendoFy.js) and the daily cost check. NOT yet
+      used by the Analytics product and category tables (lib/ostendoAdvanced.js) or the team leads' My Account margins
+      (lib/repData.js), which still use step 1 only. Every fallback stops by itself once the invoice line has a cost in
+      Ostendo. Test: `node scripts/adhoc-match-test.mjs` (13 checks).
