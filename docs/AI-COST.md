@@ -6,7 +6,7 @@ Last updated 11 November 2026.
 
 | Department | People | How they ask questions | Who pays for the AI |
 |---|---|---|---|
-| Management | kishan@, jainesh@, lakmal@, hetal@ (and pratham@, who runs it) | Department connector in their own Claude or ChatGPT account. The dashboard and its chat are also open to them. | Connector: the person's own account. Dashboard chat: Worthy. |
+| Management | kishan@, jainesh@, lakmal@, hetal@, jiten@ (and pratham@, who runs it) | Department connector in their own Claude or ChatGPT account. The dashboard and its chat are also open to them. | Connector: the person's own account. Dashboard chat: Worthy. |
 | Sales team leads | Michelle (Team 2). Team 1 lead to be decided. | My Account page on the dashboard only. Own email and access code. | Worthy |
 | Purchasing and Stock | kylie@ (dashboard and its chat only), hari@ (connector, and the dashboard) | Kylie: dashboard chat. Hari: connector in his own Claude or ChatGPT, or the dashboard chat. | Kylie: Worthy. Hari: his own account on the connector, Worthy on the dashboard chat. |
 | Business Development | Vishva Dave (more people later) | The business development connector in his own Claude, with his own email and access code. No individual rep revenue and no weekly revenue. | The person's own account |
