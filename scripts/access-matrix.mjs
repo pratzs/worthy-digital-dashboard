@@ -18,7 +18,11 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log(`  ok  ${m}`); } else { fail++; console.error(`FAIL  ${m}`); process.exitCode = 1; } };
 const denied = (s) => [401, 403, 307, 302, 308, 404].includes(s);
 
+// Sign-in is by named person now (lib/people.js). Locally the test people are used (PEOPLE_ALLOW_TEST=1); against production set MGMT_EMAIL / BDM_EMAIL / PURCH_EMAIL to listed people.
+const EMAILS = { mgmt: process.env.MGMT_EMAIL || 'test.mgmt@worthy.nz', bdm: process.env.BDM_EMAIL || 'test.bdm@worthy.nz', purch: process.env.PURCH_EMAIL || 'test.purch@worthy.nz' };
+const deptOfPw = (pw) => (pw === mPw ? 'mgmt' : pw === bdmPw ? 'bdm' : pw === purchPw ? 'purch' : 'mgmt');
 async function signIn(prefix, fields) {
+  if (prefix === '/api/mcp' && !('email' in fields)) fields = { ...fields, email: EMAILS[fields.department || 'mgmt'] || '' };
   const reg = await (await fetch(`${base}${prefix}/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirect_uris: [R] }) })).json();
   const v = randomBytes(32).toString('base64url'), ch = createHash('sha256').update(v).digest('base64url');
   const a = await fetch(`${base}${prefix}/authorize`, { method: 'POST', redirect: 'manual', body: new URLSearchParams({ response_type: 'code', client_id: reg.client_id, redirect_uri: R, state: 's', code_challenge: ch, code_challenge_method: 'S256', scope: '', resource: '', ...fields }) });
@@ -29,7 +33,7 @@ async function signIn(prefix, fields) {
 }
 const rpc = async (path, tok, method, params) => { const r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }); return { status: r.status, body: r.status === 200 ? (await r.json()).result : null }; };
 const call = async (path, tok, name, args = {}) => { const r = await rpc(path, tok, 'tools/call', { name, arguments: args }); const x = r.body; return { status: r.status, err: !x || x.isError, text: x?.content?.[0]?.text || '', data: x?.structuredContent }; };
-const login = async (path, body) => { const r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, cookie: (r.headers.get('set-cookie') || '').split(';')[0] }; };
+const login = async (path, body0) => { const body = path === '/api/auth/login' && !('email' in body0) ? { ...body0, email: EMAILS[deptOfPw(body0.password)] } : body0; const r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, cookie: (r.headers.get('set-cookie') || '').split(';')[0] }; };
 const get = async (path, headers = {}) => (await fetch(`${base}${path}`, { headers, redirect: 'manual' })).status;
 
 const LEAD_TOOLS = ['my_sales', 'my_debtors', 'my_customers', 'my_best_sellers', 'my_action_plan', 'my_cross_sell', 'my_recent_orders', 'team_overview', 'team_attention', 'team_product_gaps'];
@@ -105,7 +109,7 @@ const APIS = ['/api/odoo/fy?fy=2026', '/api/ostendo/fy?fy=2026', '/api/odoo/cred
     if (!pw) continue;
     const d = await login('/api/auth/login', { password: pw });
     ok(d.status === 200, `${name} department can sign in`);
-    for (const p of ['/api/rep-usage', '/api/targets', '/api/chat', '/rep-usage', '/credits', '/debtors']) ok(denied(await get(p, { cookie: d.cookie })) || (await get(p, { cookie: d.cookie })) === 403, `${name} cookie does not open ${p}`);
+    for (const p of ['/api/rep-usage', '/api/targets', ...(name === 'BDM' ? ['/api/chat'] : []), '/api/tools/list', '/rep-usage', '/credits', '/debtors']) ok(denied(await get(p, { cookie: d.cookie })) || (await get(p, { cookie: d.cookie })) === 403, `${name} cookie does not open ${p}`);
     ok(denied(await get('/api/my-sales/me', { cookie: d.cookie })), `${name} cookie is not a rep session`);
     // what each department gets in the data itself is checked in the sections below
   }

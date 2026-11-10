@@ -1,30 +1,47 @@
 /**
- * Management-only chat: ask a plain-English question, Claude pulls the figures
+ * WHO CAN USE IT: a named person (lib/people.js) signed in to the dashboard, in Management or in Purchasing & Stock.
+ * Management gets every tool, as before. Purchasing gets ONLY the Purchasing tools and data (lib/mcpRoles.js runForRole,
+ * the same wall the Purchasing connector uses): no rep, weekly, customer, debtor or expense figures can reach the AI, so
+ * it cannot give them out whatever is asked. The department and the person come from the signed cookie (middleware.js),
+ * never from the request.
+ *
+ * COST: this runs on Worthy's one Anthropic key. Each question counts against the person's allowance (60 a day, unused
+ * ones roll over within a 30-day cycle, lib/repStore.js) and its AI tokens are recorded per person per month for the
+ * cost page (lib/aiCost.js). A question that fails because of us is given back.
+ *
+ * Ask a plain-English question, Claude pulls the figures
  * through the SAME functions the rest of the dashboard already uses (readFY,
  * readDebtors, Ostendo's handle()) instead of a raw Odoo query tool, so the
  * answer carries the same accounting rules already proven against finance's own
  * reports (sales-line filtering, rep grouping, financial-year boundaries) rather
  * than whatever an LLM decides a "sale" is.
  *
- * Nothing here is stored. Each request is answered fresh from the dashboard's
- * existing 5-minute cache; there is no new database, no conversation log.
+ * No answers are stored and there is no conversation log: only who asked, when, which tools ran and how big the AI
+ * call was (and, for Purchasing, a short copy of the question). Each request is answered fresh from the dashboard's
+ * existing 5-minute cache.
  * Claude's last step is always a `present_table` tool call when the answer is
  * tabular, which is the ONLY source of the table sent to the browser - never a
  * guess at shaping raw Odoo/Ostendo payloads.
  */
 import { NextResponse } from 'next/server';
 import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
+import { toolListFor, runForRole } from '@/lib/mcpRoles';
+import { personFor } from '@/lib/people';
+import { takeQuestion, refundQuestion, logUsage } from '@/lib/repStore';
+import { addUsage, chatWho, costUsd } from '@/lib/aiCost';
+import { cachedRequest } from '@/lib/aiRequest';
+import { nzToday } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
 
 const MODEL = 'claude-sonnet-5-5';
+const API_URL = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';   // only ever changed by the tests (scripts/stub-ai.mjs)
+const CHAT_ROLES = ['mgmt', 'purch'];
 
 // The Anthropic Messages API rejects the `annotations` field the MCP connectors need on each tool ("Extra inputs are not permitted"), so it is removed here.
 // eslint-disable-next-line no-unused-vars
-const TOOLS = [
-  ...DATA_TOOLS.map(({ annotations, ...tool }) => tool),
-  {
+const PRESENT_TABLE = {
     name: 'present_table',
     description: 'Show the user a table. Call this once, as your last step, whenever the answer is '
       + 'naturally tabular (a list of customers, a month-by-month breakdown, a rep leaderboard, etc). '
@@ -45,8 +62,14 @@ const TOOLS = [
       },
       required: ['title', 'columns', 'rows'],
     },
-  },
-];
+};
+// eslint-disable-next-line no-unused-vars
+const TOOLS = [...DATA_TOOLS.map(({ annotations, ...tool }) => tool), PRESENT_TABLE];
+// Purchasing: only the tools its connector offers (company totals, products, categories, movers), in the shape the AI service wants.
+// eslint-disable-next-line no-unused-vars
+const TOOLS_PURCH = [...toolListFor('purch').map(({ annotations, inputSchema, ...tool }) => ({ ...tool, input_schema: inputSchema })), PRESENT_TABLE];
+const toolsFor = (role) => (role === 'mgmt' ? TOOLS : TOOLS_PURCH);
+const runTool = (role, name, input) => (role === 'mgmt' ? runDataTool(name, input) : runForRole(role, name, input));
 
 const SYSTEM = `You answer questions about Worthy's trading figures for a company director, who asks in `
   + `plain, layman language - not Odoo field names or jargon - and expects you to work out what they mean, `
@@ -168,7 +191,34 @@ const SYSTEM = `You answer questions about Worthy's trading figures for a compan
   + `factor within the same category, or a different category_id entirely, means a real conversion applies `
   + `- treat that the same as the carton/shipper case above and ask rather than guess the multiplier.`;
 
+const SYSTEM_PURCH = `You answer questions for Worthy's Purchasing and Stock team, who ask in plain, everyday language. `
+  + `Use the tools provided, never memory or estimation. Worthy trades as three companies: north (Worthy Products North, Odoo), `
+  + `oceania (Worthy Oceania, Odoo) and south (Worthy Products South, also called Dutch Rusk, Ostendo). If a question does not `
+  + `say which company, ask, unless it obviously means all three.\n\n`
+  + `What you can see: products, categories, fast movers, slow movers, revenue, units, cost and margin by product and by `
+  + `category, and company totals by month. get_product_analytics is the main tool (one company and financial year at a time); `
+  + `get_financial_year and get_south_financial_year give the company totals and monthly trend.\n\n`
+  + `What this team cannot see, by design: sales by rep, weekly figures, customers, debtors, credit notes and expenses. Those `
+  + `are not in anything the tools return. If asked, say plainly that Purchasing does not have access to that and that `
+  + `management can help, then offer what you can show instead. Never estimate or work them out another way.\n\n`
+  + `Be warm and direct, like a sharp colleague who knows the stock. Write in New Zealand English (organise, colour, centre). `
+  + `Never use an em dash. State dollar figures in NZD. Under each figure add a short line saying where it came from: which `
+  + `company and system, and the financial year. Never guess a figure a tool could not get you: say what you tried and what `
+  + `came back empty. A quantity is only counted in the unit its record used (each, carton, shipper, kg); if units are mixed `
+  + `and you do not know the conversion, ask rather than guess a multiplier.\n\n`
+  + `When the answer is a list or a breakdown, call present_table once as your last step and add a one or two sentence `
+  + `summary in your own words. Keep tables to the rows that matter for the question.`;
+const systemFor = (role) => (role === 'mgmt' ? SYSTEM : SYSTEM_PURCH);
+
 export async function POST(request) {
+  // Who is asking. Both values are set by the middleware from the signed cookie and nothing else.
+  const role = request.headers.get('x-worthy-role') || '';
+  const personKey = request.headers.get('x-worthy-person') || '';
+  if (!CHAT_ROLES.includes(role)) return NextResponse.json({ error: 'The chat is not available to your department.' }, { status: 403 });
+  const person = personFor(personKey, role, 'dashboard');
+  if (!person) return NextResponse.json({ error: 'Please sign out and sign in again with your work email to use the chat.' }, { status: 401 });
+  const who = chatWho(person.key);
+
   let body;
   try {
     body = await request.json();
@@ -186,13 +236,31 @@ export async function POST(request) {
   const messages = [...(Array.isArray(history) ? history : []), { role: 'user', content: message }];
   let table = null;
 
+  // One question from this person's allowance. If the store is down the question goes through rather than blocking them.
+  const day = nzToday();
+  let quota = null;
+  try {
+    quota = await takeQuestion(who, day);
+    if (!quota.allowed) {
+      return NextResponse.json({ error: `You have used all of your questions for now. You earn ${quota.limit} more tomorrow.`, quota }, { status: 429 });
+    }
+  } catch { quota = null; }
+  const started = Date.now();
+  const tokens = {};
+  const used = [];
+  const record = (ok, why) => logUsage({ t: new Date().toISOString(), rep: who, where: 'dashboard chat', dept: role,
+    question: role === 'mgmt' ? '' : message, tools: used, ok, ms: Date.now() - started, ...tokens, ...(why ? { why: String(why).slice(0, 200) } : {}) }).catch(() => {});
+  // Our problem, not theirs: the question is given back.
+  const giveBack = async () => { if (quota) { await refundQuestion(who, day); quota = { ...quota, used: Math.max(0, quota.used - 1), remaining: quota.remaining + 1 }; } };
+  const fail = async (error, status) => { await giveBack(); await record(false, error); return NextResponse.json({ error, quota }, { status }); };
+
   try {
     // A tool-use conversation is a few round trips (ask -> call tool -> read
     // result -> maybe another tool -> final answer). Six is enough for any
     // question this dashboard's data can answer; past that something is wrong
     // and looping forever is worse than giving up with what we have.
     for (let turn = 0; turn < 15; turn++) {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -202,21 +270,22 @@ export async function POST(request) {
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 4096,
-          system: SYSTEM,
-          tools: TOOLS,
-          messages,
+          ...cachedRequest({ system: systemFor(role), tools: toolsFor(role), messages }),
         }),
         signal: AbortSignal.timeout(45000),
       });
       const data = await res.json();
-      if (data.error) return NextResponse.json({ error: data.error.message }, { status: 502 });
+      if (data.error) return fail(data.error.message, 502);
+      addUsage(tokens, data.usage);
 
       messages.push({ role: 'assistant', content: data.content });
 
       const toolUses = data.content.filter((b) => b.type === 'tool_use');
       if (toolUses.length === 0) {
         const text = data.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-        return NextResponse.json({ text: text || 'No answer.', table, history: messages });
+        await record(true);
+        return NextResponse.json({ text: text || 'No answer.', table, history: messages, quota,
+          ...(role === 'mgmt' ? { usage: { ...tokens, usd: Math.round(costUsd(tokens) * 10000) / 10000 } } : {}) });
       }
 
       const toolResults = [];
@@ -226,8 +295,10 @@ export async function POST(request) {
           toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: 'Shown to the user.' });
           continue;
         }
+        if (!used.includes(use.name)) used.push(use.name);
         try {
-          const result = await runDataTool(use.name, use.input || {});
+          // Purchasing's tools are run through the department wall; whatever the AI asks for, it only gets Purchasing's data.
+          const result = await runTool(role, use.name, use.input || {});
           toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(result) });
         } catch (e) {
           toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: `Error: ${e.message}`, is_error: true });
@@ -235,9 +306,9 @@ export async function POST(request) {
       }
       messages.push({ role: 'user', content: toolResults });
     }
-    return NextResponse.json({ error: 'Took too many steps to answer - try a narrower question.' }, { status: 504 });
+    return fail('Took too many steps to answer - try a narrower question.', 504);
   } catch (err) {
     console.error('chat route error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return fail(err.message, 500);
   }
 }

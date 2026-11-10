@@ -18,6 +18,7 @@ const ok = (c, m) => { if (c) { pass++; console.log(`  ok  ${m}`); } else { fail
 const near = (a, b, tol = 0.06) => Math.abs(a - b) <= tol;
 
 async function signIn(prefix, fields) {
+  if (prefix === '/api/mcp' && !('email' in fields)) fields = { ...fields, email: process.env.MGMT_EMAIL || 'test.mgmt@worthy.nz' };
   const reg = await (await fetch(`${base}${prefix}/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirect_uris: [R] }) })).json();
   const v = randomBytes(32).toString('base64url'), ch = createHash('sha256').update(v).digest('base64url');
   const a = await fetch(`${base}${prefix}/authorize`, { method: 'POST', redirect: 'manual', body: new URLSearchParams({ response_type: 'code', client_id: reg.client_id, redirect_uri: R, state: 's', code_challenge: ch, code_challenge_method: 'S256', scope: '', resource: '', ...fields }) });
@@ -219,7 +220,7 @@ if (t) {
 
 if (mgmtPw && t) {
   console.log('Marketing totals against the dashboard');
-  const lg = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: mgmtPw }) });
+  const lg = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: mgmtPw, email: process.env.MGMT_EMAIL || 'test.mgmt@worthy.nz' }) });
   const cookie = (lg.headers.get('set-cookie') || '').split(';')[0];
   const dash = async (p) => (await fetch(base + p, { headers: { cookie } })).json();
   const [nf, sf] = await Promise.all([dash('/api/odoo/fy?fy=2026&fresh=1'), dash('/api/ostendo/fy?fy=2026&fresh=1')]);

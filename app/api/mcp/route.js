@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { checkAccessToken } from '@/lib/oauth';
 import { toolListFor, runForRole, instructionsFor } from '@/lib/mcpRoles';
 import { ROLES } from '@/lib/auth';
+import { personFor } from '@/lib/people';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -95,6 +96,8 @@ export async function POST(request) {
   // The department chosen at sign-in. A token naming anything else is refused.
   const role = session.role;
   if (!Object.prototype.hasOwnProperty.call(ROLES, role)) return unauthorized(request);
+  // A token issued to a named person stops working the moment that person is taken off the list (or loses connector access).
+  if (session.person && !personFor(session.person, role, 'connector')) return unauthorized(request);
 
   const sse = wantsEventStream(request);
 

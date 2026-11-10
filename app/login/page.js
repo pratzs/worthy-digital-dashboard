@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
@@ -11,18 +12,18 @@ export default function LoginPage() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!password) return;
+    if (!password || !email.trim()) return;
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/auth/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ password }),
+        body:    JSON.stringify({ email: email.trim(), password }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data?.error || 'Incorrect password');
+        setError(data?.error || 'Incorrect email or password');
         setLoading(false);
         return;
       }
@@ -63,11 +64,28 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={submit} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Password
+            Work email
+          </label>
+          <input
+            type="email"
+            autoFocus
+            autoComplete="username"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="you@worthy.nz"
+            style={{
+              width: '100%', padding: '13px 16px', fontSize: 15,
+              borderRadius: 10, border: '1.5px solid #d1d5db',
+              outline: 'none', background: '#fafafa', color: '#111827',
+              fontFamily: 'inherit', boxSizing: 'border-box',
+            }}
+          />
+          <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Department password
           </label>
           <input
             type="password"
-            autoFocus
+            autoComplete="current-password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Enter password"
@@ -89,15 +107,15 @@ export default function LoginPage() {
           )}
           <button
             type="submit"
-            disabled={loading || !password}
+            disabled={loading || !password || !email.trim()}
             style={{
               padding: '13px 16px', fontSize: 14, fontWeight: 700, letterSpacing: '0.04em',
-              borderRadius: 10, border: 'none', cursor: (loading || !password) ? 'not-allowed' : 'pointer',
-              background: (loading || !password) ? '#b78b6a' : '#66270F',
+              borderRadius: 10, border: 'none', cursor: (loading || !password || !email.trim()) ? 'not-allowed' : 'pointer',
+              background: (loading || !password || !email.trim()) ? '#b78b6a' : '#66270F',
               color: '#ffffff', fontFamily: 'inherit',
               transition: 'background 0.15s, transform 0.05s',
             }}
-            onMouseDown={e => { if (!loading && password) e.currentTarget.style.transform = 'translateY(1px)'; }}
+            onMouseDown={e => { if (!loading && password && email.trim()) e.currentTarget.style.transform = 'translateY(1px)'; }}
             onMouseUp={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
           >
             {loading ? 'Signing in…' : 'Sign in'}

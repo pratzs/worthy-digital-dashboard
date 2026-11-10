@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { ROLES, signRole, homeFor } from '@/lib/auth';
+import { signSession, homeFor } from '@/lib/auth';
+import { personByEmail } from '@/lib/people';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,14 +28,19 @@ export async function POST(request) {
     bdm:   process.env.DASHBOARD_PASSWORD_BDM || '',
     purch: process.env.DASHBOARD_PASSWORD_PURCHASING || '',
   };
-  let role = null;
-  for (const r of Object.keys(ROLES)) {
-    if (expected[r] && same(submitted, expected[r])) role = r;
+  // A named person (lib/people.js) and THEIR department's password. Anyone else, or a right password for another
+  // department, gets the same answer, so the reply never says which half was wrong.
+  const who = personByEmail(body?.email);
+  const want = who && who.dashboard ? expected[who.dept] : '';
+  const good = Boolean(want) && same(submitted, want);
+  if (!good) {
+    await new Promise((r) => setTimeout(r, 1200));   // slow down guessing
+    return NextResponse.json({ error: 'Incorrect email or password' }, { status: 401 });
   }
-  if (!role) return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
+  const role = who.dept;
 
-  const res = NextResponse.json({ ok: true, role, home: homeFor(role) });
-  res.cookies.set('worthy_auth', await signRole(role), {
+  const res = NextResponse.json({ ok: true, role, name: who.name, home: homeFor(role) });
+  res.cookies.set('worthy_auth', await signSession(role, who.key), {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',

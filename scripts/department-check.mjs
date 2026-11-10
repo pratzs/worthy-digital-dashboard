@@ -15,7 +15,11 @@ const R = 'https://claude.ai/api/mcp/auth_callback';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log(`  ok  ${m}`); } else { fail++; console.error(`FAIL  ${m}`); process.exitCode = 1; } };
 
+// Sign-in is by named person now (lib/people.js). Locally the test people are used (PEOPLE_ALLOW_TEST=1); against production set MGMT_EMAIL / BDM_EMAIL / PURCH_EMAIL to listed people.
+const EMAILS = { mgmt: process.env.MGMT_EMAIL || 'test.mgmt@worthy.nz', bdm: process.env.BDM_EMAIL || 'test.bdm@worthy.nz', purch: process.env.PURCH_EMAIL || 'test.purch@worthy.nz' };
+const deptOfPw = (pw) => (pw === mPw ? 'mgmt' : pw === bdmPw ? 'bdm' : 'purch');
 async function signIn(fields) {
+  if (!('email' in fields)) fields = { ...fields, email: EMAILS[fields.department || 'mgmt'] || '' };
   const reg = await (await fetch(`${base}/api/mcp/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirect_uris: [R] }) })).json();
   const v = randomBytes(32).toString('base64url'), ch = createHash('sha256').update(v).digest('base64url');
   const a = await fetch(`${base}/api/mcp/authorize`, { method: 'POST', redirect: 'manual', body: new URLSearchParams({ response_type: 'code', client_id: reg.client_id, redirect_uri: R, state: 's', code_challenge: ch, code_challenge_method: 'S256', scope: '', resource: '', ...fields }) });
@@ -26,7 +30,7 @@ async function signIn(fields) {
 }
 const rpc = async (tok, method, params, path = '/api/mcp') => { const r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }); return { status: r.status, body: r.status === 200 ? (await r.json()).result : null }; };
 const call = async (tok, name, args = {}) => { const r = (await rpc(tok, 'tools/call', { name, arguments: args })).body; return { err: !r || r.isError, text: r?.content?.[0]?.text || '', data: r?.structuredContent }; };
-const login = async (password) => { const r = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) }); return (r.headers.get('set-cookie') || '').split(';')[0]; };
+const login = async (password) => { const r = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password, email: EMAILS[deptOfPw(password)] }) }); return (r.headers.get('set-cookie') || '').split(';')[0]; };
 const getJson = async (path, headers) => { const r = await fetch(`${base}${path}`, { headers }); return r.status === 200 ? r.json() : null; };
 const STRIPPED = new Set(['reps', 'weeks', 'weekly', 'repMargins', 'repMarginAvailable', 'repMarginNote', 'salespeople', 'salespeopleMonthly', 'salespeopleWeekly', 'customers', 'clv', 'churned', 'atRisk', 'lapsed']);
 const hasKey = (v, set) => Array.isArray(v) ? v.some((x) => hasKey(x, set)) : v && typeof v === 'object' ? Object.entries(v).some(([k, x]) => set.has(k) || hasKey(x, set)) : false;

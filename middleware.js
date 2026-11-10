@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyRole, apiAllowed, pageAllowed, homeFor } from '@/lib/auth';
+import { verifySession, apiAllowed, pageAllowed, homeFor } from '@/lib/auth';
 
 // Routes that don't require auth (the login screen itself, login API,
 // static assets the login page needs, and Next.js internals).
@@ -18,10 +18,11 @@ export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
   // The department the data routes filter by (lib/roleResponse.js). Set only from the verified sign-in cookie; a value sent by the caller is always discarded.
-  const pass = (role) => {
+  const pass = (role, person) => {
     const h = new Headers(request.headers);
-    h.delete('x-worthy-role');
+    h.delete('x-worthy-role'); h.delete('x-worthy-person');
     if (role) h.set('x-worthy-role', role);
+    if (role && person) h.set('x-worthy-person', person);   // who is asking (for the chat allowance and the AI cost record)
     return NextResponse.next({ request: { headers: h } });
   };
 
@@ -43,13 +44,14 @@ export async function middleware(request) {
     return pass(null);
   }
 
-  const role = await verifyRole(request.cookies.get('worthy_auth')?.value);
+  const session = await verifySession(request.cookies.get('worthy_auth')?.value);
+  const role = session?.role, person = session?.person;
   if (role) {
     if (pathname.startsWith('/api/')) {
-      if (apiAllowed(role, pathname)) return pass(role);
+      if (apiAllowed(role, pathname)) return pass(role, person);
       return NextResponse.json({ error: 'Not available to your department' }, { status: 403 });
     }
-    if (pageAllowed(role, pathname)) return pass(role);
+    if (pageAllowed(role, pathname)) return pass(role, person);
     return NextResponse.redirect(new URL(homeFor(role), request.url));
   }
 

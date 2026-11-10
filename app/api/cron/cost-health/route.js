@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { southCostHealth } from '@/lib/southCostHealth';
+import { storeConnected } from '@/lib/repStore';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -10,7 +11,7 @@ export const maxDuration = 60;
 export async function GET(request) {
   const days = Number(new URL(request.url).searchParams.get('days')) || 14;
   try {
-    return NextResponse.json(await southCostHealth({ days }), { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ...(await southCostHealth({ days })), allowanceStoreConnected: storeConnected() }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     console.error(JSON.stringify({ evt: 'cost_health_error', why: String(e?.message).slice(0, 200) }));
     return NextResponse.json({ error: 'Could not read Ostendo just now.' }, { status: 502, headers: { 'Cache-Control': 'no-store' } });

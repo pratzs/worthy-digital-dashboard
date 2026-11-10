@@ -17,6 +17,7 @@ import { REP_TOOLS, runRepTool } from '@/lib/repTools';
 import { nzFinancialYear, nzToday } from '@/lib/ostendo';
 import { takeQuestion, refundQuestion, logUsage } from '@/lib/repStore';
 import { clientInfo } from '@/lib/repClient';
+import { cachedRequest } from '@/lib/aiRequest';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -135,7 +136,7 @@ async function callModel(messages, rep, send) {
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey(), 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: MODEL, max_tokens: 2200, system: systemFor(rep), tools: TOOLS, messages, stream: true }),
+    body: JSON.stringify({ model: MODEL, max_tokens: 2200, ...cachedRequest({ system: systemFor(rep), tools: TOOLS, messages }), stream: true }),
     signal: AbortSignal.timeout(100000),
   });
   if (!res.ok) {
@@ -143,9 +144,9 @@ async function callModel(messages, rep, send) {
     throw new Error(`AI service ${res.status} ${j.error?.type || ''}: ${j.error?.message || 'error'}`);
   }
   const blocks = [];
-  let stop = null, inTok = 0, outTok = 0, sentText = false;
+  let stop = null, inTok = 0, outTok = 0, crTok = 0, cwTok = 0, sentText = false;
   for await (const ev of sseEvents(res.body)) {
-    if (ev.type === 'message_start') inTok += Number(ev.message?.usage?.input_tokens) || 0;
+    if (ev.type === 'message_start') { const u = ev.message?.usage || {}; inTok += Number(u.input_tokens) || 0; crTok += Number(u.cache_read_input_tokens) || 0; cwTok += Number(u.cache_creation_input_tokens) || 0; }
     else if (ev.type === 'content_block_start') blocks[ev.index] = ev.content_block.type === 'tool_use'
       ? { type: 'tool_use', id: ev.content_block.id, name: ev.content_block.name, raw: '' } : { type: 'text', text: '' };
     else if (ev.type === 'content_block_delta') {
@@ -165,7 +166,7 @@ async function callModel(messages, rep, send) {
     try { input = b.raw ? JSON.parse(b.raw) : {}; } catch { input = {}; }
     return { type: 'tool_use', id: b.id, name: b.name, input };
   });
-  return { content, stop, inTok, outTok, sentText };
+  return { content, stop, inTok, outTok, crTok, cwTok, sentText };
 }
 
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -184,7 +185,7 @@ export async function POST(request) {
   let quota = null;
   try {
     quota = await takeQuestion(rep.key, day);
-    if (!quota.allowed) return json({ error: `You have used all of today's questions. You get ${quota.limit} more tomorrow.`, quota }, 429);
+    if (!quota.allowed) return json({ error: `You have used all of your questions for now. You get ${quota.limit} more tomorrow.`, quota }, 429);
   } catch { quota = null; }   // the store is down: let the question through rather than block the rep
 
   const question = messages[messages.length - 1].content;
@@ -195,15 +196,15 @@ export async function POST(request) {
   const stream = new ReadableStream({
     async start(controller) {
       const send = (o) => { try { controller.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* the rep has gone away */ } };
-      const used = []; let inTok = 0, outTok = 0;
+      const used = []; let inTok = 0, outTok = 0, crTok = 0, cwTok = 0;
       // Kept for management: the question, the answer, every lookup with who or what it was about, and where it came from.
       const calls = [];
       let answer = '';
-      const finish = (ok, why) => logUsage({ t: new Date().toISOString(), rep: rep.key, question, answer, calls, tools: used, ok, ms: Date.now() - started, inTok, outTok, ...where, ...(why ? { why: String(why).slice(0, 200) } : {}) }).catch(() => {});
+      const finish = (ok, why) => logUsage({ t: new Date().toISOString(), rep: rep.key, question, answer, calls, tools: used, ok, ms: Date.now() - started, inTok, outTok, crTok, cwTok, ...where, ...(why ? { why: String(why).slice(0, 200) } : {}) }).catch(() => {});
       try {
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const r = await callModel(messages, rep, send);
-          inTok += r.inTok; outTok += r.outTok;
+          inTok += r.inTok; outTok += r.outTok; crTok += r.crTok; cwTok += r.cwTok;
           messages.push({ role: 'assistant', content: r.content });
           const uses = r.content.filter((b) => b.type === 'tool_use');
           if (!uses.length) {
@@ -237,7 +238,7 @@ export async function POST(request) {
         throw new Error('too many steps');
       } catch (e) {
         // Our problem, not the rep's: give the question back, and say what to do in plain words.
-        if (quota) { await refundQuestion(rep.key, day); quota = { ...quota, used: Math.max(0, quota.used - 1), remaining: Math.min(quota.limit, quota.remaining + 1) }; }
+        if (quota) { await refundQuestion(rep.key, day); quota = { ...quota, used: Math.max(0, quota.used - 1), remaining: quota.remaining + 1 }; }
         await finish(false, e?.message);
         const paused = /credit balance|authentication|invalid x-api-key|permission|billing/i.test(String(e?.message));
         send({ type: 'error', message: paused ? 'The assistant is paused at the moment. Please let Pratham know.' : 'Sorry, I could not get your figures just now. Please try again in a minute.', quota: quota ? { used: quota.used, limit: quota.limit, carried: quota.carried, remaining: quota.remaining } : null });

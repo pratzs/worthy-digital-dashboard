@@ -25,7 +25,9 @@ export function startStub(port = 3999) {
       const body = JSON.parse(b); seen.push(body);
       const msgs = body.messages;
       const last = msgs[msgs.length - 1];
-      const firstUser = [...msgs].reverse().find((m) => m.role === 'user' && typeof m.content === 'string')?.content || '';
+      // The person's latest typed message. The chat now sends it as a text block (so it can carry a cache mark), so both shapes are read.
+      const typed = (m) => (typeof m.content === 'string' ? m.content : Array.isArray(m.content) && m.content.every((c) => c.type === 'text') ? m.content.map((c) => c.text).join('') : null);
+      const firstUser = typed([...msgs].reverse().find((m) => m.role === 'user' && typed(m) !== null) || { content: '' }) || '';
       const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
       const begin = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); ev('message_start', { message: { usage: { input_tokens: 120 } } }); };
       const end = (reason) => { ev('message_delta', { delta: { stop_reason: reason }, usage: { output_tokens: 40 } }); ev('message_stop', {}); res.end(); };

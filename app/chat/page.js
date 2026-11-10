@@ -184,8 +184,8 @@ async function runTool(name, args) {
 async function askWorthy(_key, userMessage, history) {
   const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: userMessage, history }) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `The assistant could not answer just now (${res.status}).`);
-  return { text: data.text, table: data.table, history: data.history };
+  if (!res.ok) { const e = new Error(data.error || `The assistant could not answer just now (${res.status}).`); e.quota = data.quota; throw e; }
+  return { text: data.text, table: data.table, history: data.history, quota: data.quota };
 }
 
 async function askClaude(apiKey, userMessage, history, dataTools) {
@@ -407,6 +407,12 @@ function KeySetup({ onSaved }) {
   );
 }
 
+const STARTERS_PURCH = [
+  "What are the fast movers on Worthy Products North this financial year?",
+  "Which products are slow movers on Worthy Products South?",
+  "Top 10 categories by revenue on North, with margin.",
+  "Compare north, south and oceania revenue by month this FY.",
+];
 const STARTERS = [
   "How did Worthy Products North do this financial year?",
   "Who are our top 10 overdue debtors on North, and how much do they owe?",
@@ -424,12 +430,14 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [quota, setQuota] = useState(null);
   const historyRef = useRef([]);
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then(setMe).catch(() => {});
-    fetch("/api/tools/list").then((r) => r.json()).then((d) => setDataTools(d.tools)).catch(() => setDataTools([]));
+    fetch("/api/auth/me").then((r) => r.json()).then((j) => { setMe(j); if (j?.quota) setQuota(j.quota); }).catch(() => {});
+    // The server runs the tools itself now, so this list is not needed to ask; a department without it (Purchasing) simply gets none.
+    fetch("/api/tools/list").then((r) => r.json()).then((d) => setDataTools(d.tools || [])).catch(() => setDataTools([]));
     // One key for everyone: questions go through the server's key (ANTHROPIC_API_KEY). A personal key saved in this browser by the old page is ignored.
     setProvider("worthy"); setApiKey("worthy");
     try {
@@ -483,10 +491,12 @@ export default function ChatPage() {
     setBusy(true);
     try {
       const ask = provider === "worthy" ? askWorthy : provider === "claude" ? askClaude : askChatGpt;
-      const { text: answer, table, history } = await ask(apiKey, q, historyRef.current, dataTools);
+      const { text: answer, table, history, quota: left } = await ask(apiKey, q, historyRef.current, dataTools);
+      if (left) setQuota(left);
       historyRef.current = history;
       setMessages((m) => [...m, { role: "assistant", text: answer, table }]);
     } catch (e) {
+      if (e.quota) setQuota(e.quota);
       setError(e.message);
     } finally {
       setBusy(false);
@@ -521,7 +531,7 @@ export default function ChatPage() {
             </button>
           )}
           <Link href="/" style={{ fontSize: 12, fontWeight: 700, color: "#8a8178", textDecoration: "none" }}>← Back to dashboard</Link>
-          {me && <span style={{ fontSize: 11, color: "#b7afa4" }}>{me.label}</span>}
+          {me && <span style={{ fontSize: 11, color: "#b7afa4" }}>{me.name ? `${me.name}, ` : ""}{me.label}</span>}
         </div>
       </div>
 
@@ -535,10 +545,10 @@ export default function ChatPage() {
             {messages.length === 0 && (
               <div>
                 <p style={{ fontSize: 13, color: "#8a8178", marginBottom: 14 }}>
-                  Ask about sales, margin, debtors or reps across North, South or Oceania. Try:
+                  {me?.role === "purch" ? "Ask about products, categories, fast and slow movers across North, South or Oceania. Try:" : "Ask about sales, margin, debtors or reps across North, South or Oceania. Try:"}
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {STARTERS.map((s) => (
+                  {(me?.role === "purch" ? STARTERS_PURCH : STARTERS).map((s) => (
                     <button key={s} onClick={() => send(s)} style={{
                       textAlign: "left", padding: "10px 14px", borderRadius: 9, border: "1px solid #e4e0da",
                       background: "#faf8f5", fontSize: 13, cursor: "pointer", color: "#2a241f",
@@ -575,8 +585,8 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-                placeholder="Ask about sales, margin, debtors, reps…"
-                disabled={busy}
+                placeholder={me?.role === "purch" ? "Ask about products, categories, movers…" : "Ask about sales, margin, debtors, reps…"}
+                disabled={busy || (quota && quota.remaining <= 0)}
                 style={{ flex: 1, padding: "12px 16px", borderRadius: 10, border: "1px solid #e4e0da",
                   fontSize: 13.5, fontFamily: "inherit" }}
               />
@@ -585,6 +595,13 @@ export default function ChatPage() {
                 fontWeight: 700, fontSize: 13, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
               }}>Ask</button>
             </div>
+            {quota && (
+              <div style={{ maxWidth: 820, margin: "6px auto 0", fontSize: 12, color: quota.remaining <= 0 ? "#b13924" : quota.remaining <= 5 ? "#B26A00" : "#8a8178" }}>
+                {quota.remaining <= 0
+                  ? `You have used all of your questions for now. You earn ${quota.limit} more tomorrow.`
+                  : `Questions left: ${quota.remaining}${quota.carried ? ` (${quota.limit} a day, plus ${quota.carried} saved from earlier days)` : ` of ${quota.limit} today`}. Unused questions roll over until ${quota.resets ? new Date(quota.resets + "T00:00:00").toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "the end of your 30 days"}.`}
+              </div>
+            )}
           </div>
         </>
       )}

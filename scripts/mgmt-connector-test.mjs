@@ -27,7 +27,7 @@ const R = 'https://claude.ai/api/mcp/auth_callback';
 const client = await (await post('/api/mcp/register', { redirect_uris: [R] })).json();
 const verifier = randomBytes(32).toString('base64url');
 const challenge = createHash('sha256').update(verifier).digest('base64url');
-const form = (pw, redirect = R) => new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: redirect, state: 's', code_challenge: challenge, code_challenge_method: 'S256', scope: '', resource: '', password: pw });
+const form = (pw, redirect = R) => new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: redirect, state: 's', code_challenge: challenge, code_challenge_method: 'S256', scope: '', resource: '', password: pw, email: process.env.MGMT_EMAIL || 'test.mgmt@worthy.nz' });
 const t0 = Date.now();
 const wrong = await fetch(base + '/api/mcp/authorize', { method: 'POST', body: form('not-the-password'), redirect: 'manual' });
 ok(wrong.status === 401 && Date.now() - t0 >= 1300, `a wrong password is refused and slowed (${Date.now() - t0}ms)`);
@@ -58,7 +58,7 @@ const oauth = await import('../lib/oauth.js');
 await assert.rejects(() => oauth.registerClient(['https://claude.ai/x']), /No signing secret/);
 ok(true, 'with no secret, signing fails instead of using a built-in one');
 const auth = await import('../lib/auth.js');
-await assert.rejects(() => auth.signRole('mgmt'), /No signing secret/);
+await assert.rejects(() => auth.signSession('mgmt', 'kishan'), /No signing secret/);
 ok(true, 'the dashboard login cookie cannot be signed without a secret either');
 
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
