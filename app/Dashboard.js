@@ -1175,11 +1175,6 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
             {tile("If the rest matches last year", money(flat), `${flat >= full ? "Up" : "Down"} ${Math.abs(Math.round((flat / full - 1) * 1000) / 10)}% on last year`)}
             {tile("At this year's pace", money(projected), `${projected >= full ? "Up" : "Down"} ${Math.abs(Math.round((projected / full - 1) * 1000) / 10)}% on last year`, true)}
           </div>
-          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 12, lineHeight: 1.6 }}>
-            How this is worked out: sales to date, plus the rest of last year's sales ({money(rest)}) multiplied by this year's pace against last year ({Math.round(pace * 1000) / 10}%).
-            The two projections are the low and high end: the rest of the year either matches last year exactly, or keeps up this year's pace.
-            It is a projection from last year's pattern, not a budget, and it moves as sales come in.
-          </div>
         </>
       )}
     </div>
@@ -2792,24 +2787,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const cmpYear     = selectedYear - 1;
   const cmpRev      = yoyCompare ? `${cmpYear}: ${fmtK(prevRev, activeStore.currency)}` : null;
   const cmpOrd      = yoyCompare ? `${cmpYear}: ${prevOrd.toLocaleString()} orders` : null;
-  /* A month whose cost is incomplete shows no margin, and the card says why. The
-     margin on the part that does have a cost is quoted, and labelled as such. */
-  const coverNote = (() => {
-    if (activeStore.id === "luxe") {
-      const n = view === "monthly" ? latestMonth?.suspectLines
-              : view === "yoy" ? fyPayload(selectedYear)?.totals?.suspectLines : null;
-      const rc = view === "monthly" ? latestMonth : view === "yoy" ? fyPayload(selectedYear)?.totals : null;
-      const healed = rc?.recostedLines > 0 ? `${rc.recostedLines.toLocaleString()} line${rc.recostedLines === 1 ? "" : "s"} (${fmtK(rc.recostedRevenue, activeStore.currency)}) that Ostendo issued with no cost use a fallback cost (the item master, or for non-coded clearance lines the cost finance supplied or the matching item's cost). ` : "";
-      const left = n > 0 ? `Margin leaves out ${n.toLocaleString()} invoice line${n === 1 ? "" : "s"} with no usable cost, or one that cannot be right, in Ostendo. Revenue is in full.` : "";
-      return (healed + left).trim() || null;
-    }
-    const cover = partCost ? (partCost.full > 0 ? Math.round((partCost.rev / partCost.full) * 1000) / 10 : null)
-                : (yearCostedOK && totalRev > 0 ? Math.round((totalMargRev / totalRev) * 1000) / 10 : null);
-    return cover != null && cover < 99.5
-      ? `Margin is on the ${cover}% of sales that have a cost in Odoo. Sales of products with no cost at all are left out.`
-      : null;
-  })();
-  const cmpMgn      = [yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null, coverNote].filter(Boolean).join(" · ") || null;
+  // No explanatory notes on the cards (Pratham, 11 Nov 2026): how a figure is worked out lives in docs/, not on the page.
+  const cmpMgn      = yoyCompare && prevGPMargin !== null ? `${cmpYear}: ${prevGPMargin}%` : null;
   const cmpGP       = yoyCompare && prevGP !== null ? `${cmpYear}: ${fmtK(prevGP, activeStore.currency)}` : null;
 
   // Gross profit has its own growth. It was previously showing revenue growth,
@@ -3166,7 +3145,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
           <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="dollar" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
           <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="bag" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
           {isMgmt && <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="percent" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />}
-          {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP || (coverNote ? "Same basis as the margin" : null)} />}
+          {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
         </div>
 
         {onFYView() && view !== "weekly" && (
