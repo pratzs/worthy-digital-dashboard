@@ -6,7 +6,7 @@
  *
  *   node scripts/rep-leak-scan.mjs <url> <lead email> <lead password> <lead key>
  *
- * lead key: michelle (Team 2) or testlead (needs REP_ALLOW_TEST_LEAD=1 on the server).
+ * lead key: michelle (Team 2), lead1 (Team 1, Naitik) or testlead (needs REP_ALLOW_TEST_LEAD=1 on the server).
  */
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -22,7 +22,7 @@ const EVERYONE = [
   ['nimesh', 'Nimesh Darjee'], ['nayan', 'Nayan Patel'], ['savan', 'Savan Patel'], ['naitik', 'Naitik Trivedi'],
   ['jerry', 'Jerry'], ['keith', 'Keith'], ['chris', 'Chris'], ['ravi', 'Ravi Kumar'], ['lynette', 'Lynette'], ['michelle', 'Michelle'],
 ];
-const TEAMS = { michelle: ['michelle', 'chris', 'ravi', 'lynette'], testlead: ['nimesh', 'jerry'] };
+const TEAMS = { michelle: ['michelle', 'chris', 'ravi', 'lynette'], lead1: ['naitik', 'jerry', 'keith', 'nimesh', 'nayan', 'savan'], testlead: ['nimesh', 'jerry'] };
 const team = new Set(TEAMS[leadKey]);
 const outsiders = EVERYONE.filter(([k]) => !team.has(k));
 const OTHER_WORDS = ['Leith', 'Christchurch Office', 'Hari Patel', 'Rubin', 'Direct', 'Pratham'];
