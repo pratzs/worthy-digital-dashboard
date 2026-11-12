@@ -21,7 +21,6 @@ export default function RepUsage() {
     <div style={{ background: C.bg, minHeight: "100dvh", padding: 20, fontFamily: "-apple-system, BlinkMacSystemFont, 'DM Sans', 'Segoe UI', sans-serif" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <h1 style={{ color: C.brown, fontSize: 24, margin: "0 0 4px" }}>AI assistant usage and cost</h1>
-        <p style={{ color: C.muted, margin: "0 0 16px", fontSize: 14 }}>Everyone whose questions run on Worthy&apos;s own AI key: team leads on the My account page and named people on the dashboard chat. Each person earns {d?.dailyLimit ?? "..."} questions a day; unused ones roll over for {d?.cycleDays ?? 30} days, then it starts again. Times are New Zealand time.</p>
         {err && <div style={{ color: C.rust }}>Could not load: {err}</div>}
         {d?.note && <div style={{ ...card, borderColor: C.rust, color: C.rust, fontSize: 14 }}>{d.note}</div>}
         {!d && !err && <div style={{ color: C.muted }}>Loading...</div>}
@@ -31,7 +30,6 @@ export default function RepUsage() {
               {[["AI cost this month", `US$${d.cost.thisMonthUsd.toFixed(2)}`], ["Last month", `US$${d.cost.lastMonthUsd.toFixed(2)}`], ["Questions this month", d.cost.thisMonthQuestions.toLocaleString()], ["Most the allowance permits per 30 days", `${d.cost.mostQuestionsPerCycle.toLocaleString()} questions`]].map(([k, v]) => (
                 <div key={k}><div style={{ fontSize: 12, color: C.muted }}>{k}</div><div style={{ fontSize: 22, fontWeight: 700, color: C.brown }}>{v}</div></div>
               ))}
-              <div style={{ flexBasis: "100%", fontSize: 12, color: C.muted }}>{d.cost.note} Worked out from the AI tokens recorded for each question at Anthropic&apos;s list price; the Anthropic console has the invoice figure.</div>
             </div>
           )}
           <div style={card}>

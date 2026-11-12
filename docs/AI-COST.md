@@ -90,3 +90,11 @@ Suggested budget for 10 people: US$250 a month, with the Anthropic console spend
 - `node scripts/allowance-test.mjs`: the 60 a day and 30-day rule (15 checks).
 - `node scripts/people-chat-test.mjs <url> <mgmt pw> <bdm pw> <purchasing pw>`: named sign-in, edited cookies, the Purchasing chat wall, the allowance, connector access, the cost page (45 checks, local server with test people).
 - `scripts/access-matrix.mjs` (230), `scripts/department-check.mjs` (44), `scripts/marketing-e2e.mjs` (155): the existing walls between management, team leads, business development and departments.
+
+## 9. Checking the dashboard cost against Anthropic (13 Nov 2026)
+
+On 13 Nov the usage page showed US$0.26 for November and the Anthropic console US$0.36. The US$0.26 is exact for everything since per-person cost recording went live on 11 Nov: six questions, 78,893 tokens written to cache, 70,442 read from cache, 5,175 out, which is US$0.26 at list price and matches the console's 150K input tokens and US$0.26 bar for that day. The other US$0.10 was spent on 9 and 10 Nov, before recording existed (one Team 1 test question and management chat and AI Insights tests), so it is on Anthropic's bill but not in the dashboard's month total. From 11 Nov on the two should agree, apart from the console using UTC days. AI Insights calls where the person is not known are now included in the month total (`otherUsd`).
+
+## 10. Purchasing people (Kylie and Hari)
+
+Both are in `lib/people.js`. Kylie: dashboard and its chat only. Hari: dashboard and the connector. Check the wall with `PURCH_PW=<Purchasing password> node scripts/purchasing-check.mjs <url>` (add `MGMT_PW` on a local server to also search everything Purchasing receives for real rep and customer names). 13 Nov, local server, live data: 177 checks pass (16 rep names and 394 customer names searched for, none found; every other page, API, tool and edited cookie refused). It asks no AI question, so it costs nothing and is safe to run against production.

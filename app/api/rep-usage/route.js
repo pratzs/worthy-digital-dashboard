@@ -40,17 +40,19 @@ export async function GET() {
       inputTokens: stats.inTok || 0, outputTokens: stats.outTok || 0,
     };
   }));
-  const [usage, feedback, signins] = await Promise.all([recentUsage(100), recentFeedback(100), recentSignins(100)]);
+  // AI Insights calls made when the person could not be told (kept under "d.unknown") still cost money, so they are in the totals.
+  const [usage, feedback, signins, otherNow, otherLast] = await Promise.all([recentUsage(100), recentFeedback(100), recentSignins(100), monthTokens('d.unknown', month), monthTokens('d.unknown', lastMonth)]);
+  const otherUsd = costUsd(otherNow), otherLastUsd = costUsd(otherLast);
   return NextResponse.json({
     today, dailyLimit: dailyLimit(), cycleDays: CYCLE_DAYS, storeConnected: storeConnected(),
     cost: {
       month, lastMonth, currency: 'USD', pricePerMillionTokens: PRICE_USD_PER_MILLION,
-      thisMonthUsd: Math.round(reps.reduce((a, r) => a + r.month.usd, 0) * 100) / 100,
-      lastMonthUsd: Math.round(reps.reduce((a, r) => a + r.lastMonth.usd, 0) * 100) / 100,
+      thisMonthUsd: Math.round((reps.reduce((a, r) => a + costUsd(r.month.tokens), 0) + otherUsd) * 100) / 100,
+      lastMonthUsd: Math.round((reps.reduce((a, r) => a + r.lastMonth.usd, 0) + otherLastUsd) * 100) / 100,
+      otherUsd: Math.round(otherUsd * 100) / 100,   // AI Insights with no person recorded
       thisMonthQuestions: reps.reduce((a, r) => a + r.month.questions, 0),
       // The most the allowance lets these people spend in one 30-day cycle is people x 60 x 30 questions; see docs/AI-COST.md for the dollars.
       mostQuestionsPerCycle: reps.length * dailyLimit() * CYCLE_DAYS,
-      note: 'Only AI that runs on Worthy\'s own key. Connectors in a person\'s own Claude or ChatGPT account cost Worthy nothing and are not here.',
     },
     note: storeConnected() ? null : 'No database is connected yet, so these numbers only cover this server since it last started.',
     reps, usage, feedback, signins,
