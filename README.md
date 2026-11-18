@@ -46,3 +46,5 @@ Each table group is its own page (Categories & Products, Fast & Slow Movers and 
 | Purchasing & Stock | `DASHBOARD_PASSWORD_PURCHASING` | products, movers (plus stock valuation) |
 
 A department with no password set cannot log in. `AUTH_SECRET` (optional) signs the login cookie. Access is enforced in `middleware.js` using `lib/auth.js`, for both pages and `/api/*` data. Margin and cost columns inside the tables are not yet hidden for non-management; only the Gross Profit / Margin tiles and footer figures are.
+
+- **Social and Web** (management only): website and social media figures. See [docs/SOCIAL-WEB.md](docs/SOCIAL-WEB.md).
