@@ -7,7 +7,7 @@ Management only (`/social-web`, section `socialweb` in `lib/auth.js`). Purchasin
 | What | Source | Code |
 |---|---|---|
 | worthy.nz | Google Analytics 4, property 459697422 (account "Worthy") | `lib/ga4.js`, `lib/webStats.js` |
-| dutchrusk.co.nz | Google Analytics 4, property in account "V J TRADING" (stream G-4C5Y1Y26NV) | same |
+| dutchrusk.co.nz | Google Analytics 4, property 554865794 (account "V J TRADING", stream G-4C5Y1Y26NV) | same |
 | worthyproducts.nz | Shopify (ShopifyQL) with the dashboard's existing store token | `lib/webStats.js` |
 | Facebook and Instagram | Meta Graph API, every page the token can see plus its linked Instagram account | `lib/socialMeta.js` |
 | LinkedIn and TikTok | typed in once a month on the page, kept in the shared store (Upstash) | `lib/socialManual.js` |
