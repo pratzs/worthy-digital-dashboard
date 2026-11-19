@@ -5,6 +5,7 @@
  * person it is, only that SOME management login completed the OAuth step.
  * Read-only: the same four tools app/api/chat uses, via lib/mcpTools.js.
  */
+import { setOidcToken } from '@/lib/ga4';
 import { NextResponse } from 'next/server';
 import { checkAccessToken } from '@/lib/oauth';
 import { toolListFor, runForRole, instructionsFor } from '@/lib/mcpRoles';
@@ -136,6 +137,7 @@ export async function POST(request) {
   }
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params;
+  setOidcToken(request.headers.get('x-vercel-oidc-token'));   // keyless Google Analytics sign-in (lib/ga4.js)
     try {
       const result = await runForRole(role, name, args);
       // structuredContent must be a plain object per the MCP spec - most tools

@@ -23,6 +23,7 @@
  * tabular, which is the ONLY source of the table sent to the browser - never a
  * guess at shaping raw Odoo/Ostendo payloads.
  */
+import { setOidcToken } from '@/lib/ga4';
 import { NextResponse } from 'next/server';
 import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
 import { toolListFor, runForRole } from '@/lib/mcpRoles';
@@ -218,6 +219,7 @@ export async function POST(request) {
   const person = personFor(personKey, role, 'dashboard');
   if (!person) return NextResponse.json({ error: 'Please sign out and sign in again with your work email to use the chat.' }, { status: 401 });
   const who = chatWho(person.key);
+  setOidcToken(request.headers.get('x-vercel-oidc-token'));   // keyless Google Analytics sign-in (lib/ga4.js)
 
   let body;
   try {
