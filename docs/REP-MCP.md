@@ -181,3 +181,22 @@ Rotation checklist: create the new key, paste it into `ANTHROPIC_API_KEY` (type 
 - His code was made with `node scripts/make-rep-codes.mjs "<new folder>" lead1=naitik@worthyproducts.nz` and the entry's `ver` raised to 2, so the old test login (team1.lead@worthy.test), its password and any session or connector token it still held stop working once the new `REP_ACCESS` is in Vercel. `REP_ACCESS` must hold michelle, lead1 and vishva together (merged file in the private folder).
 - Checked on a local server against live Odoo and Ostendo data with his real code: `scripts/rep-leak-scan.mjs <url> <email> <password> lead1` 1,829 checks (every tool for all six people, this and last year, no outsider in any rep field, figures add up); 44 boundary checks (wrong email or password, the old test login, all 21 names and tricks outside Team 1 on all 8 person tools = 168 refusals, 19 management and business development tools refused, the management connector and the dashboard APIs refuse his token and his My Account cookie); each of the six people's year-to-date sales equals the dashboard's Sales by Rep figure to the cent. `scripts/rep-leak-test.mjs` 71 offline.
 - A lead and Michelle's team: Team 2 (Michelle, Chris, Ravi, Lynette) is unchanged and cannot see Team 1; Team 1 cannot see Team 2.
+
+## 19 Nov 2026: selling prices for the Marketing login (Vishva)
+
+Vishva could see cost but not selling price. Three tools added to the Marketing login only (`lib/priceData.js`); team leads do not get them.
+
+| Tool | What it answers |
+|---|---|
+| `product_price` | Standard sell price before GST, cost, and margin at that price, both systems. North: Odoo "Sales Price" (`list_price`). South: Ostendo `STDSELLPRICE`, with the date it last changed. |
+| `customer_prices` | For one product: every customer (store) that bought it, the net price they last paid, the list price and discount on that invoice, lowest/highest/average, and below, at or above today's standard. Optional customer words (e.g. "CSB"). Default last 12 months. |
+| `price_history` | For one product (optionally one customer or group): the standard price over time read from invoice lines, each customer's price changes (from, to, %, invoice), the latest 40 invoice lines, and changes recorded by the daily snapshot. Default last 24 months. |
+
+What the systems hold, checked 19 Nov 2026:
+- Customer-specific pricing is set by hand per order: North gives a discount % off the list price on the line; South a price or discount on the line. Neither system has customer price lists with prices in them (Odoo: 257 price lists, only the Shopify one has items; Ostendo: one "Standard" level, `ITEMSELLPRICES` empty). So invoices are the record of who pays what.
+- Neither system keeps a history of standard price changes (Odoo does not track `list_price`; Ostendo keeps only `LASTPRICEUPDATEDATE`). History comes from the list price on each invoice line (North `price_unit`, South `STANDARDUNITPRICE`) and from the daily snapshot.
+- South `INVOICEUNITPRICE` is already after the discount; net is `EXTENDEDNETTPRICE / INVOICEQTY`. North net is `price_subtotal / quantity`.
+- Left out of prices: credit notes, sales between Worthy companies (customer names starting "Worthy Products" or "Worthy Oceania"), and lines at no charge (free stock, counted as `freeUnits`). North invoice numbers are shown without their free-text reference.
+- Verified against raw invoices: Vending Direct C0381 INV/2026/11998 27 Oct 2026 $30.20 less 14.38% = $25.86; Foodstuffs South Island C0381 45816-1 18 Nov 2026 $29.00 less 10% = $26.10.
+
+Daily standard price snapshot (`lib/priceSnapshot.js`): `/api/cron/price-snapshot`, called by `.github/workflows/price-snapshot.yml` at 13:30 UTC. Reads ~1,870 North and ~2,630 South prices, records each change (date, old, new) in the shared store: the latest snapshot per system, 50 changes per product, latest 500 overall. Returns counts only and runs at most once in 20 hours (`?force=<WARM_KEY>` to rerun). The first run is the starting point, so changes are recorded from 19 Nov 2026.

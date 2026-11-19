@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   '/api/cron/warm', // protected by CRON_SECRET inside the route, not by the login cookie
   '/api/cron/cost-health', // totals only, no names; the scheduled check needs no login
   '/api/cron/warm-reps', // reveals nothing and rate-limits itself, so the scheduled job needs no login
+  '/api/cron/price-snapshot', // returns counts only and runs at most once in 20 hours
   '/logo-black.png',
   '/logo-white.png',
   '/favicon.ico',

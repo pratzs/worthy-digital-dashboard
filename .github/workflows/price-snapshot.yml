@@ -1,0 +1,26 @@
+name: Daily standard price snapshot
+on:
+  schedule:
+    # 02:30 New Zealand summer time (13:30 UTC), quiet for Odoo and Ostendo.
+    - cron: '30 13 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: price-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Record today's standard sell prices
+        run: |
+          code=$(curl -sS --max-time 320 -o snap.json -w '%{http_code}' https://worthy-digital-dashboard.vercel.app/api/cron/price-snapshot || echo 000)
+          echo "HTTP $code"
+          cat snap.json 2>/dev/null | head -c 1500 || true
+          echo
+          if [ "$code" != "200" ] || grep -q '"error"' snap.json; then
+            echo "::warning title=Price snapshot did not complete::HTTP $code. Tomorrow's run will try again."
+          fi
+          exit 0
