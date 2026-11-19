@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   '/api/cron/cost-health', // totals only, no names; the scheduled check needs no login
   '/api/cron/warm-reps', // reveals nothing and rate-limits itself, so the scheduled job needs no login
   '/api/cron/price-snapshot', // returns counts only and runs at most once in 20 hours
+  '/api/cron/connector-health', // tool call counts and list-fetch times only, no names or figures
   '/logo-black.png',
   '/logo-white.png',
   '/favicon.ico',

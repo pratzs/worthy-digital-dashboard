@@ -9,6 +9,8 @@ import { checkAccessToken } from '@/lib/repOauth';
 import { principalByKey, currentVer } from '@/lib/repAccess';
 import { toolsFor, runRepTool } from '@/lib/repTools';
 import { MARKETING_INSTRUCTIONS } from '@/lib/systemNames';
+import { kvIncr, kvSet } from '@/lib/repStore';
+import { nzToday } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -90,13 +92,18 @@ export async function POST(request) {
     }, sse);
   }
   if (method === 'ping') return rpcResult(id, {}, sse);
-  if (method === 'tools/list') return rpcResult(id, { tools: toolsFor(rep) }, sse);
+  if (method === 'tools/list') {
+    // Names-free health signal: when each kind of login last fetched the tool list (a reconnect fetches it again).
+    await kvSet(`mcp:listed:${rep.role}`, new Date().toISOString()).catch(() => {});
+    return rpcResult(id, { tools: toolsFor(rep) }, sse);
+  }
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params;
     const started = Date.now();
     try {
       const result = await runRepTool(rep, name, args);
       console.log(JSON.stringify({ evt: 'rep_mcp', rep: rep.key, tool: String(name), ok: true, ms: Date.now() - started }));
+      await kvIncr(`mcp:calls:${nzToday()}`, `${rep.role}:${String(name).slice(0, 40)}`, 8 * 86400).catch(() => {});
       return rpcResult(id, {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         structuredContent: result,
