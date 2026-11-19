@@ -85,7 +85,7 @@ export async function POST(request) {
     return rpcResult(id, {
       protocolVersion: negotiateVersion(params.protocolVersion),
       capabilities: { tools: {} },
-      serverInfo: { name: 'worthy-my-sales', version: '1.0.0' },
+      serverInfo: { name: 'worthy-my-sales', version: '1.2.0' },   // raise when the tool list changes, so clients notice
       ...(rep.role === 'marketing' ? { instructions: MARKETING_INSTRUCTIONS } : {}),
     }, sse);
   }
