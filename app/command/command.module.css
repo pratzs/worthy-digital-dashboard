@@ -105,10 +105,11 @@
 .stack { display: grid; gap: 14px; align-content: start; min-width: 0; }
 
 /* segmented toggle */
-.seg { display: inline-flex; gap: 2px; padding: 3px; background: rgba(255,255,255,.7); border-radius: 12px; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.seg { display: inline-flex; gap: 6px; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
 .seg::-webkit-scrollbar { display: none; }
-.seg button { border: 0; background: transparent; font: inherit; font-size: 12px; padding: 7px 14px; border-radius: 9px; cursor: pointer; color: var(--ink2); white-space: nowrap; }
-.seg .segOn { background: #1c1d1c; color: #fff; }
+.seg button { border: 1px solid rgba(255,255,255,.9); background: rgba(255,255,255,.6); font: inherit; font-size: 12.5px; padding: 8px 16px; border-radius: 11px; cursor: pointer; color: var(--ink2); white-space: nowrap; }
+.seg button:hover { background: #fff; }
+.seg .segOn, .seg .segOn:hover { background: #2a2b2a; border-color: #111; color: #fff; }
 
 /* chart */
 .chartWrap { position: relative; width: 100%; }

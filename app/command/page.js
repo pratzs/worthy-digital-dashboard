@@ -18,21 +18,21 @@ const SITES = [
 const siteName = (id) => SITES.find((x) => x.id === id)?.name || (id === "all" ? "All sites" : id || "");
 
 const KINDS = {
-  pipeline: { label: "Pipeline", one: "Pipeline item", statuses: ["next", "in progress", "done"], title: "What needs doing",
+  pipeline: { label: "Pipeline", one: "Pipeline item", statuses: ["next", "in progress", "done"], title: "Task",
     fields: ["title", "site", "area", "status", "owner", "due", "link", "notes"] },
-  outreach: { label: "Outreach", one: "Outreach contact", statuses: ["prospect", "contacted", "replied", "won", "lost"], title: "Website or publication",
+  outreach: { label: "Outreach", one: "Outreach contact", statuses: ["prospect", "contacted", "replied", "won", "lost"], title: "Website",
     fields: ["title", "contact", "site", "status", "owner", "due", "link", "notes"] },
-  listing: { label: "Listings", one: "Listing", statuses: ["to submit", "submitted", "live", "needs fixing"], title: "Directory or listing",
+  listing: { label: "Listings", one: "Listing", statuses: ["to submit", "submitted", "live", "needs fixing"], title: "Listing",
     fields: ["title", "site", "status", "link", "notes"] },
   meeting: { label: "Meeting", one: "Action point", statuses: ["open", "done"], title: "Action point",
     fields: ["title", "owner", "site", "due", "status", "notes"] },
-  authority: { label: "Authority", one: "Authority score", statuses: ["recorded"], title: "Measure (for example Ahrefs domain rating)",
+  authority: { label: "Authority", one: "Authority score", statuses: ["recorded"], title: "Measure",
     fields: ["title", "site", "score", "month", "link", "notes"] },
-  spend: { label: "Spend", one: "Marketing spend", statuses: ["recorded"], title: "Channel (for example Google Ads)",
+  spend: { label: "Spend", one: "Marketing spend", statuses: ["recorded"], title: "Channel",
     fields: ["title", "site", "amount", "month", "notes"] },
 };
 const FIELD_LABEL = { site: "Site", area: "Area", status: "Status", owner: "Owner", due: "Due", link: "Link", notes: "Notes",
-  contact: "Contact (name or email)", score: "Score", amount: "Amount (NZ$, excl GST)", month: "Month" };
+  contact: "Contact", score: "Score", amount: "Amount (NZ$)", month: "Month" };
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "grid" },
@@ -250,7 +250,7 @@ function TrafficChart({ rows, mode }) {
         {rows.map((r, i) => r.weekend ? <rect key={`w${i}`} x={x(i) - step / 2} y={padT} width={step} height={ih} fill="url(#cc-hatch)" rx="3" /> : null)}
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
           <g key={f}>
-            <line x1={padL} x2={padL + iw} y1={padT + ih - f * ih} y2={padT + ih - f * ih} stroke="rgba(20,22,20,.06)" />
+            <line x1={padL} x2={padL + iw} y1={padT + ih - f * ih} y2={padT + ih - f * ih} stroke="rgba(20,22,20,.16)" strokeDasharray="5 5" />
             <text x={padL - 8} y={padT + ih - f * ih + 4} textAnchor="end" fontSize="11" fill="#8b918c">{axisNum(maxA * f)}</text>
             <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#5536e6" opacity=".7">{f ? `$${axisNum(maxB * f)}` : ""}</text>
           </g>
@@ -263,7 +263,8 @@ function TrafficChart({ rows, mode }) {
         <path d={smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} stroke="#f2892a" strokeWidth="2.6" fill="none" />
         {h && (
           <g>
-            <line x1={x(hover)} x2={x(hover)} y1={yA(h.a)} y2={padT + ih} stroke="#f2892a" strokeWidth="1.6" />
+            <line x1={x(hover)} x2={x(hover)} y1={padT + 4} y2={padT + ih} stroke="#f2892a" strokeWidth="2" />
+            <circle cx={x(hover)} cy={padT + 4} r="6" fill="#f2892a" />
             <circle cx={x(hover)} cy={yB(h.b)} r="4.5" fill="#fff" stroke="#5536e6" strokeWidth="2" />
             <circle cx={x(hover)} cy={yA(h.a)} r="5.5" fill="#f2892a" stroke="#fff" strokeWidth="2" />
           </g>
@@ -272,11 +273,11 @@ function TrafficChart({ rows, mode }) {
       {h && (
         <div className={s.tip} style={{ left: Math.min(Math.max(x(hover), 90), w - 90), top: Math.max(yA(h.a), 70) }}>
           <div><b>{h.long}</b></div>
-          {change !== null && <div className={s.tipRow}><span>Visits vs before</span><b style={{ color: change >= 0 ? "#1f9d47" : "#e5413c" }}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
+          {change !== null && <div className={s.tipRow}><span>Change</span><b style={{ color: change >= 0 ? "#1f9d47" : "#e5413c" }}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
           <div className={s.tipRow}><span style={{ color: "#f2892a" }}>Visits</span><b>{n0(h.a)}</b></div>
           <div className={s.tipRow}><span style={{ color: "#5536e6" }}>Online sales</span><b>{money(h.b)}</b></div>
-          <div className={s.tipRow}><span>Orders and enquiries</span><b>{n0(h.conv)}</b></div>
-          {h.c !== null && <div className={s.tipRow}><span>Visits, period before</span><b>{n0(h.c)}</b></div>}
+          <div className={s.tipRow}><span>Conversions</span><b>{n0(h.conv)}</b></div>
+          {h.c !== null && <div className={s.tipRow}><span>Previous</span><b>{n0(h.c)}</b></div>}
         </div>
       )}
     </div>
@@ -498,7 +499,7 @@ export default function CommandCenter() {
               </div>
               <div className={s.kpi}>
                 <div className={s.kpiTop}><div className={s.kpiNum}>{data ? moneyShort(rev[0]) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n="cart" size={15} /></div></div>
-                <div className={s.kpiLabel}>Online sales, 30 days <Delta now={rev[0]} before={rev[1]} /></div>
+                <div className={s.kpiLabel}>Online sales <Delta now={rev[0]} before={rev[1]} /></div>
                 <Spark values={w30.cur.map((r) => r.revenue)} hotLast={7} />
               </div>
               <div className={s.kpi}>
@@ -521,7 +522,7 @@ export default function CommandCenter() {
                     <div className={s.legend}>
                       <span><i style={{ background: "#f2892a" }} />Visits</span>
                       <span><i style={{ background: "#5536e6" }} />Online sales</span>
-                      <span><i style={{ background: "#a9adaa" }} />Visits, period before</span>
+                      <span><i style={{ background: "#a9adaa" }} />Previous</span>
                     </div>
                     {rows.length > 0 && <Range>{`${rows[0].label} to ${rows[rows.length - 1].label}`}</Range>}
                   </div>
@@ -535,7 +536,7 @@ export default function CommandCenter() {
                       {[["all", "All"], ["done", "Done"], ["moved", "Moved"], ["added", "Added"]].map(([id, l]) => <button key={id} type="button" className={feedTab === id ? s.segOn : ""} onClick={() => setFeedTab(id)}>{l}</button>)}
                     </div>
                     <div className={s.feed}>
-                      {feedShown.length === 0 && <div className={s.empty}>Nothing here yet.</div>}
+                      {feedShown.length === 0 && <div className={s.empty}>Nothing yet</div>}
                       {feedShown.map((e, i) => (
                         <div key={i} className={s.feedItem}>
                           <div className={s.feedIcon}><Icon n={KIND_ICON[e.kind] || "flow"} size={15} /></div>
@@ -554,7 +555,7 @@ export default function CommandCenter() {
                       <h2 className={s.cardTitle}>Next up</h2>
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => go("pipeline")}>All work</button>
                     </div>
-                    {upcoming.length === 0 && <div className={s.empty}>Nothing waiting.</div>}
+                    {upcoming.length === 0 && <div className={s.empty}>All clear</div>}
                     {upcoming.slice(0, 9).map((x) => (
                       <div key={x.id} className={s.row}>
                         <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => { setSaveErr(""); setEditing(x); }}>
@@ -594,7 +595,7 @@ export default function CommandCenter() {
                           ? <span className={`${s.pill} ${lv.now > 0 ? s.pillGreen : s.pillGrey}`}>{lv.now > 0 ? `${lv.now} live` : "Quiet"}</span>
                           : <span className={`${s.pill} ${data ? s.pillRed : s.pillGrey}`}>{data ? "Not connected" : "Loading"}</span>}
                       </div>
-                      <div className={s.siteSub}>{okS ? `Avg position ${n1(sr.totals.nonBrandedPosition[0])} · ${n0(sr.totals.queries[0])} search terms` : sr?.status === "error" ? "Search Console not reachable" : "Search Console"}</div>
+                      <div className={s.siteSub}>{okS ? `Avg position ${n1(sr.totals.nonBrandedPosition[0])} · ${n0(sr.totals.queries[0])} search terms` : sr?.status === "error" ? "Offline" : ""}</div>
                       <div className={s.gauges}>
                         <Gauge value={p1} color="#e5413c" label="Page 1 terms" text={okS ? `${Math.round(p1 * 100)}%` : "-"} />
                         <Gauge value={Math.min(1, ctr * 5)} color="#f2892a" label="Search CTR" text={okS ? `${(ctr * 100).toFixed(1)}%` : "-"} />
@@ -622,7 +623,6 @@ export default function CommandCenter() {
             onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onDone={(x) => quickStatus(x, "done")} saving={saving} />
         )}
 
-        <div className={s.foot}>Worthy Command Center · Search Console, Google Analytics and Shopify · {dLong(today)}</div>
       </div>
 
       {editing && <Editor key={editing.id || "new"} item={editing} busy={saving} error={saveErr} onClose={() => setEditing(null)} onSave={(f) => save(f)} onDelete={(f) => save(f, "delete")} />}
@@ -654,26 +654,26 @@ function SearchTab({ data, site, items, onEdit, onAdd }) {
     <div className={s.fade}>
       <section className={s.kpis}>
         <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("nonBrandedClicks", 0)) : "-"}</div><div className={s.kpiLabel}>Non-branded clicks <Delta now={T("nonBrandedClicks", 0)} before={T("nonBrandedClicks", 1)} /></div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("nonBrandedImpressions", 0)) : "-"}</div><div className={s.kpiLabel}>Times shown in Google <Delta now={T("nonBrandedImpressions", 0)} before={T("nonBrandedImpressions", 1)} /></div></div>
+        <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("nonBrandedImpressions", 0)) : "-"}</div><div className={s.kpiLabel}>Impressions <Delta now={T("nonBrandedImpressions", 0)} before={T("nonBrandedImpressions", 1)} /></div></div>
         <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("pageOne", 0)) : "-"}</div><div className={s.kpiLabel}>Terms on page 1 <Delta now={T("pageOne", 0)} before={T("pageOne", 1)} /></div></div>
         <div className={s.kpi}><div className={s.kpiNum}>{data ? n1(wpos(0)) : "-"}</div><div className={s.kpiLabel}>Average position <Delta now={wpos(0)} before={wpos(1)} invert /></div></div>
       </section>
       <div className={s.grid}>
         <section className={s.card}>
           <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Rankings for non-branded searches</h2>
-            {range && <Range>{`${dShort(range.start)} to ${dLong(range.end)}, against the 28 days before`}</Range>}
+            <h2 className={s.cardTitle}>Non-branded rankings</h2>
+            {range && <Range>{`${dShort(range.start)} to ${dShort(range.end)}`}</Range>}
           </div>
           <div className={s.cardHead}>
             <div className={s.seg}>{[["all", "All"], ["top3", "Top 3"], ["page1", "Page 1"], ["page2", "Page 2"], ["beyond", "Beyond"]].map(([id, l]) => <button key={id} type="button" className={band === id ? s.segOn : ""} onClick={() => setBand(id)}>{l}</button>)}</div>
-            <input className={s.search} placeholder="Find a search term" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className={s.search} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className={s.tableWrap}>
             <table className={s.table}>
               <thead><tr>{th("query", "Search term")}{site === "all" && <th className={s.hideSm}>Site</th>}{th("position", "Position", true)}{th("move", "Move", true)}{th("clicks", "Clicks", true)}{th("impressions", "Shown", true)}<th className={`${s.num} ${s.hideSm}`}>CTR</th></tr></thead>
               <tbody>
                 {!data && [0, 1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={7}><div className={s.skeleton} style={{ height: 16 }} /></td></tr>)}
-                {data && shown.length === 0 && <tr><td colSpan={7} className={s.empty}>No search terms match.</td></tr>}
+                {data && shown.length === 0 && <tr><td colSpan={7} className={s.empty}>No matches</td></tr>}
                 {shown.map((r) => {
                   const mv = r.prevPosition ? r.prevPosition - r.position : null;
                   return (
@@ -695,7 +695,7 @@ function SearchTab({ data, site, items, onEdit, onAdd }) {
         <div className={s.stack}>
           <section className={s.card}>
             <div className={s.cardHead}><h2 className={s.cardTitle}>Biggest climbers</h2></div>
-            {winners.length === 0 && <div className={s.empty}>{data ? "No movement yet." : ""}</div>}
+            {winners.length === 0 && <div className={s.empty}>{data ? "None yet" : ""}</div>}
             {winners.filter((r) => r.move > 0).slice(0, 6).map((r) => (
               <div key={`${r.site}-${r.query}`} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{r.query}</div><div className={s.rowMeta}>{siteName(r.site)} · {n1(r.prevPosition)} to {n1(r.position)}</div></div>
@@ -705,12 +705,12 @@ function SearchTab({ data, site, items, onEdit, onAdd }) {
           </section>
           <section className={s.card}>
             <div className={s.cardHead}><h2 className={s.cardTitle}>Indexing</h2></div>
-            {idx.length === 0 && <div className={s.empty}>{data ? "Search Console not reachable." : ""}</div>}
+            {idx.length === 0 && <div className={s.empty}>{data ? "Offline" : ""}</div>}
             {idx.map((x) => x.sitemaps.map((m) => (
               <div key={m.path} className={s.row}>
                 <div style={{ minWidth: 0 }}>
                   <div className={s.rowTitle}>{siteName(x.id)}</div>
-                  <div className={s.rowMeta}>{n0(m.submitted)} pages in sitemap · read by Google {m.lastDownloaded ? dShort(m.lastDownloaded) : "not yet"}</div>
+                  <div className={s.rowMeta}>{n0(m.submitted)} pages · read {m.lastDownloaded ? dShort(m.lastDownloaded) : "-"}</div>
                 </div>
                 <span className={`${s.pill} ${m.errors ? s.pillRed : m.pending ? s.pillAmber : s.pillGreen}`}>{m.errors ? `${m.errors} errors` : m.pending ? "Pending" : "Read"}</span>
               </div>
@@ -721,7 +721,7 @@ function SearchTab({ data, site, items, onEdit, onAdd }) {
               <h2 className={s.cardTitle}>Authority</h2>
               <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("authority", { month: new Date().toISOString().slice(0, 7) })}><Icon n="plus" size={13} />Record</button>
             </div>
-            {auth.length === 0 && <div className={s.empty}>No scores recorded yet.</div>}
+            {auth.length === 0 && <div className={s.empty}>Nothing yet</div>}
             {auth.slice(0, 8).map((x) => (
               <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{siteName(x.site)}{x.month ? ` · ${monthLabel(x.month)}` : ""}</div></div>
@@ -730,7 +730,7 @@ function SearchTab({ data, site, items, onEdit, onAdd }) {
             ))}
           </section>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Top pages from Google</h2></div>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>Top pages</h2></div>
             {pages.map((p) => (
               <div key={p.page} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.page.replace(/^https?:\/\/(www\.)?/, "")}</div><div className={s.rowMeta}>{n0(p.impressions)} shown · position {n1(p.position)}</div></div>
@@ -770,8 +770,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove }) {
                 <div key={x.id} className={s.item} onClick={() => onEdit(x)}>
                   <div className={s.itemTitle}>{x.title}</div>
                   {x.contact && <div className={s.rowMeta}>{x.contact}</div>}
-                  {x.notes && <div className={s.rowMeta} style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{x.notes}</div>}
-                  <div className={s.itemMeta}>
+                                    <div className={s.itemMeta}>
                     {x.site && <span className={s.siteTag}>{siteName(x.site)}</span>}
                     {x.area && <span className={s.siteTag}>{x.area}</span>}
                     {x.due && st !== doneWord && <span className={x.due < today ? s.overdue : ""}>{x.due < today ? "Overdue " : "Due "}{dShort(x.due)}</span>}
@@ -824,15 +823,15 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
       <section className={s.card} style={{ marginBottom: 14 }}>
         <div className={s.cardHead}>
           <h2 className={s.cardTitle}>Ecom x Marketing, {DAYS_LONG[d0(nextThu).getUTCDay()]} {dLong(nextThu)}</h2>
-          <Range>{`Last 7 days to ${dShort(addDays(today, -1))}, against the 7 before`}</Range>
+          <Range>{`${dShort(addDays(today, -7))} to ${dShort(addDays(today, -1))}`}</Range>
         </div>
         <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(v[0])}</div><div className={s.statLabel}>Visits <Delta now={v[0]} before={v[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>Orders and enquiries <Delta now={c[0]} before={c[1]} /></div></div>
+          <div className={s.stat}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>Conversions <Delta now={c[0]} before={c[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{v[0] ? `${((c[0] / v[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>Conversion <Delta now={v[0] ? c[0] / v[0] : null} before={v[1] ? c[1] / v[1] : null} points /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks, 28 days <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>On the sites now</div></div>
+          <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
+          <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>Live now</div></div>
         </div>
       </section>
 
@@ -842,7 +841,7 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
             <h2 className={s.cardTitle}>Action points</h2>
             <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("meeting", { due: nextThu, meeting: nextThu })}><Icon n="plus" size={13} />Add</button>
           </div>
-          {actions.length === 0 && <div className={s.empty}>No open action points.</div>}
+          {actions.length === 0 && <div className={s.empty}>Nothing open</div>}
           {actions.map((x) => (
             <div key={x.id} className={s.row}>
               <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => onEdit(x)}>
@@ -853,7 +852,7 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
             </div>
           ))}
           {nextUp.length > 0 && <>
-            <div className={s.cardHead} style={{ marginTop: 18 }}><h2 className={s.cardTitle}>Next in the pipeline</h2></div>
+            <div className={s.cardHead} style={{ marginTop: 18 }}><h2 className={s.cardTitle}>Up next</h2></div>
             {nextUp.map((x) => (
               <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{cap(x.status)}{x.due ? ` · ${dShort(x.due)}` : ""}{x.site ? ` · ${siteName(x.site)}` : ""}</div></div>
@@ -865,10 +864,10 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
 
         <section className={s.card}>
           <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Done since the last meeting</h2>
+            <h2 className={s.cardTitle}>Done this week</h2>
             <Range>{`Since ${dShort(lastThu)}`}</Range>
           </div>
-          {doneSince.length === 0 && <div className={s.empty}>Nothing marked done yet.</div>}
+          {doneSince.length === 0 && <div className={s.empty}>Nothing yet</div>}
           {doneSince.map((x) => (
             <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
               <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{KINDS[x.kind].label}{x.site ? ` · ${siteName(x.site)}` : ""} · {dShort(x.doneAt)}</div></div>
@@ -884,7 +883,7 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
             <h2 className={s.cardTitle}>Spend and return</h2>
             <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("spend", { month: today.slice(0, 7) })}><Icon n="plus" size={13} />Add spend</button>
           </div>
-          {months.length === 0 && <div className={s.empty}>No spend recorded yet.</div>}
+          {months.length === 0 && <div className={s.empty}>Nothing yet</div>}
           {months.length > 0 && (
             <div className={s.tableWrap}>
               <table className={s.table}>
@@ -910,9 +909,9 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
         <section className={s.card}>
           <div className={s.cardHead}>
             <h2 className={s.cardTitle}>Where visits come from</h2>
-            <Range>Last 30 days</Range>
+            <Range>30 days</Range>
           </div>
-          {channels.length === 0 && <div className={s.empty}>{site === "worthyproducts" ? "Channel split for worthyproducts.nz is on the Social and Web page." : data ? "No channel data." : ""}</div>}
+          {channels.length === 0 && <div className={s.empty}>{site === "worthyproducts" ? "No data" : data ? "No data" : ""}</div>}
           <div className={s.bars}>
             {channels.map((ch, i) => (
               <div key={ch.name} className={s.barRow}>
