@@ -1139,12 +1139,14 @@ const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
    reconciled back to everything invoiced. Same basis as the Sunday email and the chat (docs/SALES-BASIS.md). */
 const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent, companyName = "Worthy Products" }) => {
   const T = theme;
+  // Margin to two decimals from the figures themselves, so it reads exactly like the Sunday email.
+  const m2 = (costed, cost) => (costed > 0 && cost != null ? Math.round(((costed - cost) / costed) * 10000) / 100 : null);
   if (!cur?.sisterSales) return null;
   const month = [...(cur.months || [])].reverse().find((m) => m.started && m.sisters);
   const cols = [
     week && week.sisters ? { label: "Week", range: `${fmtDay(week.start)} to ${fmtDay(week.end)}`, s: week.sisters, wp: { sales: week.revenue, other: week.otherInvoicedLines, margin: weekWp?.margin ?? null, cost: weekWp?.cost, costed: weekWp?.costed } } : null,
-    month ? { label: "Month to date", range: `${fmtDay(`${month.key}-01`)} to ${fmtDay(month.through)}`, s: month.sisters, wp: { sales: month.revenue, other: month.otherInvoicedLines, margin: month.marginPct, cost: month.cost, costed: month.costedRevenue } } : null,
-    { label: "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
+    month ? { label: "Month to date", range: `${fmtDay(`${month.key}-01`)} to ${fmtDay(month.through)}`, s: month.sisters, wp: { sales: month.revenue, other: month.otherInvoicedLines, margin: m2(month.costedRevenue, month.cost) ?? month.marginPct, cost: month.cost, costed: month.costedRevenue } } : null,
+    { label: "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: m2(cur.totals?.costedRevenue, cur.totals?.cost) ?? cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
   ].filter(Boolean);
   const money = (v) => (v == null ? "-" : fmtExact(v, currency));
   const pctTxt = (v) => (v == null ? "-" : `${Number(v).toFixed(2)}%`);

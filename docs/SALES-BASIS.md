@@ -15,10 +15,15 @@ Code: `lib/salesTool.js` `resolveBusinesses` (management) and `lib/systemNames.j
 ## Worthy Products (Odoo company 4)
 
 - **Sales:** product lines on posted customer invoices less credit notes, before GST (finance's basis).
-- **Other invoiced lines:** lines with no product (freight recharged, customs, clearance and other charges). Shown on their own row, counted in "all invoiced", never in margin.
+- **Freight is never counted** (Pratham, 25 Nov 2026): not in sales, not in margin, not in any total. Freight = any line on 6030 Freight Recovered or 7310 Outward Freight, or a shipping/delivery product (Standard Shipping 77932, 79478, 77497; delivery method product 76579), with or without a product on the line (`FREIGHT_ACCOUNTS`, `FREIGHT_PRODUCT_IDS`, `NOT_FREIGHT` in `lib/salesBasis.js`).
+- **Other lines with no product** (discounts typed as lines, rebates, management fees, interest): not sales, never margin.
 - **Cost:** the cost Odoo booked on each invoice: the cost-of-goods lines (`display_type = 'cogs'`) on the 7xxx accounts, which is what accounts reports. Today's standard cost only for a product with no booked cost. A product with neither is left out of the margin base.
 - **Margin %:** (costed sales - cost) / costed sales.
-- **Sister companies:** sales to Dutch Rusk (partner 27830, Worthy Products South Ltd-Dutch Rusk) and Worthy Oceania (partner 32490) are transfers between our own companies. They are never inside the Worthy Products figure; they are shown separately with the same rules, and the last row adds everything back to "all invoiced".
+- **Sister companies:** sales to Dutch Rusk (partner 27830, Worthy Products South Ltd-Dutch Rusk) and Worthy Oceania (partner 32490) are transfers between our own companies. They are never inside the Worthy Products figure; they are shown separately with the same rules, and the bottom row is all product sales (Worthy Products + sisters).
+
+## Worthy Oceania (Odoo company 1), same basis since 25 Nov 2026
+
+Product sales only (it used to count management fees, interest and other non-product lines as revenue, about $600K FY26), booked cost, no freight. Its sister / related companies are Worthy Products Ltd (partner 9271), Dutch Rusk (32462), Worthy Enterprises (7397) and Worthy Properties (7391): kept out and shown separately (`SISTER_SETS` in `lib/salesBasis.js`). The four fabric variants Odoo cannot name (28085, 28084, 6691, 7503) stay out of product groupings as before; their sales are reported separately on the page.
 
 ## Where it lives
 
@@ -26,6 +31,7 @@ Code: `lib/salesTool.js` `resolveBusinesses` (management) and `lib/systemNames.j
 |---|---|
 | Dashboard figures (months, weeks, products, reps, year) | `lib/odooFy.js` (`notSisterMove`, `notSisterLine`, `costByKey` + `ledgerCostByProductMonth` in `lib/odooCost.js`) |
 | Dashboard weekly margin | `app/api/odoo/weeks/route.js` |
+| Team-lead connector (My Account) and Vishva's connector | `lib/repData.js` (booked cost per customer and product, no freight, no sisters), `lib/bdData.js`, `lib/accountData.js`, `lib/bdTools.js`, `lib/priceData.js` (no freight) |
 | Dashboard "Sister company sales" section | `SisterSalesCard` in `app/Dashboard.js`, data from `sisterDaily` / `sumSisters` in `lib/salesBasis.js` |
 | Management chat and connector | `get_sales_summary` (`lib/salesTool.js`), Worthy Products from `wpSales` in `lib/salesBasis.js`; Dutch Rusk and Oceania from the dashboard's own rows |
 | Sunday email | Odoo scheduled action 105 "Weekly Sales Report (Overall)"; code kept in the catalog-manager repo `.scratch_docs/odoo_weekly_sales_overall_report.py` (backup of the old version `..._BACKUP_2026-11-25.py`) |
