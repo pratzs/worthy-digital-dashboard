@@ -2,6 +2,10 @@
    sage-grey glass, white cards, black active pill, thin large numerals, orange and violet lines. */
 
 .page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
   --bg: #dfe6e2;
   --bg2: #eceee9;
   --glass: linear-gradient(165deg, #e8ece8 0%, #e1e7e3 45%, #dde5e1 100%);
@@ -27,7 +31,9 @@
   font-feature-settings: 'tnum' 1;
 }
 .shell {
-  width: 100%;
+  box-sizing: border-box;
+  width: auto;
+  max-width: 100%;
   min-height: 100vh;
   margin: 0;
   background: var(--glass);
