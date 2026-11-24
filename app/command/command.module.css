@@ -182,6 +182,7 @@
 .item:hover { box-shadow: 0 12px 24px -16px rgba(0,0,0,.35); transform: translateY(-1px); }
 .itemTitle { font-size: 13.5px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
 .itemMeta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; align-items: center; font-size: 11.5px; color: var(--mute); }
+.srcTag { background: #1c1d1c !important; color: #fff !important; }
 .siteTag { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: #f1f2ef; color: var(--ink2); }
 
 /* modal */
@@ -213,6 +214,28 @@
 .fade { animation: fadeIn .35s ease both; }
 @keyframes fadeIn { from { transform: translateY(4px); } to { transform: none; } }
 
+/* asana */
+.people { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.people::-webkit-scrollbar { display: none; }
+.person { display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.95); background: rgba(255,255,255,.6); border-radius: 16px; padding: 8px 14px 8px 8px; font: inherit; font-size: 12px; color: var(--ink2); cursor: pointer; text-align: left; white-space: nowrap; line-height: 1.3; }
+.person b { color: var(--ink); font-weight: 500; }
+.personOn { background: #1c1d1c; color: #d9dbd8; border-color: #1c1d1c; }
+.personOn b, .personOn .personName { color: #fff; }
+.personName { font-size: 13px; color: var(--ink); }
+.personAv { width: 34px; height: 34px; border-radius: 11px; background: #fff; color: var(--ink); display: grid; place-items: center; font-size: 12px; font-weight: 500; flex: none; }
+.personOn .personAv { background: #3a3b3a; color: #fff; }
+.personAvSm { width: 18px; height: 18px; border-radius: 6px; background: #1c1d1c; color: #fff; display: inline-grid; place-items: center; font-size: 9px; }
+.ownerChip { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); }
+.task { background: var(--card-solid); border: 1px solid rgba(255,255,255,.95); border-radius: 16px; padding: 12px 14px; margin-top: 8px; }
+.taskMain { display: flex; align-items: flex-start; gap: 12px; }
+.taskName { font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; line-height: 1.35; }
+.taskName:hover { text-decoration: underline; }
+.check { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #b9bdb9; display: grid; place-items: center; flex: none; margin-top: 1px; color: #fff; }
+.checkOn { background: var(--green); border-color: var(--green); }
+.subToggle { display: inline-flex; align-items: center; gap: 10px; margin: 10px 0 0 30px; border: 0; background: transparent; font: inherit; font-size: 12px; color: var(--ink2); cursor: pointer; padding: 0; }
+.sub { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; margin: 8px 0 0 30px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; }
+.subName { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+
 /* ── responsive ──────────────────────────────────────── */
 @media (max-width: 1200px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
@@ -239,6 +262,7 @@
   .kpiNum { font-size: 32px; }
   .card { padding: 16px; border-radius: 22px; }
   .chartSvg { height: 230px; }
+  .sub, .subToggle { margin-left: 0; }
   .board { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; }
   .fields { grid-template-columns: 1fr; }
   .search { width: 100%; }

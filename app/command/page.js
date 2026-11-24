@@ -108,6 +108,9 @@ const PATHS = {
 const Icon = ({ n, size = 16, stroke = 1.6, className }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>{PATHS[n]}</svg>
 );
+const ASANA_PROJECT = "1219139073710791";
+const statusCls = (st) => (/done/i.test(st || "") ? s.pillGreen : /progress/i.test(st || "") ? s.pillViolet : /review|waiting|approved/i.test(st || "") ? s.pillAmber : s.pillGrey);
+const initialsOf = (n) => String(n || "?").replace(/@.*/, "").split(/[\s.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 const KIND_ICON = { pipeline: "flow", outreach: "mail", listing: "pin", meeting: "calendar", authority: "star", spend: "dollar" };
 
 // ── small pieces ────────────────────────────────────────────────────────────────────────────────────
@@ -307,7 +310,7 @@ function Editor({ item, onClose, onSave, onDelete, busy, error }) {
           {!item.id && (
             <label className={`${s.field} ${s.fieldWide}`}>Type
               <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value, status: KINDS[e.target.value].statuses[0] })}>
-                {Object.entries(KINDS).map(([id, x]) => <option key={id} value={id}>{x.one}</option>)}
+                {Object.entries(KINDS).filter(([id]) => id !== "meeting").map(([id, x]) => <option key={id} value={id}>{x.one}</option>)}
               </select>
             </label>
           )}
@@ -336,6 +339,8 @@ export default function CommandCenter() {
   const [data, setData] = useState(null);
   const [live, setLive] = useState(null);
   const [board, setBoard] = useState(null);
+  const [asana, setAsana] = useState(null);
+  const [clickup, setClickup] = useState(null);
   const [log, setLog] = useState([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState("");
@@ -364,7 +369,7 @@ export default function CommandCenter() {
       if (r.status === 401 || r.status === 403) { window.location.href = "/login"; return; }
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
-      setData(j); setLive(j.live); setBoard(j.board); setLog(j.log || []); setLiveAt(j.builtAt); setFailed("");
+      setData(j); setLive(j.live); setAsana(j.asana); setClickup(j.clickup); setBoard(j.board); setLog(j.log || []); setLiveAt(j.builtAt); setFailed("");
     } catch (e) { setFailed(String(e.message || e)); }
     finally { setLoading(false); }
   }, []);
@@ -372,7 +377,7 @@ export default function CommandCenter() {
     try {
       const r = await fetch("/api/command?live=1", { cache: "no-store" });
       if (!r.ok) return;
-      const j = await r.json(); setLive(j.live); setLog(j.log || []); setLiveAt(j.at);
+      const j = await r.json(); setLive(j.live); if (j.asana) setAsana(j.asana); if (j.clickup) setClickup(j.clickup); setLog(j.log || []); setLiveAt(j.at);
     } catch { /* next tick */ }
   }, []);
   useEffect(() => {
@@ -398,7 +403,7 @@ export default function CommandCenter() {
   const quickStatus = (item, status) => save({ ...item, status });
   const person = data?.person || "";
   const newItem = (kind, extra = {}) => { setSaveErr(""); setEditing({ kind, status: KINDS[kind].statuses[0], site: site === "all" ? "" : site, owner: person ? cap(person) : "", ...extra }); };
-  const defaultKind = { dashboard: "pipeline", search: "authority", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "meeting" }[tab];
+  const defaultKind = { dashboard: "pipeline", search: "authority", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "pipeline" }[tab];
 
   // ── derived numbers ──
   const today = data?.today || nzTodayIso();
@@ -427,7 +432,23 @@ export default function CommandCenter() {
   const inSite = (x) => site === "all" || !x.site || x.site === site;
   const upcoming = items.filter((x) => inSite(x) && ((x.kind === "pipeline" && x.status !== "done") || (x.kind === "meeting" && x.status === "open") || (x.kind === "outreach" && ["prospect", "contacted", "replied"].includes(x.status) && x.due)))
     .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
-  const overdue = upcoming.filter((x) => x.due && x.due < today).length;
+  const asanaTasks = (asana?.tasks || []).filter((t) => site === "all" || !t.sites?.length || t.sites.includes(site));
+  const asanaOpen = asanaTasks.filter((t) => !t.done).map((t) => ({ id: `as_${t.id}`, kind: "asana", title: t.name, due: t.due, owner: t.owner, site: t.sites?.length === 1 ? t.sites[0] : "", url: t.url, status: t.status }));
+  const external = useMemo(() => {
+    const inS = (t) => site === "all" || !t.sites?.length || t.sites.includes(site);
+    const st = (t, map) => (t.done ? "done" : map(t));
+    const one = (t) => (t.sites?.length === 1 ? t.sites[0] : "");
+    const fromAsana = (asana?.tasks || []).filter(inS).filter((t) => !t.done || (t.doneAt && t.doneAt.slice(0, 10) >= addDays(today, -14)))
+      .map((t) => ({ id: `as_${t.id}`, kind: "pipeline", source: "Asana", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
+        status: st(t, (x) => (/progress|review/i.test(x.status || "") ? "in progress" : "next")), label: t.done ? "Done" : t.status || "Open", doneAt: t.doneAt ? t.doneAt.slice(0, 10) : null }));
+    const fromClickup = (clickup?.tasks || []).filter(inS)
+      .map((t) => ({ id: `cu_${t.id}`, kind: "pipeline", source: "ClickUp", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
+        status: st(t, (x) => (/progress|review/i.test(x.status) ? "in progress" : "next")), label: cap(t.status), doneAt: t.doneAt }));
+    return [...fromAsana, ...fromClickup];
+  }, [asana, clickup, site, today]);
+  const cuOpen = external.filter((x) => x.source === "ClickUp" && x.status !== "done").map((x) => ({ ...x, kind: "asana", status: x.label }));
+  const upcomingAll = [...upcoming, ...asanaOpen, ...cuOpen].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+  const overdue = upcomingAll.filter((x) => x.due && x.due < today).length;
 
   const feed = useMemo(() => {
     const ev = (log || []).map((e) => ({ ...e, type: /done|won|live/.test(e.what) ? "done" : /moved/.test(e.what) ? "moved" : e.what === "added" ? "added" : "updated" }));
@@ -477,7 +498,9 @@ export default function CommandCenter() {
               <option value="all">All sites</option>
               {SITES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
-            <button type="button" className={`${s.btn} ${s.btnDark}`} onClick={() => newItem(defaultKind)}><Icon n="plus" size={15} stroke={2} />Add {KINDS[defaultKind].one.toLowerCase()}</button>
+            {tab === "meeting"
+              ? <a className={`${s.btn} ${s.btnDark}`} href={`https://app.asana.com/0/${ASANA_PROJECT}/list`} target="_blank" rel="noreferrer"><Icon n="plus" size={15} stroke={2} />New task in Asana</a>
+              : <button type="button" className={`${s.btn} ${s.btnDark}`} onClick={() => newItem(defaultKind)}><Icon n="plus" size={15} stroke={2} />Add {KINDS[defaultKind].one.toLowerCase()}</button>}
           </div>
         </div>
 
@@ -555,17 +578,19 @@ export default function CommandCenter() {
                       <h2 className={s.cardTitle}>Next up</h2>
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => go("pipeline")}>All work</button>
                     </div>
-                    {upcoming.length === 0 && <div className={s.empty}>All clear</div>}
-                    {upcoming.slice(0, 9).map((x) => (
+                    {upcomingAll.length === 0 && <div className={s.empty}>All clear</div>}
+                    {upcomingAll.slice(0, 9).map((x) => (
                       <div key={x.id} className={s.row}>
-                        <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => { setSaveErr(""); setEditing(x); }}>
+                        <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => { if (x.kind === "asana") window.open(x.url, "_blank", "noopener"); else { setSaveErr(""); setEditing(x); } }}>
                           <div className={s.rowTitle}>{x.title}</div>
                           <div className={s.rowMeta}>
                             {x.due && <span className={x.due < today ? s.overdue : ""}>{x.due < today ? "Overdue, " : "Due "}{dShort(x.due)}</span>}
                             {x.site ? ` · ${siteName(x.site)}` : ""}{x.owner ? ` · ${x.owner}` : ""}
                           </div>
                         </div>
-                        {x.kind !== "outreach"
+                        {x.kind === "asana"
+                          ? <span className={`${s.pill} ${statusCls(x.status)}`}>{x.status || "Open"}</span>
+                          : x.kind !== "outreach"
                           ? <button type="button" className={s.toggle} aria-label={`Mark ${x.title} done`} onClick={() => quickStatus(x, "done")} disabled={saving} />
                           : <span className={`${s.pill} ${s.pillAmber}`}>{cap(x.status)}</span>}
                       </div>
@@ -617,9 +642,9 @@ export default function CommandCenter() {
         {tab === "search" && <SearchTab data={data} site={site} items={items} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
         {tab === "outreach" && <BoardTab kind="outreach" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
-        {tab === "pipeline" && <BoardTab kind="pipeline" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
+        {tab === "pipeline" && <BoardTab kind="pipeline" items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "meeting" && (
-          <MeetingTab data={data} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
+          <MeetingTab data={data} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
             onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onDone={(x) => quickStatus(x, "done")} saving={saving} />
         )}
 
@@ -767,17 +792,19 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove }) {
               const i = k.statuses.indexOf(st);
               const next = k.statuses[i + 1];
               return (
-                <div key={x.id} className={s.item} onClick={() => onEdit(x)}>
+                <div key={x.id} className={s.item} onClick={() => (x.source ? window.open(x.url, "_blank", "noopener") : onEdit(x))}>
                   <div className={s.itemTitle}>{x.title}</div>
                   {x.contact && <div className={s.rowMeta}>{x.contact}</div>}
                                     <div className={s.itemMeta}>
-                    {x.site && <span className={s.siteTag}>{siteName(x.site)}</span>}
+                    {x.source && <span className={`${s.siteTag} ${s.srcTag}`}>{x.source}</span>}
+                    {x.source ? x.sites?.map((y) => <span key={y} className={s.siteTag}>{siteName(y)}</span>) : x.site && <span className={s.siteTag}>{siteName(x.site)}</span>}
                     {x.area && <span className={s.siteTag}>{x.area}</span>}
+                    {x.source && x.label && st !== doneWord && <span className={s.siteTag}>{x.label}</span>}
                     {x.due && st !== doneWord && <span className={x.due < today ? s.overdue : ""}>{x.due < today ? "Overdue " : "Due "}{dShort(x.due)}</span>}
                     {x.doneAt && st === doneWord && <span>{cap(doneWord)} {dShort(x.doneAt)}</span>}
                     {x.owner && <span>· {x.owner}</span>}
                     {x.link && <a href={x.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "#5536e6", display: "inline-flex" }} aria-label="Open link"><Icon n="link" size={13} /></a>}
-                    {next && next !== "lost" && (
+                    {next && next !== "lost" && !x.source && (
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} style={{ marginLeft: "auto", padding: "4px 9px" }} onClick={(e) => { e.stopPropagation(); onMove(x, next); }}>
                         {cap(next)}<Icon n="move" size={12} />
                       </button>
@@ -797,14 +824,16 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove }) {
 }
 
 // ── Thursday meeting ────────────────────────────────────────────────────────────────────────────────
-function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
+function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
   const t = d0(today); const wd = t.getUTCDay();
   const nextThu = addDays(today, (4 - wd + 7) % 7);
   const lastThu = addDays(nextThu, -7);
   const inSite = (x) => site === "all" || !x.site || x.site === site;
-  const actions = items.filter((x) => x.kind === "meeting" && x.status === "open" && inSite(x)).sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999")));
-  const doneSince = items.filter((x) => x.doneAt && x.doneAt >= lastThu && inSite(x)).sort((a, b) => b.doneAt.localeCompare(a.doneAt));
-  const nextUp = items.filter((x) => x.kind === "pipeline" && x.status !== "done" && inSite(x)).sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999"))).slice(0, 6);
+  const asanaDone = asanaTasks.filter((t) => t.done && t.doneAt && t.doneAt.slice(0, 10) >= lastThu)
+    .map((t) => ({ id: `as_${t.id}`, kind: "asana", title: t.name, doneAt: t.doneAt.slice(0, 10), owner: t.owner, url: t.url, site: t.sites?.length === 1 ? t.sites[0] : "" }));
+  const doneSince = [...items.filter((x) => x.doneAt && x.doneAt >= lastThu && inSite(x)), ...asanaDone].sort((a, b) => b.doneAt.localeCompare(a.doneAt));
+  const nextUp = [...items.filter((x) => x.kind === "pipeline" && x.status !== "done" && inSite(x)), ...external.filter((x) => x.source === "ClickUp" && x.status !== "done")]
+    .sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999"))).slice(0, 8);
   const v = [sumOf(w7.cur, "sessions"), sumOf(w7.prev, "sessions")];
   const r = [sumOf(w7.cur, "revenue"), sumOf(w7.prev, "revenue")];
   const c = [sumOf(w7.cur, "conversions"), sumOf(w7.prev, "conversions")];
@@ -835,27 +864,16 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
         </div>
       </section>
 
-      <div className={s.grid2}>
+      <AsanaCard asana={asana} tasks={asanaTasks} site={site} today={today} lastThu={lastThu} />
+
+      <div className={s.grid2} style={{ marginTop: 14 }}>
         <section className={s.card}>
-          <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Action points</h2>
-            <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("meeting", { due: nextThu, meeting: nextThu })}><Icon n="plus" size={13} />Add</button>
-          </div>
-          {actions.length === 0 && <div className={s.empty}>Nothing open</div>}
-          {actions.map((x) => (
-            <div key={x.id} className={s.row}>
-              <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => onEdit(x)}>
-                <div className={s.rowTitle}>{x.title}</div>
-                <div className={s.rowMeta}>{x.owner || "No owner"}{x.due ? <> · <span className={x.due < today ? s.overdue : ""}>{x.due < today ? "Overdue " : "Due "}{dShort(x.due)}</span></> : ""}{x.site ? ` · ${siteName(x.site)}` : ""}</div>
-              </div>
-              <button type="button" className={s.toggle} aria-label={`Mark ${x.title} done`} onClick={() => onDone(x)} disabled={saving} />
-            </div>
-          ))}
+          {nextUp.length === 0 && <><div className={s.cardHead}><h2 className={s.cardTitle}>Up next</h2></div><div className={s.empty}>All clear</div></>}
           {nextUp.length > 0 && <>
-            <div className={s.cardHead} style={{ marginTop: 18 }}><h2 className={s.cardTitle}>Up next</h2></div>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>Up next</h2></div>
             {nextUp.map((x) => (
-              <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
-                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{cap(x.status)}{x.due ? ` · ${dShort(x.due)}` : ""}{x.site ? ` · ${siteName(x.site)}` : ""}</div></div>
+              <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => (x.source ? window.open(x.url, "_blank", "noopener") : onEdit(x))}>
+                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{x.source ? `${x.source} · ${x.label}` : cap(x.status)}{x.due ? ` · ${dShort(x.due)}` : ""}{x.site ? ` · ${siteName(x.site)}` : ""}</div></div>
                 <span className={`${s.pill} ${x.status === "in progress" ? s.pillViolet : s.pillGrey}`}>{cap(x.status)}</span>
               </div>
             ))}
@@ -869,8 +887,8 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
           </div>
           {doneSince.length === 0 && <div className={s.empty}>Nothing yet</div>}
           {doneSince.map((x) => (
-            <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
-              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{KINDS[x.kind].label}{x.site ? ` · ${siteName(x.site)}` : ""} · {dShort(x.doneAt)}</div></div>
+            <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => (x.kind === "asana" ? window.open(x.url, "_blank", "noopener") : onEdit(x))}>
+              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{x.kind === "asana" ? `Asana${x.owner ? ` · ${x.owner}` : ""}` : KINDS[x.kind].label}{x.site ? ` · ${siteName(x.site)}` : ""} · {dShort(x.doneAt)}</div></div>
               <span className={`${s.pill} ${s.pillGreen}`}><Icon n="check" size={11} stroke={2.4} /></span>
             </div>
           ))}
@@ -924,5 +942,90 @@ function MeetingTab({ data, site, items, today, w7, w30, daily, nbClicks, search
         </section>
       </div>
     </div>
+  );
+}
+
+// ── Asana: Ecom x Marketing ─────────────────────────────────────────────────────────────────────────
+function AsanaCard({ asana, tasks, site, today, lastThu }) {
+  const [view, setView] = useState("open");
+  const [person, setPerson] = useState("all");
+  const [openIds, setOpenIds] = useState({});
+  const ok = asana?.status === "ok";
+  const open = tasks.filter((t) => !t.done);
+  const late = open.filter((t) => t.due && t.due < today);
+  const doneWk = tasks.filter((t) => t.done && t.doneAt && t.doneAt.slice(0, 10) >= lastThu);
+  const who = (t) => t.owner || "Unassigned";
+  const people = [...new Set(open.map(who))].map((n) => ({
+    name: n, open: open.filter((t) => who(t) === n).length, late: late.filter((t) => who(t) === n).length,
+  })).sort((a, b) => b.open - a.open);
+  const base = view === "open" ? open : view === "late" ? late : view === "done" ? doneWk : tasks;
+  const shown = base.filter((t) => person === "all" || who(t) === person)
+    .sort((a, b) => (a.done - b.done) || String(a.due || "9999").localeCompare(String(b.due || "9999")));
+  return (
+    <section className={s.card}>
+      <div className={s.cardHead}>
+        <h2 className={s.cardTitle}>Meeting tasks</h2>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {ok && <span className={`${s.pill} ${asana.stale ? s.pillAmber : s.pillGreen}`}>{asana.stale ? "Delayed" : "Live from Asana"}</span>}
+          {asana && !ok && <span className={`${s.pill} ${s.pillRed}`}>{asana.status === "not_connected" ? "Asana not connected" : "Asana offline"}</span>}
+          <a className={`${s.btn} ${s.btnSmall}`} href={`https://app.asana.com/0/${ASANA_PROJECT}/list`} target="_blank" rel="noreferrer"><Icon n="out" size={13} />Asana</a>
+        </div>
+      </div>
+      {!asana && <div className={s.skeleton} style={{ height: 120 }} />}
+      {ok && (
+        <>
+          <div className={s.people}>
+            <button type="button" className={`${s.person} ${person === "all" ? s.personOn : ""}`} onClick={() => setPerson("all")}>
+              <span className={s.personAv}>All</span><span><span className={s.personName}>Everyone</span><br /><b>{open.length}</b> open</span>
+            </button>
+            {people.map((p) => (
+              <button key={p.name} type="button" className={`${s.person} ${person === p.name ? s.personOn : ""}`} onClick={() => setPerson(person === p.name ? "all" : p.name)}>
+                <span className={s.personAv}>{initialsOf(p.name)}</span>
+                <span><span className={s.personName}>{p.name.replace(/@.*/, "")}</span><br /><b>{p.open}</b> open{p.late ? <span className={s.overdue}> · {p.late} late</span> : null}</span>
+              </button>
+            ))}
+          </div>
+          <div className={s.seg} style={{ margin: "14px 0 6px" }}>
+            {[["open", `Open ${open.length}`], ["late", `Overdue ${late.length}`], ["done", `Done this week ${doneWk.length}`], ["all", "All"]].map(([id, l]) => <button key={id} type="button" className={view === id ? s.segOn : ""} onClick={() => setView(id)}>{l}</button>)}
+          </div>
+          {shown.length === 0 && <div className={s.empty}>Nothing here</div>}
+          {shown.slice(0, 60).map((t) => {
+            const subDone = t.subtasks.filter((x) => x.done).length;
+            const isOpen = openIds[t.id];
+            return (
+              <div key={t.id} className={s.task}>
+                <div className={s.taskMain}>
+                  <span className={`${s.check} ${t.done ? s.checkOn : ""}`}>{t.done && <Icon n="check" size={11} stroke={2.6} />}</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <a className={s.taskName} href={t.url} target="_blank" rel="noreferrer">{t.name}</a>
+                    <div className={s.itemMeta} style={{ marginTop: 6 }}>
+                      <span className={s.ownerChip}><span className={s.personAvSm}>{initialsOf(t.owner || "?")}</span>{t.owner ? t.owner.replace(/@.*/, "") : "Unassigned"}</span>
+                      {t.done ? <span>Done {dShort(t.doneAt)}</span> : t.due ? <span className={t.due < today ? s.overdue : ""}>{t.due < today ? "Overdue " : "Due "}{dShort(t.due)}</span> : null}
+                      {site === "all" && t.sites?.map((x) => <span key={x} className={s.siteTag}>{siteName(x)}</span>)}
+                      {t.priority && <span className={s.siteTag}>{t.priority}</span>}
+                    </div>
+                  </div>
+                  <span className={`${s.pill} ${statusCls(t.done ? "Done" : t.status)}`}>{t.done ? "Done" : t.status || "Open"}</span>
+                </div>
+                {t.subtaskCount > 0 && (
+                  <button type="button" className={s.subToggle} onClick={() => setOpenIds({ ...openIds, [t.id]: !isOpen })}>
+                    <span className={s.barTrack} style={{ width: 80, display: "inline-block" }}><span className={s.barFill} style={{ display: "block", width: `${t.subtasks.length ? (subDone / t.subtasks.length) * 100 : 0}%` }} /></span>
+                    {t.subtasks.length ? `${subDone} of ${t.subtasks.length} subtasks` : `${t.subtaskCount} subtasks`}
+                    <Icon n={isOpen ? "up" : "down"} size={12} />
+                  </button>
+                )}
+                {isOpen && t.subtasks.map((x) => (
+                  <div key={x.id} className={s.sub}>
+                    <span className={`${s.check} ${x.done ? s.checkOn : ""}`}>{x.done && <Icon n="check" size={10} stroke={2.6} />}</span>
+                    <a href={x.url} target="_blank" rel="noreferrer" className={s.subName} style={{ textDecoration: x.done ? "line-through" : "none" }}>{x.name}</a>
+                    <span className={s.rowMeta} style={{ marginTop: 0, whiteSpace: "nowrap" }}>{x.owner ? x.owner.replace(/@.*/, "") : ""}{x.due && !x.done ? ` · ${dShort(x.due)}` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </section>
   );
 }
