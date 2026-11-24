@@ -497,7 +497,8 @@ export default function CommandCenter() {
   const conv = [sumOf(sw30.cur, "conversions"), sumOf(sw30.prev, "conversions")];
   const shopSess = [sumOf(sw30.cur, "sessions"), sumOf(sw30.prev, "sessions")];
   const cr = [shopSess[0] ? conv[0] / shopSess[0] : null, shopSess[1] ? conv[1] / shopSess[1] : null];
-  const rows = useMemo(() => chartSeries(daily, mode, rStart, rEnd).map((x) => (lead ? { ...x, b: x.conv } : x)), [daily, mode, lead, rStart, rEnd]);
+  const chartMode = (mode === "monthly" && w30.days < 85) || (mode === "weekly" && w30.days < 21) ? (w30.days >= 21 && mode === "monthly" ? "weekly" : "daily") : mode;
+  const rows = useMemo(() => chartSeries(daily, chartMode, rStart, rEnd).map((x) => (lead ? { ...x, b: x.conv } : x)), [daily, chartMode, lead, rStart, rEnd]);
 
   const items = useMemo(() => board || [], [board]);
   const inSite = (x) => site === "all" || !x.site || x.site === site;
@@ -533,6 +534,8 @@ export default function CommandCenter() {
 
   const updatedText = loadedAt ? `Refreshed ${nzTime(loadedAt)}, live ${ago(liveAt || loadedAt, now)}` : "Connecting";
   const refreshAll = () => { load(true); };
+  // Typing a date switches to your own dates, keeping the other end where it was
+  const pickDates = (a, b) => { setPreset("custom"); setFrom(a); setTo(b); };
   const initials = person ? person.slice(0, 2).toUpperCase() : "WO";
 
   return (
@@ -571,13 +574,7 @@ export default function CommandCenter() {
             <select className={s.select} value={preset} onChange={(e) => { setPreset(e.target.value); if (e.target.value === "custom" && !from) { setFrom(rStart); setTo(rEnd); } }} aria-label="Date range">
               {PRESETS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
             </select>
-            {preset === "custom" && (
-              <span className={s.dates}>
-                <input type="date" value={from} max={yesterday} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
-                <span>to</span>
-                <input type="date" value={to} max={yesterday} onChange={(e) => setTo(e.target.value)} aria-label="To" />
-              </span>
-            )}
+            <DatePair start={rStart} end={rEnd} max={yesterday} onChange={pickDates} />
             <select className={s.select} value={site} onChange={(e) => chooseSite(e.target.value)} aria-label="Site">
               <option value="all">All sites</option>
               {SITES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -624,7 +621,7 @@ export default function CommandCenter() {
                   <div className={s.cardHead}>
                     <h2 className={s.cardTitle}>{lead ? "Traffic vs enquiries" : "Traffic vs sales"}</h2>
                     <div className={s.seg}>
-                      {["daily", "weekly", "monthly"].map((m) => <button key={m} type="button" className={mode === m ? s.segOn : ""} onClick={() => setMode(m)}>{cap(m)}</button>)}
+                      {["daily", "weekly", "monthly"].map((m) => { const off = (m === "weekly" && w30.days < 21) || (m === "monthly" && w30.days < 85); return <button key={m} type="button" className={chartMode === m ? s.segOn : ""} disabled={off} title={off ? "Pick a longer period" : undefined} style={off ? { opacity: 0.4, cursor: "not-allowed" } : undefined} onClick={() => setMode(m)}>{cap(m)}</button>; })}
                     </div>
                   </div>
                   <div className={s.cardHead} style={{ marginBottom: 6 }}>
@@ -633,9 +630,9 @@ export default function CommandCenter() {
                       <span><i style={{ background: "#5536e6" }} />{lead ? "Enquiries" : "Online sales"}</span>
                       <span><i style={{ background: "#a9adaa" }} />Previous</span>
                     </div>
-                    <Range>{rangeText}</Range>
+                    <DatePair start={rStart} end={rEnd} max={yesterday} onChange={pickDates} small />
                   </div>
-                  <TrafficChart rows={rows} mode={mode} lead={lead} />
+                  <TrafficChart rows={rows} mode={chartMode} lead={lead} />
                 </section>
 
                 <div className={s.grid2}>
@@ -1506,5 +1503,16 @@ function Freshness({ data, liveAt, todayNow, asana, clickup, meeting, now }) {
       {meeting && <span className={`${s.pill} ${s.pillViolet}`}>Meeting day: refreshing every minute</span>}
       {items.map(([label, t]) => <span key={label} className={`${s.tag} ${stale(t) ? s.tagStale : ""}`}>{label} {nzTime(t)}</span>)}
     </div>
+  );
+}
+
+// ── From and To dates, always on screen ──────────────────────────────────────────────────────────────
+function DatePair({ start, end, max, onChange, small }) {
+  return (
+    <span className={`${s.dates} ${small ? s.datesSmall : ""}`}>
+      <input type="date" value={start} max={end} onChange={(e) => e.target.value && onChange(e.target.value, end)} aria-label="From" />
+      <span>to</span>
+      <input type="date" value={end} min={start} max={max} onChange={(e) => e.target.value && onChange(start, e.target.value)} aria-label="To" />
+    </span>
   );
 }

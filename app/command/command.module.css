@@ -203,6 +203,7 @@
 .dates { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mute); }
 .dates input { font: inherit; font-size: 13px; padding: 9px 10px; border-radius: 14px; border: 1px solid rgba(255,255,255,.95); background: rgba(255,255,255,.75); color: var(--ink); }
 .sub { flex-wrap: wrap; white-space: normal; }
+.datesSmall input { padding: 5px 8px; font-size: 12px; border-radius: 10px; border-color: var(--line); }
 .modalTitle { font-size: 20px; font-weight: 400; margin: 0 0 16px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field { display: grid; gap: 6px; font-size: 12px; color: var(--ink2); min-width: 0; }
