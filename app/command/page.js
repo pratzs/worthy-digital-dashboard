@@ -885,7 +885,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
                         {x.src === "clickup" && st === "next" ? "Start" : "Done"}<Icon n={st === "next" && x.src === "clickup" ? "move" : "check"} size={12} />
                       </button>
                     )}
-                    {next && next !== "lost" && !x.source && (
+                    {next && next !== "lost" && !x.source && !(kind === "listing" && st === "live") && (
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} style={{ marginLeft: "auto", padding: "4px 9px" }} onClick={(e) => { e.stopPropagation(); onMove(x, next); }}>
                         {cap(next)}<Icon n="move" size={12} />
                       </button>
