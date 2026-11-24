@@ -7,7 +7,7 @@
  * The weekly view only ever shows one month, so this fetches exactly that month
  * and nothing more.
  */
-import { SISTER_IDS } from '@/lib/salesBasis';
+import { SISTER_IDS, NOT_FREIGHT } from '@/lib/salesBasis';
 import { cachedAuth } from '@/lib/odooAuth';
 import { loadUnitCosts, makeQtyInProductUnit } from '@/lib/odooCost';
 import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
@@ -61,7 +61,7 @@ export async function GET(request) {
       ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end],
       ['display_type', '=', 'product'], ['product_id', '!=', false], ['date', '!=', false],
       // Worthy Products never includes sales to its sister companies (docs/SALES-BASIS.md).
-      ...(cid === NORTH ? [['move_id.commercial_partner_id', 'not in', SISTER_IDS]] : []),
+      ...(cid === NORTH ? [['move_id.commercial_partner_id', 'not in', SISTER_IDS], ...NOT_FREIGHT] : []),   // freight never counted
     ];
 
     // Who sold in this month, and what each invoice is worth per day.

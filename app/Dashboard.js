@@ -1156,8 +1156,7 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent }) => {
     ["Worthy Oceania", (c) => c.s.oceania.sales, (c) => c.s.oceania.marginPct],
     ["Sister companies total", (c) => c.s.total.sales, (c) => c.s.total.marginPct, true],
     ["Worthy Products", (c) => c.wp.sales ?? 0, (c) => c.wp.margin],
-    ["Other invoiced lines", (c) => (c.wp.other ?? 0) + c.s.total.otherInvoicedLines, () => null],
-    ["All invoiced", (c) => (c.wp.sales ?? 0) + (c.wp.other ?? 0) + c.s.total.allInvoiced, (c) => {
+    ["All product sales", (c) => (c.wp.sales ?? 0) + c.s.total.sales, (c) => {
       const costed = (c.wp.costed ?? 0) + (c.s.total.costedSales ?? 0), cost = (c.wp.cost ?? 0) + (c.s.total.cost ?? 0);
       return c.wp.costed != null && costed > 0 ? Math.round(((costed - cost) / costed) * 10000) / 100 : null;
     }, true],
