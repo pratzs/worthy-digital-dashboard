@@ -2,7 +2,23 @@
 
 Management only (`/command`, section `command` in `lib/auth.js`). The API (`/api/command`) checks the role itself as well. Built for the Thursday Ecom x Marketing meeting, 24 Nov 2026.
 
-Tabs: Dashboard, Search, Outreach, Listings, Pipeline, Meeting. A site picker (all sites, worthy.nz, worthyproducts.nz, dutchrusk.co.nz) filters everything.
+Two halves:
+- **E-commerce department** (Pratham's): Dashboard, Search, Outreach, Listings, Pipeline (own items plus relevant ClickUp cards).
+- **Ecom x Marketing** tab: the Thursday meeting. Week numbers, live Asana tasks, done this week, spend and return, where visits come from.
+
+A site picker and a date range picker (7, 30, 90 days, this month, last month, 12 months, custom) drive every number and the chart. Search Console periods end 3 days ago at the latest. Clicking enquiries or conversion rate opens every key event GA4 recorded in that period: when, what (contact form, order), page, where the visitor came from, town, device. GA4 holds no names.
+
+worthy.nz is the company site, so it counts enquiries, not sales. "All sites" conversion uses the two shops only.
+
+## Changing tasks from the page
+
+Ticking a task, changing its due date, adding a note, or Start/Done on a pipeline card writes straight to Asana or ClickUp (`asanaWrite`, `clickupWrite`), then reloads from the tool. Every change goes to the activity log (`cc:log:v1`) with the person. ClickUp date-only due dates are stored at 4am NZ, matched here.
+
+## No duplicates
+
+- Asana subtasks that are also in the project show under their parent only.
+- ClickUp copies of Thursday meeting items (ids in `ASANA_TWINS`, lib/clickup.js) never show; Asana is the source of truth for meeting items.
+- Starter pipeline items were cut to the three re-indexing jobs, which live nowhere else.
 
 ## Where each number comes from
 
@@ -14,7 +30,7 @@ Tabs: Dashboard, Search, Outreach, Listings, Pipeline, Meeting. A site picker (a
 | Indexing | Search Console sitemaps | 60 min cache |
 | Visits, sales, conversions | GA4 for worthy.nz and dutchrusk.co.nz; Shopify reports for worthyproducts.nz (New Zealand visits only, Online Store sales) | 15 min cache |
 | Meeting tasks | Asana project Ecom x Marketing (`1219139073710791`): owner, Status field, due, subtasks | every 30 s (20 s server memo) |
-| Pipeline | the page's own board plus Asana tasks plus ClickUp cards | every 30 s |
+| Pipeline | the page's own board plus ClickUp cards | every 30 s |
 | Outreach, listings, authority, spend | typed in on the page, stored in Upstash (`cc:board:v1`, log `cc:log:v1`) | instant |
 
 A failed Google or Shopify fetch is never cached. The last good answer per source and site is kept in Upstash (`cc:last:*`) and shown if a source is down. ShopifyQL retries on THROTTLED.
