@@ -2,6 +2,7 @@
  * Worthy Command Center data (lib/command.js). Management only: the middleware lets only the management department
  * reach this path, and the route checks the role again.
  *   GET            everything the page shows (?fresh=1 skips the 15 to 60 minute caches)
+ *   GET ?search=1&start=&end=        Search Console for any period (date picker)
  *   GET ?events=worthy&start=&end=   each key event (enquiry) on that site: time, event, page, source, town, device
  *   GET ?live=1    visitors right now, the Asana meeting tasks and the ClickUp cards, for the page's 30-second refresh
  *   POST           { action: 'save' | 'delete', item }  change the typed-in board
@@ -9,7 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { setOidcToken } from '@/lib/ga4';
-import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail } from '@/lib/command';
+import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail, searchForRange } from '@/lib/command';
 import { asanaSafe, asanaWrite } from '@/lib/asana';
 import { clickupSafe, clickupWrite } from '@/lib/clickup';
 
@@ -22,6 +23,11 @@ export async function GET(request) {
   if (request.headers.get('x-worthy-role') !== 'mgmt') return denied();
   setOidcToken(request.headers.get('x-vercel-oidc-token'));
   const q = new URL(request.url).searchParams;
+  if (q.get('search') === '1') {
+    const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+    if (!ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    return NextResponse.json({ search: await searchForRange(q.get('start'), q.get('end')) });
+  }
   if (q.get('events')) {
     const site = q.get('events');
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');

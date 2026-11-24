@@ -173,26 +173,48 @@ function windowed(daily, end, days) {
   const a = addDays(end, -(days - 1)), pa = addDays(a, -days), pb = addDays(a, -1);
   return { cur: daily.filter((r) => r.date >= a && r.date <= end), prev: daily.filter((r) => r.date >= pa && r.date <= pb), start: a };
 }
+/** The chosen period and the same number of days straight before it. */
+function rangeWin(daily, start, end) {
+  const days = Math.round((d0(end) - d0(start)) / 86400000) + 1;
+  const pe = addDays(start, -1), ps = addDays(pe, -(days - 1));
+  return { cur: daily.filter((r) => r.date >= start && r.date <= end), prev: daily.filter((r) => r.date >= ps && r.date <= pe), days, prevStart: ps, prevEnd: pe };
+}
+const PRESETS = [["7d", "Last 7 days"], ["30d", "Last 30 days"], ["90d", "Last 90 days"], ["mtd", "This month"], ["lm", "Last month"], ["12m", "Last 12 months"], ["custom", "Custom dates"]];
+function rangeFor(preset, from, to, yesterday) {
+  const first = (iso) => `${iso.slice(0, 7)}-01`;
+  if (preset === "7d") return [addDays(yesterday, -6), yesterday];
+  if (preset === "90d") return [addDays(yesterday, -89), yesterday];
+  if (preset === "12m") return [addDays(yesterday, -364), yesterday];
+  if (preset === "mtd") return [first(yesterday), yesterday];
+  if (preset === "lm") { const e = addDays(first(yesterday), -1); return [first(e), e]; }
+  if (preset === "custom" && from && to) { const a = from <= to ? from : to, b = from <= to ? to : from; return [a, b > yesterday ? yesterday : b]; }
+  return [addDays(yesterday, -29), yesterday];
+}
 const mondayOf = (iso) => { const d = d0(iso); const wd = (d.getUTCDay() + 6) % 7; return addDays(iso, -wd); };
 
-function chartSeries(daily, mode) {
-  if (!daily.length) return [];
+function chartSeries(allDaily, mode, start, end) {
+  if (!allDaily.length) return [];
+  const win = rangeWin(allDaily, start, end);
+  const daily = win.cur, prevDaily = win.prev;
   if (mode === "daily") {
-    const last = daily.slice(-30), before = daily.slice(-60, -30);
+    const last = daily, before = prevDaily;
     return last.map((r, i) => ({ key: r.date, label: dShort(r.date), long: `${DAYS_LONG[d0(r.date).getUTCDay()]} ${dLong(r.date)}`, weekend: [0, 6].includes(d0(r.date).getUTCDay()), a: r.sessions, b: r.revenue, c: before[i]?.sessions ?? null, conv: r.conversions }));
   }
   const keyOf = mode === "weekly" ? (iso) => mondayOf(iso) : (iso) => iso.slice(0, 7);
-  const g = new Map();
-  daily.forEach((r) => { const k = keyOf(r.date); const o = g.get(k) || { key: k, sessions: 0, revenue: 0, conversions: 0, days: 0 }; o.sessions += r.sessions; o.revenue += r.revenue; o.conversions += r.conversions; o.days += 1; g.set(k, o); });
-  let rows = [...g.values()].sort((a, b) => a.key.localeCompare(b.key));
-  if (mode === "weekly") rows = rows.filter((r) => r.days === 7);   // a part week would look like a drop
-  const n = mode === "weekly" ? 26 : 12;
-  const last = rows.slice(-n), before = rows.slice(-2 * n, -n);
+  const group = (list) => {
+    const g = new Map();
+    list.forEach((r) => { const k = keyOf(r.date); const o = g.get(k) || { key: k, sessions: 0, revenue: 0, conversions: 0, days: 0 }; o.sessions += r.sessions; o.revenue += r.revenue; o.conversions += r.conversions; o.days += 1; g.set(k, o); });
+    let out = [...g.values()].sort((a, b) => a.key.localeCompare(b.key));
+    if (mode === "weekly" && out.some((r) => r.days === 7)) out = out.filter((r) => r.days === 7);   // a part week would look like a drop
+    return out;
+  };
+  const rows = group(daily), before = group(prevDaily);
+  const last = rows;
   return last.map((r, i) => ({
     key: r.key,
     label: mode === "weekly" ? dShort(r.key) : monthLabel(r.key),
-    long: mode === "weekly" ? `Week of ${dLong(r.key)}${r.days < 7 ? " (so far)" : ""}` : `${MONTHS_LONG[Number(r.key.slice(5)) - 1]} ${r.key.slice(0, 4)}${r === rows[rows.length - 1] ? " (so far)" : ""}`,
-    a: r.sessions, b: r.revenue, c: before.length === last.length ? before[i]?.sessions ?? null : null, conv: r.conversions,
+    long: mode === "weekly" ? `Week of ${dLong(r.key)}${r.days < 7 ? " (part)" : ""}` : `${MONTHS_LONG[Number(r.key.slice(5)) - 1]} ${r.key.slice(0, 4)}${r.days < new Date(Date.UTC(Number(r.key.slice(0, 4)), Number(r.key.slice(5)), 0)).getUTCDate() ? " (part)" : ""}`,
+    a: r.sessions, b: r.revenue, c: before[i]?.sessions ?? null, conv: r.conversions,
   }));
 }
 
@@ -223,8 +245,8 @@ function TrafficChart({ rows, mode, lead }) {
   useEffect(() => {
     const el = wrap.current; if (!el) return;
     const ro = new ResizeObserver(() => { setW(el.clientWidth || 720); setNarrow(window.innerWidth < 760); });
-    ro.observe(el); return () => ro.disconnect();
-  }, []);
+    ro.observe(el);   // fires once straight away with the real width return () => ro.disconnect();
+  }, [rows.length > 0]);   // eslint-disable-line react-hooks/exhaustive-deps
   const H = narrow ? 230 : 300, padL = 40, padR = 48, padT = 14, padB = 28;
   const iw = Math.max(10, w - padL - padR), ih = H - padT - padB;
   const maxA = niceMax(Math.max(1, ...rows.map((r) => Math.max(r.a || 0, r.c || 0))));
@@ -355,6 +377,11 @@ export default function CommandCenter() {
   const [saveErr, setSaveErr] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [liveAt, setLiveAt] = useState(null);
+  const [preset, setPreset] = useState("30d");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [rangeSearch, setRangeSearch] = useState(null);
+  const [events, setEvents] = useState(null);
 
   useEffect(() => {
     const fromHash = () => { const h = window.location.hash.slice(1); if (TABS.some((t) => t.id === h)) setTab(h); };
@@ -427,10 +454,27 @@ export default function CommandCenter() {
   const lead = site === "worthy";
   const daily = useMemo(() => combineTraffic(data?.traffic, site), [data, site]);
   const shopDaily = useMemo(() => (site === "all" ? combineTraffic(data?.traffic, site, SHOPS) : daily), [data, site, daily]);
-  const sw30 = useMemo(() => windowed(shopDaily, yesterday, 30), [shopDaily, yesterday]);
-  const w30 = useMemo(() => windowed(daily, yesterday, 30), [daily, yesterday]);
+  const [rStart, rEnd] = rangeFor(preset, from, to, yesterday);
+  const sw30 = useMemo(() => rangeWin(shopDaily, rStart, rEnd), [shopDaily, rStart, rEnd]);
+  const w30 = useMemo(() => rangeWin(daily, rStart, rEnd), [daily, rStart, rEnd]);
+  const rangeText = `${dShort(rStart)}${rStart.slice(0, 4) !== rEnd.slice(0, 4) ? ` ${rStart.slice(0, 4)}` : ""} to ${dShort(rEnd)} ${rEnd.slice(0, 4)}`;
+  // Search Console runs about 3 days behind, so its period ends 3 days ago at the latest
+  const gscEnd = rEnd > addDays(today, -3) ? addDays(today, -3) : rEnd;
+  const gscStart = rStart > gscEnd ? gscEnd : rStart;
+  useEffect(() => {
+    if (preset === "30d") { setRangeSearch(null); return; }
+    let stop = false;
+    fetch(`/api/command?search=1&start=${gscStart}&end=${gscEnd}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (!stop && j.search) setRangeSearch(j.search); }).catch(() => {});
+    return () => { stop = true; };
+  }, [preset, gscStart, gscEnd]);
+  const openEvents = async (siteId, a = rStart, b = rEnd) => {
+    const ids = siteId === "all" ? SITES.map((x) => x.id) : [siteId];
+    setEvents({ loading: true, site: siteId, start: a, end: b, rows: [] });
+    const parts = await Promise.all(ids.map((id) => fetch(`/api/command?events=${id}&start=${a}&end=${b}`, { cache: "no-store" }).then((r) => r.json()).then((j) => (j.rows || []).map((x) => ({ ...x, site: id }))).catch(() => [])));
+    setEvents({ loading: false, site: siteId, start: a, end: b, rows: parts.flat().sort((a, b) => b.at.localeCompare(a.at)) });
+  };
   const w7 = useMemo(() => windowed(daily, yesterday, 7), [daily, yesterday]);
-  const searchSites = pick(data?.search, site);
+  const searchSites = pick(rangeSearch || data?.search, site);
   const liveSites = (live || []).filter((x) => x.status === "ok" && (site === "all" || x.id === site));
   const liveNow = liveSites.length ? liveSites.reduce((a, x) => a + x.now, 0) : null;
   const liveMinutes = new Array(30).fill(0).map((_, i) => liveSites.reduce((a, x) => a + (x.byMinute?.[i] || 0), 0));
@@ -439,14 +483,14 @@ export default function CommandCenter() {
   const searchRange = searchSites[0]?.range;
   const nbDaily = useMemo(() => {
     const m = new Map(); searchSites.forEach((x) => (x.daily || []).forEach((r) => m.set(r.date, (m.get(r.date) || 0) + (r.nbClicks || 0))));
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-28).map((e) => e[1]);
-  }, [searchSites]);
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).filter((e) => e[0] >= gscStart && e[0] <= gscEnd).map((e) => e[1]);
+  }, [searchSites, gscStart, gscEnd]);
   const rev = [sumOf(w30.cur, "revenue"), sumOf(w30.prev, "revenue")];
   const sess = [sumOf(w30.cur, "sessions"), sumOf(w30.prev, "sessions")];
   const conv = [sumOf(sw30.cur, "conversions"), sumOf(sw30.prev, "conversions")];
   const shopSess = [sumOf(sw30.cur, "sessions"), sumOf(sw30.prev, "sessions")];
   const cr = [shopSess[0] ? conv[0] / shopSess[0] : null, shopSess[1] ? conv[1] / shopSess[1] : null];
-  const rows = useMemo(() => chartSeries(daily, mode).map((x) => (lead ? { ...x, b: x.conv } : x)), [daily, mode, lead]);
+  const rows = useMemo(() => chartSeries(daily, mode, rStart, rEnd).map((x) => (lead ? { ...x, b: x.conv } : x)), [daily, mode, lead, rStart, rEnd]);
 
   const items = useMemo(() => board || [], [board]);
   const inSite = (x) => site === "all" || !x.site || x.site === site;
@@ -510,10 +554,20 @@ export default function CommandCenter() {
         <div className={s.head}>
           <div>
             <h1 className={s.title}>{tab === "dashboard" ? "Command Center" : TABS.find((t) => t.id === tab).label === "Meeting" ? "Thursday meeting" : TABS.find((t) => t.id === tab).label}</h1>
-            <div className={s.sub}><span className={s.liveDot} />{updatedText}<span>·</span><span>{siteName(site)}</span></div>
+            <div className={s.sub}><span className={s.liveDot} />{updatedText}<span>·</span><span>{siteName(site)}</span><span>·</span><span>{rangeText}</span></div>
           </div>
           <div className={s.actions}>
             <button type="button" className={s.btn} onClick={() => load(true)} disabled={loading}><Icon n="refresh" size={15} className={loading ? s.spin : ""} />Refresh</button>
+            <select className={s.select} value={preset} onChange={(e) => { setPreset(e.target.value); if (e.target.value === "custom" && !from) { setFrom(rStart); setTo(rEnd); } }} aria-label="Date range">
+              {PRESETS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
+            </select>
+            {preset === "custom" && (
+              <span className={s.dates}>
+                <input type="date" value={from} max={yesterday} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
+                <span>to</span>
+                <input type="date" value={to} max={yesterday} onChange={(e) => setTo(e.target.value)} aria-label="To" />
+              </span>
+            )}
             <select className={s.select} value={site} onChange={(e) => chooseSite(e.target.value)} aria-label="Site">
               <option value="all">All sites</option>
               {SITES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -540,12 +594,12 @@ export default function CommandCenter() {
                 <div className={s.kpiLabel}>Non-branded search clicks {searchSites.length > 0 && <Delta now={nbClicks[0]} before={nbClicks[1]} />}</div>
                 <Spark values={nbDaily.length ? nbDaily : new Array(28).fill(0)} hotLast={7} />
               </div>
-              <div className={s.kpi}>
+              <div className={`${s.kpi} ${lead ? s.kpiClick : ""}`} onClick={lead ? () => openEvents(site) : undefined} role={lead ? "button" : undefined} tabIndex={lead ? 0 : undefined}>
                 <div className={s.kpiTop}><div className={s.kpiNum}>{data ? (lead ? n0(conv[0]) : moneyShort(rev[0])) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n={lead ? "mail" : "cart"} size={15} /></div></div>
                 <div className={s.kpiLabel}>{lead ? "Enquiries" : "Online sales"} {lead ? <Delta now={conv[0]} before={conv[1]} /> : <Delta now={rev[0]} before={rev[1]} />}</div>
                 <Spark values={w30.cur.map((r) => (lead ? r.conversions : r.revenue))} hotLast={7} />
               </div>
-              <div className={s.kpi}>
+              <div className={`${s.kpi} ${s.kpiClick}`} onClick={() => openEvents(site)} role="button" tabIndex={0}>
                 <div className={s.kpiTop}><div className={s.kpiNum}>{cr[0] === null ? "-" : (cr[0] * 100).toFixed(2)}<small>%</small></div><div className={s.chip}><Icon n="target" size={15} /></div></div>
                 <div className={s.kpiLabel}>{lead ? "Enquiry rate" : "Conversion rate"} <Delta now={cr[0]} before={cr[1]} points /></div>
                 <Spark values={w30.cur.map((r) => r.conversions)} hotLast={7} />
@@ -567,7 +621,7 @@ export default function CommandCenter() {
                       <span><i style={{ background: "#5536e6" }} />{lead ? "Enquiries" : "Online sales"}</span>
                       <span><i style={{ background: "#a9adaa" }} />Previous</span>
                     </div>
-                    {rows.length > 0 && <Range>{`${rows[0].label} to ${rows[rows.length - 1].label}`}</Range>}
+                    <Range>{rangeText}</Range>
                   </div>
                   <TrafficChart rows={rows} mode={mode} lead={lead} />
                 </section>
@@ -664,12 +718,13 @@ export default function CommandCenter() {
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "meeting" && (
-          <MeetingTab data={data} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
+          <MeetingTab data={data} onEvents={openEvents} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
             onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onDone={(x) => quickStatus(x, "done")} saving={saving} />
         )}
 
       </div>
 
+      {events && <EventsModal ev={events} onClose={() => setEvents(null)} />}
       {editing && <Editor key={editing.id || "new"} item={editing} busy={saving} error={saveErr} onClose={() => setEditing(null)} onSave={(f) => save(f)} onDelete={(f) => save(f, "delete")} />}
     </div>
   );
@@ -850,7 +905,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
 }
 
 // ── Thursday meeting ────────────────────────────────────────────────────────────────────────────────
-function MeetingTab({ data, onExt, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
+function MeetingTab({ data, onEvents, onExt, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
   const t = d0(today); const wd = t.getUTCDay();
   const nextThu = addDays(today, (4 - wd + 7) % 7);
   const lastThu = addDays(nextThu, -7);
@@ -890,9 +945,9 @@ function MeetingTab({ data, onExt, asana, asanaTasks, external, site, items, tod
         <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(v[0])}</div><div className={s.statLabel}>Visits <Delta now={v[0]} before={v[1]} /></div></div>
           {!lead && <div className={s.stat}><div className={s.statNum}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
-          <div className={s.stat}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
+          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, addDays(today, -7), addDays(today, -1))}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
-          {site === "all" && <div className={s.stat}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
+          {site === "all" && <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents("worthy", addDays(today, -7), addDays(today, -1))}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
           <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>Live now</div></div>
         </div>
@@ -1062,7 +1117,7 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
                   </button>
                 )}
                 {isOpen && t.subtasks.map((x) => (
-                  <div key={x.id} className={s.sub}>
+                  <div key={x.id} className={s.subRow}>
                     <button type="button" className={`${s.check} ${x.done ? s.checkOn : ""}`} disabled={saving} aria-label={x.done ? `Reopen ${x.name}` : `Mark ${x.name} done`} onClick={() => onExt("asana", x.id, x.done ? "reopen" : "done", null, x.name)}>{x.done && <Icon n="check" size={10} stroke={2.6} />}</button>
                     <a href={x.url} target="_blank" rel="noreferrer" className={s.subName} style={{ textDecoration: x.done ? "line-through" : "none" }}>{x.name}</a>
                     <span className={s.rowMeta} style={{ marginTop: 0, whiteSpace: "nowrap" }}>{x.owner ? x.owner.replace(/@.*/, "") : ""}{x.due && !x.done ? ` · ${dShort(x.due)}` : ""}</span>
@@ -1074,5 +1129,54 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
         </>
       )}
     </section>
+  );
+}
+
+// ── who converted: every enquiry or order GA4 recorded ───────────────────────────────────────────────
+const EVENT_LABEL = { contact: "Contact form", purchase: "Order", generate_lead: "Enquiry", form_submit: "Form", shop_click: "Shop click", sign_up: "Sign-up", phone_click: "Phone call", email_click: "Email click" };
+function EventsModal({ ev, onClose }) {
+  const [kind, setKind] = useState("all");
+  const kinds = [...new Set(ev.rows.map((r) => r.event))];
+  const rows = ev.rows.filter((r) => kind === "all" || r.event === kind);
+  const when = (at) => { const d = d0(at.slice(0, 10)); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${at.slice(11, 16)}`; };
+  const pages = Object.entries(rows.reduce((m, r) => ({ ...m, [r.page]: (m[r.page] || 0) + r.count }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return (
+    <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`${s.modal} ${s.modalWide} ${s.fade}`}>
+        <div className={s.cardHead}>
+          <h3 className={s.modalTitle} style={{ margin: 0 }}>{ev.site === "worthy" ? "Enquiries" : "Conversions"} · {siteName(ev.site)}</h3>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Range>{`${dShort(ev.start)} to ${dLong(ev.end)}`}</Range><button type="button" className={s.iconBtn} onClick={onClose} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="plus" size={16} className={s.rot45} /></button></div>
+        </div>
+        {ev.loading && <div className={s.skeleton} style={{ height: 160 }} />}
+        {!ev.loading && (
+          <>
+            <div className={s.statLine} style={{ marginBottom: 14 }}>
+              <div className={s.stat}><div className={s.statNum}>{n0(rows.reduce((a, r) => a + r.count, 0))}</div><div className={s.statLabel}>Total</div></div>
+              {pages.map(([pg, n]) => <div key={pg} className={s.stat}><div className={s.statNum}>{n}</div><div className={s.statLabel}>{pg}</div></div>)}
+            </div>
+            {kinds.length > 1 && <div className={s.seg} style={{ marginBottom: 10 }}>{[["all", "All"], ...kinds.map((k) => [k, EVENT_LABEL[k] || cap(k.replace(/_/g, " "))])].map(([id, l]) => <button key={id} type="button" className={kind === id ? s.segOn : ""} onClick={() => setKind(id)}>{l}</button>)}</div>}
+            {rows.length === 0 && <div className={s.empty}>None in this period</div>}
+            {rows.length > 0 && (
+              <div className={s.tableWrap} style={{ maxHeight: "55vh", overflowY: "auto" }}>
+                <table className={s.table}>
+                  <thead><tr><th>When</th><th>What</th>{ev.site === "all" && <th>Site</th>}<th>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th></tr></thead>
+                  <tbody>{rows.map((r, i) => (
+                    <tr key={i}>
+                      <td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td>
+                      <td>{EVENT_LABEL[r.event] || cap(r.event.replace(/_/g, " "))}{r.count > 1 ? ` x${r.count}` : ""}</td>
+                      {ev.site === "all" && <td><span className={s.siteTag}>{siteName(r.site)}</span></td>}
+                      <td style={{ overflowWrap: "anywhere" }}>{r.page}</td>
+                      <td className={s.hideSm}>{r.source}</td>
+                      <td className={s.hideSm}>{r.city === "(not set)" ? "-" : r.city}</td>
+                      <td className={s.hideSm}>{cap(r.device)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
