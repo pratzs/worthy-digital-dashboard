@@ -1333,7 +1333,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
         <div className={s.stack}>
           {gaiPages.length > 0 && (
             <section className={s.card}>
-              <div className={s.cardHead}><h2 className={s.cardTitle}>Pages Google's AI shows</h2><Range>{`${dShort(gai[0].start)} to ${dShort(gai[0].end)}`}</Range></div>
+              <div className={s.cardHead}><h2 className={s.cardTitle}>Pages Google&rsquo;s AI shows</h2><Range>{`${dShort(gai[0].start)} to ${dShort(gai[0].end)}`}</Range></div>
               {gaiPages.map((p) => (
                 <div key={p.url} className={s.row}>
                   <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.url.replace(/^https?:\/\/(www\.)?/, "")}</div><div className={s.rowMeta}>{siteName(p.site)}</div></div>
