@@ -108,15 +108,19 @@ export async function GET(request) {
          today's standard cost only where nothing was booked. Same rule as the month figures and the Sunday email. */
       const booked = new Map();
       if (ON_BASIS(cid)) {
-        const rows = await exec('account.move.line', 'read_group',
-          [[['move_id.company_id', '=', cid], ['move_id.move_type', 'in', ['out_invoice', 'out_refund']], ['move_id.state', '=', 'posted'],
+        const cogsSide = (type) => exec('account.move.line', 'read_group',
+          [[['move_id.company_id', '=', cid], ['move_id.move_type', '=', type], ['move_id.state', '=', 'posted'],
             ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end], ['move_id.commercial_partner_id', 'not in', sisterIdsOf(cid)],
             ['move_id.invoice_user_id', 'in', ids], ['display_type', '=', 'cogs'], ['account_id.code', '=like', '7%'],
             ['product_id', '!=', false], ['date', '!=', false], ['product_id', 'not in', [28085, 28084, 6691, 7503]]],   // Oceania variants Odoo cannot name
-           ['balance:sum'], ['product_id', 'date:day']], { lazy: false });
+           ['balance:sum', 'quantity:sum'], ['product_id', 'date:day']], { lazy: false }).then((rs) => rs.map((r) => ({ ...r, _type: type })));
+        const rows = [...await cogsSide('out_invoice'), ...await cogsSide('out_refund')];
         for (const r of rows) {
           const d = dayOf(r.__range?.['date:day']?.from); const pid = r.product_id && r.product_id[0]; if (!d || !pid) continue;
-          booked.set(`${pid}|${d}`, (booked.get(`${pid}|${d}`) || 0) + (Number(r.balance) || 0));
+          const sign = r._type === 'out_refund' ? -1 : 1;
+          const cur = booked.get(`${pid}|${d}`) || { cost: 0, qty: 0 };
+          cur.cost += Number(r.balance) || 0; cur.qty += sign * (Number(r.quantity) || 0);
+          booked.set(`${pid}|${d}`, cur);
         }
       }
       const agg = new Map();   // product|day -> { week, rev, std, unit }
@@ -127,16 +131,17 @@ export async function GET(request) {
         const k = `${name}|${weekOf(d)}`;
         // balance is in company currency and already signed (a credit note is negative once negated)
         if (financeBasis) revenue.set(k, (revenue.get(k) || 0) + toCents(-(Number(r.balance) || 0)));
-        const a = agg.get(`${pid}|${d}`) || { k, rev: 0, std: 0, unit };
-        a.rev += toCents(-(Number(r.balance) || 0)); a.std += toCents(qtyOf(r) * unit) * r._sign;
+        const a = agg.get(`${pid}|${d}`) || { k, rev: 0, std: 0, qty: 0, unit };
+        a.rev += toCents(-(Number(r.balance) || 0)); a.std += toCents(qtyOf(r) * unit) * r._sign; a.qty += qtyOf(r) * r._sign;
         agg.set(`${pid}|${d}`, a);
       }
       for (const [pk, a] of agg) {
         const b = booked.get(pk);
-        cost.set(a.k, (cost.get(a.k) || 0) + (b !== undefined ? toCents(b) : a.std));
+        const unbookedQty = b !== undefined ? a.qty - b.qty : 0;
+        cost.set(a.k, (cost.get(a.k) || 0) + (b !== undefined ? toCents(b.cost) + (Math.abs(unbookedQty) > 1e-6 ? toCents(unbookedQty * a.unit) : 0) : a.std));
         /* Only a product with a real cost can back its own revenue. Freight and service lines sell for real money
            at cost zero, and counting them as costed is what turns a week into a 100% margin. */
-        if (b !== undefined ? b !== 0 : a.unit > 0) costedRev.set(a.k, (costedRev.get(a.k) || 0) + a.rev);
+        if (b !== undefined ? (b.cost !== 0 || a.unit > 0) : a.unit > 0) costedRev.set(a.k, (costedRev.get(a.k) || 0) + a.rev);
       }
     };
     for (let i = 0; i < entries.length; i += 5) {
