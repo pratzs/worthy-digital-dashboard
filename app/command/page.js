@@ -718,7 +718,7 @@ export default function CommandCenter() {
           </div>
         )}
 
-        {tab === "search" && <SearchTab data={data} site={site} items={items} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
+        {tab === "search" && <SearchTab data={rangeSearch ? { ...data, search: rangeSearch } : data} site={site} items={items} start={rStart} end={rEnd} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
         {tab === "outreach" && <BoardTab kind="outreach" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
@@ -736,7 +736,19 @@ export default function CommandCenter() {
 }
 
 // ── Search tab ──────────────────────────────────────────────────────────────────────────────────────
-function SearchTab({ data, site, items, onEdit, onAdd }) {
+function SearchTab(props) {
+  const [mode, setMode] = useState("google");
+  return (
+    <>
+      <div className={s.seg} style={{ marginBottom: 14 }}>
+        {[["google", "Google"], ["ai", "AI search"], ["shopping", "Google Shopping"]].map(([id, l]) => <button key={id} type="button" className={mode === id ? s.segOn : ""} onClick={() => setMode(id)}>{l}</button>)}
+      </div>
+      {mode === "google" ? <GoogleSearch {...props} /> : mode === "ai" ? <AiSearch {...props} /> : <ShoppingSearch {...props} />}
+    </>
+  );
+}
+
+function GoogleSearch({ data, site, items, onEdit, onAdd }) {
   const [band, setBand] = useState("all");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState({ k: "impressions", dir: -1 });
@@ -1168,6 +1180,268 @@ function EventsModal({ ev, onClose }) {
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── AI search: how each AI assistant shows the sites ────────────────────────────────────────────────
+const AI_ENGINES = [["claude", "Claude"], ["chatgpt", "ChatGPT"], ["gemini", "Gemini"], ["perplexity", "Perplexity"], ["copilot", "Copilot"]];
+const engCell = (r) => {
+  if (!r || r.status === "no_key") return { cls: s.pillGrey, t: "Add key" };
+  if (r.status === "error") return { cls: s.pillGrey, t: "Failed" };
+  if (r.status === "refused") return { cls: s.pillGrey, t: "No answer" };
+  if (r.mentioned && r.cited) return { cls: s.pillGreen, t: "Named, linked" };
+  if (r.mentioned) return { cls: s.pillAmber, t: "Named" };
+  if (r.cited) return { cls: s.pillAmber, t: "Linked" };
+  return { cls: s.pillRed, t: "Not shown" };
+};
+
+function AiSearch({ site, start, end, onAdd, data }) {
+  const [ai, setAi] = useState(null);
+  const [shop, setShop] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [err, setErr] = useState("");
+  const [open, setOpen] = useState(null);
+  const [now] = useState(() => Date.now());
+  const check = useCallback(async (force) => {
+    setChecking(true); setErr("");
+    try {
+      const r = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ai-check", force }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Check failed");
+      setAi((x) => ({ ...(x || {}), latest: j.latest, history: j.history }));
+    } catch (e) { setErr(String(e.message || e)); }
+    finally { setChecking(false); }
+  }, []);
+  useEffect(() => {
+    let stop = false;
+    fetch(`/api/command?ai=1&start=${start}&end=${end}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      if (stop) return;
+      setAi(j);
+      if (!j.latest?.at || now - Date.parse(j.latest.at) > 24 * 3600000) check(false);   // ask again when over a day old
+    }).catch((e) => setErr(String(e.message || e)));
+    fetch(`/api/command?shopping=1&start=${start}&end=${end}&gscStart=${start}&gscEnd=${end}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (!stop) setShop(j); }).catch(() => {});
+    return () => { stop = true; };
+  }, [start, end, check, now]);
+
+  const inSite = (x) => site === "all" || x.id === site || x.site === site;
+  const refs = (ai?.referrals || []).filter((x) => x.status === "ok" && inSite(x));
+  const visitsBy = {};
+  refs.forEach((x) => x.assistants.forEach((a) => { const o = visitsBy[a.name] || { sessions: 0, conversions: 0 }; o.sessions += a.sessions; o.conversions += a.conversions; visitsBy[a.name] = o; }));
+  const pages = refs.flatMap((x) => x.pages.map((p) => ({ ...p, site: x.id }))).sort((a, b) => b.sessions - a.sessions).slice(0, 12);
+  const results = (ai?.latest?.results || []).filter((x) => site === "all" || x.site === site);
+  const chatgptChannel = (shop?.channels?.channels || []).filter((c) => /chatgpt|openai/i.test(c.name));
+  const cgOrders = chatgptChannel.reduce((a, c) => a + c.orders, 0), cgSales = chatgptChannel.reduce((a, c) => a + c.sales, 0);
+  const showChannel = site === "all" || site === "worthyproducts";
+
+  // One card per assistant: answers that show us, visits it sent, what they did
+  const engines = AI_ENGINES.map(([id, name]) => {
+    const rs = results.map((x) => x.engines?.[id]).filter(Boolean);
+    const ok = rs.filter((r) => r.status === "ok");
+    const v = visitsBy[name] || { sessions: 0, conversions: 0 };
+    return { id, name, asked: ok.length, named: ok.filter((r) => r.mentioned).length, linked: ok.filter((r) => r.cited).length, connected: id !== "copilot" && rs.some((r) => r.status !== "no_key"), visits: v.sessions, conversions: v.conversions };
+  });
+
+  const questions = pick(data?.search, site).flatMap((x) => x.queries.map((q) => ({ ...q, site: x.id })))
+    .filter((q) => /^(how|what|where|who|which|why|when|best|can|is|are|does|do)\b|\?/i.test(q.query)).sort((a, b) => b.impressions - a.impressions).slice(0, 10);
+
+  // What to work on, worked out from the above
+  const actions = [];
+  results.forEach((x) => {
+    const missing = AI_ENGINES.filter(([id]) => x.engines?.[id]?.status === "ok" && !x.engines[id].mentioned && !x.engines[id].cited).map(([, n]) => n);
+    if (missing.length) {
+      const others = [...new Set(AI_ENGINES.flatMap(([id]) => x.engines?.[id]?.others || []))].slice(0, 3);
+      actions.push({ key: `nm-${x.id}`, site: x.site, title: `Not shown by ${missing.join(", ")} for "${x.q}"`, detail: `${others.length ? `They point to ${others.join(", ")}. ` : ""}Answer this question clearly on ${siteName(x.site)} (a page or FAQ).` });
+    }
+    if (AI_ENGINES.some(([id]) => x.engines?.[id]?.staleNelson)) actions.push({ key: `ne-${x.id}`, site: x.site, title: "AI still says Dutch Rusk is in Nelson", detail: `For "${x.q}". The old Nelson listings feed this; see Listings.` });
+  });
+  pages.filter((p) => p.sessions >= 5 && p.conversions === 0).slice(0, 4).forEach((p) => actions.push({ key: `lp-${p.site}-${p.page}`, site: p.site, title: `${p.sessions} visits from ${p.assistant} to ${p.page}, nothing came of it`, detail: "Make the next step obvious on that page (trade sign-up, enquiry or shop button)." }));
+  questions.filter((q) => q.position > 10 && q.impressions >= 20).slice(0, 3).forEach((q) => actions.push({ key: `gq-${q.site}-${q.query}`, site: q.site, title: `People ask "${q.query}" and we sit at ${n1(q.position)}`, detail: `${n0(q.impressions)} searches. Answer it plainly on ${siteName(q.site)}; AI assistants read the same pages.` }));
+
+  const doneAt = ai?.latest?.at;
+  return (
+    <div className={s.fade}>
+      <div className={s.engineGrid}>
+        {engines.map((e) => (
+          <section key={e.id} className={s.card}>
+            <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>{e.name}</h2>
+              {e.id === "copilot" ? <span className={`${s.pill} ${s.pillGrey}`}>Visits only</span> : e.connected ? <span className={`${s.pill} ${s.pillGreen}`}>Asked</span> : <span className={`${s.pill} ${s.pillGrey}`}>Add key</span>}
+            </div>
+            <div className={s.statLine} style={{ gap: 14 }}>
+              <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.named}/${e.asked}` : "-"}</div><div className={s.statLabel}>Answers name us</div></div>
+              <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.linked}/${e.asked}` : "-"}</div><div className={s.statLabel}>Link our site</div></div>
+              <div className={s.stat}><div className={s.statNum}>{ai ? n0(e.visits) : "-"}</div><div className={s.statLabel}>Visits{e.conversions ? `, ${n0(e.conversions)} converted` : ""}</div></div>
+              {e.id === "chatgpt" && showChannel && <div className={s.stat}><div className={s.statNum}>{shop ? n0(cgOrders) : "-"}</div><div className={s.statLabel}>Shopify ChatGPT orders{cgSales ? `, ${money(cgSales)}` : ""}</div></div>}
+            </div>
+          </section>
+        ))}
+      </div>
+      {err && <div className={s.err} style={{ margin: "10px 4px" }}>{err}</div>}
+      <div className={s.grid}>
+        <div className={s.stack}>
+          <section className={s.card}>
+            <div className={s.cardHead}>
+              <h2 className={s.cardTitle}>What each AI tells customers</h2>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                {doneAt && <Range>{`Checked ${dShort(new Date(doneAt).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" }))}, ${nzTime(doneAt)}`}</Range>}
+                <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => check(true)} disabled={checking}><Icon n="refresh" size={13} className={checking ? s.spin : ""} />{checking ? "Checking" : "Check now"}</button>
+              </div>
+            </div>
+            {!ai && <div className={s.skeleton} style={{ height: 200 }} />}
+            {ai && results.length === 0 && <div className={s.empty}>{checking ? "Asking now, about a minute" : "No checks yet"}</div>}
+            {results.length > 0 && (
+              <div className={s.tableWrap}>
+                <table className={s.table}>
+                  <thead><tr><th>Question</th>{site === "all" && <th className={s.hideSm}>Site</th>}{AI_ENGINES.filter(([id]) => id !== "copilot").map(([id, n]) => <th key={id}>{n}</th>)}</tr></thead>
+                  <tbody>{results.map((x) => (
+                    <tr key={x.id}>
+                      <td style={{ overflowWrap: "anywhere", minWidth: 180 }}>{x.q}</td>
+                      {site === "all" && <td className={s.hideSm}><span className={s.siteTag}>{siteName(x.site)}</span></td>}
+                      {AI_ENGINES.filter(([id]) => id !== "copilot").map(([id, n]) => {
+                        const r = x.engines?.[id]; const c = engCell(r);
+                        return <td key={id}><button type="button" className={`${s.pill} ${c.cls}`} style={{ border: 0, cursor: r?.status === "ok" ? "pointer" : "default", font: "inherit", fontSize: 11 }} onClick={() => r?.status === "ok" && setOpen({ q: x.q, site: x.site, engine: n, ...r })}>{c.t}</button>{r?.staleNelson && <span className={`${s.pill} ${s.pillAmber}`} style={{ marginLeft: 4 }}>Nelson</span>}</td>;
+                      })}
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          <section className={s.card}>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>What to work on</h2></div>
+            {actions.length === 0 && <div className={s.empty}>{results.length ? "Nothing stands out" : "Shows once the first check is in"}</div>}
+            {actions.slice(0, 14).map((a) => (
+              <div key={a.key} className={s.row}>
+                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{a.title}</div><div className={s.rowMeta}>{siteName(a.site)} · {a.detail}</div></div>
+                <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("pipeline", { title: a.title, site: a.site, area: "AI search", notes: a.detail })}><Icon n="plus" size={12} />Pipeline</button>
+              </div>
+            ))}
+          </section>
+        </div>
+        <div className={s.stack}>
+          <section className={s.card}>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>Pages AI sends people to</h2><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
+            {ai && pages.length === 0 && <div className={s.empty}>None in this period</div>}
+            {pages.map((p, i) => (
+              <div key={i} className={s.row}>
+                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.page}</div><div className={s.rowMeta}>{siteName(p.site)} · {p.assistant}{p.conversions ? ` · ${n0(p.conversions)} converted` : ""}</div></div>
+                <div className={s.statNum} style={{ fontSize: 20 }}>{n0(p.sessions)}</div>
+              </div>
+            ))}
+          </section>
+          <section className={s.card}>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>Questions people ask Google</h2></div>
+            {questions.length === 0 && <div className={s.empty}>None in this period</div>}
+            {questions.map((q) => (
+              <div key={`${q.site}-${q.query}`} className={s.row}>
+                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{q.query}</div><div className={s.rowMeta}>{siteName(q.site)} · {n0(q.impressions)} searches · {n0(q.clicks)} clicks</div></div>
+                <span className={`${s.posBadge} ${q.position <= 3 ? s.pos1 : q.position <= 10 ? s.pos2 : q.position <= 20 ? s.pos3 : s.pos4}`}>{n1(q.position)}</span>
+              </div>
+            ))}
+          </section>
+        </div>
+      </div>
+      {open && (
+        <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(null); }}>
+          <div className={`${s.modal} ${s.modalWide} ${s.fade}`}>
+            <div className={s.cardHead}>
+              <h3 className={s.modalTitle} style={{ margin: 0 }}>{open.engine}: {open.q}</h3>
+              <button type="button" className={s.iconBtn} onClick={() => setOpen(null)} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="plus" size={16} className={s.rot45} /></button>
+            </div>
+            <div className={s.itemMeta} style={{ marginBottom: 12 }}>
+              <span className={s.siteTag}>{siteName(open.site)}</span>
+              <span className={`${s.pill} ${open.mentioned ? s.pillGreen : s.pillRed}`}>{open.mentioned ? "Names us" : "Does not name us"}</span>
+              <span className={`${s.pill} ${open.cited ? s.pillGreen : s.pillGrey}`}>{open.cited ? "Links our site" : "No link to us"}</span>
+            </div>
+            <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6, color: "#2a2d2a" }}>{open.answer || "No answer"}</div>
+            {open.ourCited?.length > 0 && <div className={s.rowMeta} style={{ marginTop: 14 }}>Our pages cited: {open.ourCited.map((c) => c.url).join(", ")}</div>}
+            {open.others?.length > 0 && <div className={s.rowMeta} style={{ marginTop: 6 }}>Also cited: {open.others.join(", ")}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Google Shopping: free listings, Shopping ads, product results, sales channels ────────────────────
+function ShoppingSearch({ site, start, end, today }) {
+  const [d, setD] = useState(null);
+  const gscEnd = end > addDays(today, -3) ? addDays(today, -3) : end;
+  const gscStart = start > gscEnd ? gscEnd : start;
+  useEffect(() => {
+    let stop = false;
+    fetch(`/api/command?shopping=1&start=${start}&end=${end}&gscStart=${gscStart}&gscEnd=${gscEnd}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (!stop) setD(j); }).catch(() => {});
+    return () => { stop = true; };
+  }, [start, end, gscStart, gscEnd]);
+  const inSite = (x) => site === "all" || x.id === site;
+  const visits = (d?.visits || []).filter((x) => x.status === "ok" && inSite(x));
+  const G = (name, k) => visits.reduce((a, x) => a + (x.groups.find((g) => g.name === name)?.[k] || 0), 0);
+  const pages = visits.flatMap((x) => x.pages.map((p) => ({ ...p, site: x.id }))).sort((a, b) => b.sessions - a.sessions).slice(0, 12);
+  const google = (d?.google || []).filter((x) => x.status === "ok" && inSite(x));
+  const appear = {};
+  google.forEach((x) => x.appearances.forEach((a) => { const o = appear[a.searchAppearance] || { name: a.searchAppearance, clicks: 0, impressions: 0 }; o.clicks += a.clicks; o.impressions += a.impressions; appear[a.searchAppearance] = o; }));
+  const appearances = Object.values(appear).sort((a, b) => b.impressions - a.impressions);
+  const label = (a) => cap(String(a).toLowerCase().replace(/_/g, " "));
+  const shopQueries = google.flatMap((x) => x.detail.flatMap((dd) => dd.queries.map((q) => ({ ...q, site: x.id, appearance: dd.appearance })))).sort((a, b) => b.impressions - a.impressions).slice(0, 12);
+  const channels = d?.channels?.status === "ok" && (site === "all" || site === "worthyproducts") ? d.channels.channels : [];
+  const chMax = Math.max(1, ...channels.map((c) => c.sales));
+  return (
+    <div className={s.fade}>
+      <section className={s.kpis}>
+        <div className={s.kpi}><div className={s.kpiNum}>{d ? n0(G("Free listings", "sessions")) : "-"}</div><div className={s.kpiLabel}>Visits from free listings</div></div>
+        <div className={s.kpi}><div className={s.kpiNum}>{d ? moneyShort(G("Free listings", "revenue")) : "-"}</div><div className={s.kpiLabel}>Sales from free listings, {n0(G("Free listings", "orders"))} orders</div></div>
+        <div className={s.kpi}><div className={s.kpiNum}>{d ? n0(G("Shopping ads", "sessions")) : "-"}</div><div className={s.kpiLabel}>Visits from Shopping ads</div></div>
+        <div className={s.kpi}><div className={s.kpiNum}>{d ? moneyShort(G("Shopping ads", "revenue")) : "-"}</div><div className={s.kpiLabel}>Sales from Shopping ads, {n0(G("Shopping ads", "orders"))} orders</div></div>
+      </section>
+      <div className={s.grid}>
+        <div className={s.stack}>
+          <section className={s.card}>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>Products people land on from Google Shopping</h2><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
+            {!d && <div className={s.skeleton} style={{ height: 160 }} />}
+            {d && pages.length === 0 && <div className={s.empty}>None in this period</div>}
+            {pages.length > 0 && (
+              <div className={s.tableWrap}>
+                <table className={s.table}>
+                  <thead><tr><th>Page</th>{site === "all" && <th className={s.hideSm}>Site</th>}<th className={s.hideSm}>From</th><th className={s.num}>Visits</th><th className={s.num}>Orders</th><th className={s.num}>Sales</th></tr></thead>
+                  <tbody>{pages.map((p, i) => (
+                    <tr key={i}><td style={{ overflowWrap: "anywhere" }}>{p.page}</td>{site === "all" && <td className={s.hideSm}><span className={s.siteTag}>{siteName(p.site)}</span></td>}<td className={s.hideSm}>{p.kind}</td><td className={s.num}>{n0(p.sessions)}</td><td className={s.num}>{n0(p.orders)}</td><td className={s.num}>{money(p.revenue)}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          <section className={s.card}>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>Searches that show our products</h2><Range>{`${dShort(gscStart)} to ${dShort(gscEnd)}`}</Range></div>
+            {d && shopQueries.length === 0 && <div className={s.empty}>None in this period</div>}
+            {shopQueries.map((q, i) => (
+              <div key={i} className={s.row}>
+                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{q.query}</div><div className={s.rowMeta}>{siteName(q.site)} · {label(q.appearance)} · {n0(q.impressions)} shown · {n0(q.clicks)} clicks</div></div>
+                <span className={`${s.posBadge} ${q.position <= 3 ? s.pos1 : q.position <= 10 ? s.pos2 : q.position <= 20 ? s.pos3 : s.pos4}`}>{n1(q.position)}</span>
+              </div>
+            ))}
+          </section>
+        </div>
+        <div className={s.stack}>
+          <section className={s.card}>
+            <div className={s.cardHead}><h2 className={s.cardTitle}>How we show in Google</h2></div>
+            {d && appearances.length === 0 && <div className={s.empty}>None in this period</div>}
+            {appearances.map((a) => (
+              <div key={a.name} className={s.row}>
+                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{label(a.name)}</div><div className={s.rowMeta}>{n0(a.impressions)} shown · {n0(a.clicks)} clicks</div></div>
+              </div>
+            ))}
+          </section>
+          {(site === "all" || site === "worthyproducts") && (
+            <section className={s.card}>
+              <div className={s.cardHead}><h2 className={s.cardTitle}>worthyproducts.nz sales by channel</h2></div>
+              {d && channels.length === 0 && <div className={s.empty}>{d?.channels?.status === "error" ? "Shopify offline" : "None in this period"}</div>}
+              <div className={s.bars}>{channels.map((c, i) => (
+                <div key={c.name} className={s.barRow}><span>{c.name}</span><div className={s.barTrack}><div className={`${s.barFill} ${i % 2 ? s.barFillV : ""}`} style={{ width: `${(c.sales / chMax) * 100}%` }} /></div><span className={s.num}>{money(c.sales)} · {n0(c.orders)}</span></div>
+              ))}</div>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

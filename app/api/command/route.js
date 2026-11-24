@@ -2,6 +2,9 @@
  * Worthy Command Center data (lib/command.js). Management only: the middleware lets only the management department
  * reach this path, and the route checks the role again.
  *   GET            everything the page shows (?fresh=1 skips the 15 to 60 minute caches)
+ *   GET ?shopping=1&start=&end=&gscStart=&gscEnd=   Google Shopping visits, product results, Shopify sales channels
+ *   GET ?ai=1&start=&end=            visits from AI assistants (GA4) and the latest AI answer checks
+ *   POST { action: 'ai-check', force } ask the AI questions again (skipped if the last run is under 20 hours old, unless force)
  *   GET ?search=1&start=&end=        Search Console for any period (date picker)
  *   GET ?events=worthy&start=&end=   each key event (enquiry) on that site: time, event, page, source, town, device
  *   GET ?live=1    visitors right now, the Asana meeting tasks and the ClickUp cards, for the page's 30-second refresh
@@ -13,9 +16,11 @@ import { setOidcToken } from '@/lib/ga4';
 import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail, searchForRange } from '@/lib/command';
 import { asanaSafe, asanaWrite } from '@/lib/asana';
 import { clickupSafe, clickupWrite } from '@/lib/clickup';
+import { aiReferrals, latestChecks, runChecks } from '@/lib/aiVisibility';
+import { shoppingData } from '@/lib/shopping';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const denied = () => NextResponse.json({ error: 'Not available to your department' }, { status: 403 });
 
@@ -23,6 +28,18 @@ export async function GET(request) {
   if (request.headers.get('x-worthy-role') !== 'mgmt') return denied();
   setOidcToken(request.headers.get('x-vercel-oidc-token'));
   const q = new URL(request.url).searchParams;
+  if (q.get('shopping') === '1') {
+    const ok = (d) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d || '');
+    const [a, b, c, d] = ['start', 'end', 'gscStart', 'gscEnd'].map((k) => q.get(k));
+    if (![a, b, c, d].every(ok)) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    return NextResponse.json(await shoppingData(a, b, c, d));
+  }
+  if (q.get('ai') === '1') {
+    const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+    if (!ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    const [referrals, checks] = await Promise.all([aiReferrals(q.get('start'), q.get('end')), latestChecks()]);
+    return NextResponse.json({ referrals, ...checks });
+  }
   if (q.get('search') === '1') {
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
     if (!ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
@@ -47,6 +64,16 @@ export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }
   const person = request.headers.get('x-worthy-person') || 'management';
+  // Ask the AI questions again (the page does this when the last run is over a day old, or on Check now)
+  if (body.action === 'ai-check') {
+    try {
+      const { latest } = await latestChecks();
+      if (!body.force && latest?.at && Date.now() - Date.parse(latest.at) < 20 * 3600000) return NextResponse.json({ ...(await latestChecks()), skipped: true });
+      await runChecks();
+      await logEvent({ what: 'AI answers checked', kind: 'search', title: 'AI search check', person });
+      return NextResponse.json(await latestChecks());
+    } catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
+  }
   // Changes to Asana tasks and ClickUp cards, made straight in those tools and written to the activity log
   if (body.action === 'external') {
     const { source, id, op, value, title } = body;
