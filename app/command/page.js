@@ -1406,8 +1406,6 @@ function ShoppingSearch({ site, start, end, today }) {
   const appearances = Object.values(appear).sort((a, b) => b.impressions - a.impressions);
   const label = (a) => cap(String(a).toLowerCase().replace(/_/g, " "));
   const shopQueries = google.flatMap((x) => x.detail.flatMap((dd) => dd.queries.map((q) => ({ ...q, site: x.id, appearance: dd.appearance })))).sort((a, b) => b.impressions - a.impressions).slice(0, 12);
-  const channels = d?.channels?.status === "ok" && (site === "all" || site === "worthyproducts") ? d.channels.channels : [];
-  const chMax = Math.max(1, ...channels.map((c) => c.sales));
   return (
     <div className={s.fade}>
       <section className={s.kpis}>
@@ -1454,15 +1452,6 @@ function ShoppingSearch({ site, start, end, today }) {
               </div>
             ))}
           </section>
-          {(site === "all" || site === "worthyproducts") && (
-            <section className={s.card}>
-              <div className={s.cardHead}><h2 className={s.cardTitle}>worthyproducts.nz sales by channel</h2></div>
-              {d && channels.length === 0 && <div className={s.empty}>{d?.channels?.status === "error" ? "Shopify offline" : "None in this period"}</div>}
-              <div className={s.bars}>{channels.map((c, i) => (
-                <div key={c.name} className={s.barRow}><span>{c.name}</span><div className={s.barTrack}><div className={`${s.barFill} ${i % 2 ? s.barFillV : ""}`} style={{ width: `${(c.sales / chMax) * 100}%` }} /></div><span className={s.num}>{money(c.sales)} · {n0(c.orders)}</span></div>
-              ))}</div>
-            </section>
-          )}
         </div>
       </div>
     </div>
