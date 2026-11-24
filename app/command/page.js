@@ -157,9 +157,10 @@ const Range = ({ children }) => <span className={s.tag}><Icon n="calendar" size=
 const pick = (arr, site) => (arr || []).filter((x) => x.status === "ok" && (site === "all" || x.id === site));
 
 /** One combined daily series (visits, conversions, sales) for the chosen sites. */
-function combineTraffic(traffic, site) {
+const SHOPS = ["worthyproducts", "dutchrusk"];   // worthy.nz is the company site: enquiries, no online sales
+function combineTraffic(traffic, site, only = null) {
   const m = new Map();
-  pick(traffic, site).forEach((t) => (t.daily || []).forEach((r) => {
+  pick(traffic, site).filter((t) => !only || only.includes(t.id)).forEach((t) => (t.daily || []).forEach((r) => {
     const o = m.get(r.date) || { date: r.date, sessions: 0, conversions: 0, revenue: 0 };
     o.sessions += r.sessions || 0; o.conversions += r.conversions || 0; o.revenue += r.revenue || 0;
     m.set(r.date, o);
@@ -213,7 +214,7 @@ const niceMax = (v) => { if (v <= 0) return 4; const e = 10 ** Math.floor(Math.l
 const axisNum = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}m` : v >= 1000 ? `${(v / 1000).toFixed(v % 1000 ? 1 : 0)}k` : String(Math.round(v)));
 
 // ── traffic vs sales chart ──────────────────────────────────────────────────────────────────────────
-function TrafficChart({ rows, mode }) {
+function TrafficChart({ rows, mode, lead }) {
   const wrap = useRef(null);
   const [w, setW] = useState(720);
   const [hover, setHover] = useState(null);
@@ -255,7 +256,7 @@ function TrafficChart({ rows, mode }) {
           <g key={f}>
             <line x1={padL} x2={padL + iw} y1={padT + ih - f * ih} y2={padT + ih - f * ih} stroke="rgba(20,22,20,.16)" strokeDasharray="5 5" />
             <text x={padL - 8} y={padT + ih - f * ih + 4} textAnchor="end" fontSize="11" fill="#8b918c">{axisNum(maxA * f)}</text>
-            <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#5536e6" opacity=".7">{f ? `$${axisNum(maxB * f)}` : ""}</text>
+            <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#5536e6" opacity=".7">{f ? `${lead ? "" : "$"}${axisNum(maxB * f)}` : ""}</text>
           </g>
         ))}
         {rows.map((r, i) => (i % every === 0 || i === rows.length - 1) && (i === rows.length - 1 || rows.length - 1 - i >= every / 2) ? <text key={`l${i}`} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="#8b918c">{r.label}</text> : null)}
@@ -278,8 +279,10 @@ function TrafficChart({ rows, mode }) {
           <div><b>{h.long}</b></div>
           {change !== null && <div className={s.tipRow}><span>Change</span><b style={{ color: change >= 0 ? "#1f9d47" : "#e5413c" }}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
           <div className={s.tipRow}><span style={{ color: "#f2892a" }}>Visits</span><b>{n0(h.a)}</b></div>
-          <div className={s.tipRow}><span style={{ color: "#5536e6" }}>Online sales</span><b>{money(h.b)}</b></div>
-          <div className={s.tipRow}><span>Conversions</span><b>{n0(h.conv)}</b></div>
+          {lead
+            ? <div className={s.tipRow}><span style={{ color: "#5536e6" }}>Enquiries</span><b>{n0(h.conv)}</b></div>
+            : <><div className={s.tipRow}><span style={{ color: "#5536e6" }}>Online sales</span><b>{money(h.b)}</b></div>
+              <div className={s.tipRow}><span>Orders</span><b>{n0(h.conv)}</b></div></>}
           {h.c !== null && <div className={s.tipRow}><span>Previous</span><b>{n0(h.c)}</b></div>}
         </div>
       )}
@@ -408,7 +411,10 @@ export default function CommandCenter() {
   // ── derived numbers ──
   const today = data?.today || nzTodayIso();
   const yesterday = addDays(today, -1);
+  const lead = site === "worthy";
   const daily = useMemo(() => combineTraffic(data?.traffic, site), [data, site]);
+  const shopDaily = useMemo(() => (site === "all" ? combineTraffic(data?.traffic, site, SHOPS) : daily), [data, site, daily]);
+  const sw30 = useMemo(() => windowed(shopDaily, yesterday, 30), [shopDaily, yesterday]);
   const w30 = useMemo(() => windowed(daily, yesterday, 30), [daily, yesterday]);
   const w7 = useMemo(() => windowed(daily, yesterday, 7), [daily, yesterday]);
   const searchSites = pick(data?.search, site);
@@ -424,9 +430,10 @@ export default function CommandCenter() {
   }, [searchSites]);
   const rev = [sumOf(w30.cur, "revenue"), sumOf(w30.prev, "revenue")];
   const sess = [sumOf(w30.cur, "sessions"), sumOf(w30.prev, "sessions")];
-  const conv = [sumOf(w30.cur, "conversions"), sumOf(w30.prev, "conversions")];
-  const cr = [sess[0] ? conv[0] / sess[0] : null, sess[1] ? conv[1] / sess[1] : null];
-  const rows = useMemo(() => chartSeries(daily, mode), [daily, mode]);
+  const conv = [sumOf(sw30.cur, "conversions"), sumOf(sw30.prev, "conversions")];
+  const shopSess = [sumOf(sw30.cur, "sessions"), sumOf(sw30.prev, "sessions")];
+  const cr = [shopSess[0] ? conv[0] / shopSess[0] : null, shopSess[1] ? conv[1] / shopSess[1] : null];
+  const rows = useMemo(() => chartSeries(daily, mode).map((x) => (lead ? { ...x, b: x.conv } : x)), [daily, mode, lead]);
 
   const items = useMemo(() => board || [], [board]);
   const inSite = (x) => site === "all" || !x.site || x.site === site;
@@ -521,13 +528,13 @@ export default function CommandCenter() {
                 <Spark values={nbDaily.length ? nbDaily : new Array(28).fill(0)} hotLast={7} />
               </div>
               <div className={s.kpi}>
-                <div className={s.kpiTop}><div className={s.kpiNum}>{data ? moneyShort(rev[0]) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n="cart" size={15} /></div></div>
-                <div className={s.kpiLabel}>Online sales <Delta now={rev[0]} before={rev[1]} /></div>
-                <Spark values={w30.cur.map((r) => r.revenue)} hotLast={7} />
+                <div className={s.kpiTop}><div className={s.kpiNum}>{data ? (lead ? n0(conv[0]) : moneyShort(rev[0])) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n={lead ? "mail" : "cart"} size={15} /></div></div>
+                <div className={s.kpiLabel}>{lead ? "Enquiries" : "Online sales"} {lead ? <Delta now={conv[0]} before={conv[1]} /> : <Delta now={rev[0]} before={rev[1]} />}</div>
+                <Spark values={w30.cur.map((r) => (lead ? r.conversions : r.revenue))} hotLast={7} />
               </div>
               <div className={s.kpi}>
                 <div className={s.kpiTop}><div className={s.kpiNum}>{cr[0] === null ? "-" : (cr[0] * 100).toFixed(2)}<small>%</small></div><div className={s.chip}><Icon n="target" size={15} /></div></div>
-                <div className={s.kpiLabel}>Conversion rate <Delta now={cr[0]} before={cr[1]} points /></div>
+                <div className={s.kpiLabel}>{lead ? "Enquiry rate" : "Conversion rate"} <Delta now={cr[0]} before={cr[1]} points /></div>
                 <Spark values={w30.cur.map((r) => r.conversions)} hotLast={7} />
               </div>
             </section>
@@ -544,12 +551,12 @@ export default function CommandCenter() {
                   <div className={s.cardHead} style={{ marginBottom: 6 }}>
                     <div className={s.legend}>
                       <span><i style={{ background: "#f2892a" }} />Visits</span>
-                      <span><i style={{ background: "#5536e6" }} />Online sales</span>
+                      <span><i style={{ background: "#5536e6" }} />{lead ? "Enquiries" : "Online sales"}</span>
                       <span><i style={{ background: "#a9adaa" }} />Previous</span>
                     </div>
                     {rows.length > 0 && <Range>{`${rows[0].label} to ${rows[rows.length - 1].label}`}</Range>}
                   </div>
-                  <TrafficChart rows={rows} mode={mode} />
+                  <TrafficChart rows={rows} mode={mode} lead={lead} />
                 </section>
 
                 <div className={s.grid2}>
@@ -624,7 +631,7 @@ export default function CommandCenter() {
                       <div className={s.gauges}>
                         <Gauge value={p1} color="#e5413c" label="Page 1 terms" text={okS ? `${Math.round(p1 * 100)}%` : "-"} />
                         <Gauge value={Math.min(1, ctr * 5)} color="#f2892a" label="Search CTR" text={okS ? `${(ctr * 100).toFixed(1)}%` : "-"} />
-                        <Gauge value={Math.min(1, crt * 10)} color="#5536e6" label="Conversion" text={ts ? `${(crt * 100).toFixed(1)}%` : "-"} />
+                        <Gauge value={Math.min(1, crt * 10)} color="#5536e6" label={x.id === "worthy" ? "Enquiry rate" : "Conversion"} text={ts ? `${(crt * 100).toFixed(1)}%` : "-"} />
                       </div>
                       <div className={s.siteBtns} onClick={(e) => e.stopPropagation()}>
                         <a href={x.url} target="_blank" rel="noreferrer"><Icon n="globe" size={13} />Visit</a>
@@ -836,11 +843,18 @@ function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7,
     .sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999"))).slice(0, 8);
   const v = [sumOf(w7.cur, "sessions"), sumOf(w7.prev, "sessions")];
   const r = [sumOf(w7.cur, "revenue"), sumOf(w7.prev, "revenue")];
-  const c = [sumOf(w7.cur, "conversions"), sumOf(w7.prev, "conversions")];
+  const lead = site === "worthy";
+  const sd = site === "all" ? combineTraffic(data?.traffic, site, SHOPS) : daily;
+  const sw = windowed(sd, addDays(today, -1), 7);
+  const c = [sumOf(sw.cur, "conversions"), sumOf(sw.prev, "conversions")];
+  const sv = [sumOf(sw.cur, "sessions"), sumOf(sw.prev, "sessions")];
+  const ew = windowed(combineTraffic(data?.traffic, "worthy"), addDays(today, -1), 7);
+  const e = [sumOf(ew.cur, "conversions"), sumOf(ew.prev, "conversions")];
   // spend and return by month
   const spend = items.filter((x) => x.kind === "spend" && (site === "all" || x.site === site));
   const months = [...new Set([...spend.map((x) => x.month).filter(Boolean)])].sort().reverse().slice(0, 6);
   const revByMonth = (ym) => daily.filter((d) => d.date.startsWith(ym)).reduce((a, d) => a + d.revenue, 0);
+  const leadsByMonth = (ym) => daily.filter((d) => d.date.startsWith(ym)).reduce((a, d) => a + d.conversions, 0);
   const channels = (() => {
     const m = new Map();
     pick(data?.traffic, site).forEach((t2) => (t2.channels || []).forEach((ch) => { const o = m.get(ch.name) || { name: ch.name, sessions: 0 }; o.sessions += ch.sessions; m.set(ch.name, o); }));
@@ -856,9 +870,10 @@ function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7,
         </div>
         <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(v[0])}</div><div className={s.statLabel}>Visits <Delta now={v[0]} before={v[1]} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>Conversions <Delta now={c[0]} before={c[1]} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{v[0] ? `${((c[0] / v[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>Conversion <Delta now={v[0] ? c[0] / v[0] : null} before={v[1] ? c[1] / v[1] : null} points /></div></div>
+          {!lead && <div className={s.stat}><div className={s.statNum}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
+          <div className={s.stat}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
+          <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
+          {site === "all" && <div className={s.stat}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
           <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>Live now</div></div>
         </div>
@@ -905,10 +920,11 @@ function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7,
           {months.length > 0 && (
             <div className={s.tableWrap}>
               <table className={s.table}>
-                <thead><tr><th>Month</th><th className={s.num}>Spend</th><th className={s.num}>Online sales</th><th className={s.num}>Return</th></tr></thead>
+                <thead><tr><th>Month</th><th className={s.num}>Spend</th><th className={s.num}>{lead ? "Enquiries" : "Online sales"}</th><th className={s.num}>{lead ? "Cost each" : "Return"}</th></tr></thead>
                 <tbody>
                   {months.map((ym) => {
                     const sp = spend.filter((x) => x.month === ym).reduce((a, x) => a + (Number(x.amount) || 0), 0);
+                    if (lead) { const ld = leadsByMonth(ym); return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{n0(ld)}</td><td className={s.num}>{ld ? money(sp / ld) : "-"}</td></tr>; }
                     const rv = revByMonth(ym);
                     return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{money(rv)}</td><td className={s.num}>{sp ? `${(rv / sp).toFixed(1)}x` : "-"}</td></tr>;
                   })}
