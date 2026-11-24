@@ -1135,6 +1135,70 @@ const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
 /* Year-end forecast. One method, stated on the card: sales to date, plus what is
    left of last year's trading at this year's pace against last year. It is a
    projection from last year's shape, not a budget. */
+/* Worthy Products only: sales to the sister companies (Dutch Rusk, Worthy Oceania), kept out of every figure above and
+   reconciled back to everything invoiced. Same basis as the Sunday email and the chat (docs/SALES-BASIS.md). */
+const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent }) => {
+  const T = theme;
+  if (!cur?.sisterSales) return null;
+  const month = [...(cur.months || [])].reverse().find((m) => m.started && m.sisters);
+  const cols = [
+    week && week.sisters ? { label: "Week", range: `${fmtDay(week.start)} to ${fmtDay(week.end)}`, s: week.sisters, wp: { sales: week.revenue, other: week.otherInvoicedLines, margin: weekWp?.margin ?? null, cost: weekWp?.cost, costed: weekWp?.costed } } : null,
+    month ? { label: "Month to date", range: `${fmtDay(`${month.key}-01`)} to ${fmtDay(month.through)}`, s: month.sisters, wp: { sales: month.revenue, other: month.otherInvoicedLines, margin: month.marginPct, cost: month.cost, costed: month.costedRevenue } } : null,
+    { label: "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
+  ].filter(Boolean);
+  const money = (v) => (v == null ? "-" : fmtExact(v, currency));
+  const pctTxt = (v) => (v == null ? "-" : `${Number(v).toFixed(2)}%`);
+  const th = { textAlign: "right", padding: "8px 10px", fontSize: 11, color: T.textLabel, fontWeight: 600, whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` };
+  const td = { textAlign: "right", padding: "9px 10px", fontSize: 13, color: T.text, whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` };
+  const name = { ...td, textAlign: "left", fontWeight: 600, color: T.textHead };
+  const rows = [
+    ["Dutch Rusk", (c) => c.s.dutchRusk.sales, (c) => c.s.dutchRusk.marginPct],
+    ["Worthy Oceania", (c) => c.s.oceania.sales, (c) => c.s.oceania.marginPct],
+    ["Sister companies total", (c) => c.s.total.sales, (c) => c.s.total.marginPct, true],
+    ["Worthy Products", (c) => c.wp.sales ?? 0, (c) => c.wp.margin],
+    ["Other invoiced lines", (c) => (c.wp.other ?? 0) + c.s.total.otherInvoicedLines, () => null],
+    ["All invoiced", (c) => (c.wp.sales ?? 0) + (c.wp.other ?? 0) + c.s.total.allInvoiced, (c) => {
+      const costed = (c.wp.costed ?? 0) + (c.s.total.costedSales ?? 0), cost = (c.wp.cost ?? 0) + (c.s.total.cost ?? 0);
+      return c.wp.costed != null && costed > 0 ? Math.round(((costed - cost) / costed) * 10000) / 100 : null;
+    }, true],
+  ];
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 28, overflowX: "auto" }}>
+      <div style={{ color: T.textHead, marginBottom: 12 }}>
+        <SectionTitle icon="building" accent={accent}>Sister company sales</SectionTitle>
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 640 }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: "left" }}>Company</th>
+            {cols.map((c) => (
+              <th key={c.label} colSpan={2} style={th}>
+                <div>{c.label}</div>
+                <div style={{ marginTop: 4 }}><RangeTag text={c.range} theme={T} /></div>
+              </th>
+            ))}
+          </tr>
+          <tr>
+            <th style={th} />
+            {cols.map((c) => [<th key={c.label + "s"} style={th}>Sales</th>, <th key={c.label + "m"} style={th}>Margin</th>])}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, sales, margin, strong]) => (
+            <tr key={label} style={strong ? { background: `${accent}10` } : undefined}>
+              <td style={name}>{label}</td>
+              {cols.map((c) => [
+                <td key={c.label + "s"} style={{ ...td, fontWeight: strong ? 700 : 400 }}>{money(sales(c))}</td>,
+                <td key={c.label + "m"} style={td}>{pctTxt(margin(c))}</td>,
+              ])}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
   const T = theme;
   const t = cur?.totals;
@@ -3147,6 +3211,22 @@ export default function EcommerceDashboard({ section = "overview" }) {
           {isMgmt && <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="percent" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />}
           {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
         </div>
+
+        {isMgmt && activeStore.id === "worthy" && channelTab === "odoo" && onFYView() && (() => {
+          const cur = fyPayload(selectedYear);
+          if (!cur?.sisterSales) return null;
+          const done = (cur.weeks || []).filter((w) => w.sisters);
+          const picked = view === "weekly"
+            ? done.find((w) => MONTH_IDX[w.monthLabel] === weeklyMonth && w.week === selectedWeek)
+            : [...done].reverse().find((w) => w.complete);
+          const wk = picked && MONTH_IDX[picked.monthLabel] === weeklyMonth && view === "weekly"
+            ? odooWeekRows().filter((r) => r.week === picked.week) : [];
+          const wkCost = wk.reduce((t, r) => t + (r.cost || 0), 0);
+          const wkGp = wk.reduce((t, r) => t + (r.grossProfit || 0), 0);
+          const weekWp = wk.length && wkGp + wkCost > 0
+            ? { margin: Math.round((wkGp / (wkGp + wkCost)) * 10000) / 100, cost: wkCost, costed: wkGp + wkCost } : null;
+          return <SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency} theme={T} accent={accent} />;
+        })()}
 
         {onFYView() && view !== "weekly" && (
           <ForecastCard cur={fyPayload(selectedYear)} prior={fyPayload(selectedYear - 1)} currency={activeStore.currency}

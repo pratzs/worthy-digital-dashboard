@@ -7,6 +7,7 @@
  * The weekly view only ever shows one month, so this fetches exactly that month
  * and nothing more.
  */
+import { SISTER_IDS } from '@/lib/salesBasis';
 import { cachedAuth } from '@/lib/odooAuth';
 import { loadUnitCosts, makeQtyInProductUnit } from '@/lib/odooCost';
 import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
@@ -59,12 +60,15 @@ export async function GET(request) {
       ['move_id.state', '=', 'posted'],
       ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end],
       ['display_type', '=', 'product'], ['product_id', '!=', false], ['date', '!=', false],
+      // Worthy Products never includes sales to its sister companies (docs/SALES-BASIS.md).
+      ...(cid === NORTH ? [['move_id.commercial_partner_id', 'not in', SISTER_IDS]] : []),
     ];
 
     // Who sold in this month, and what each invoice is worth per day.
     const moves = await exec('account.move', 'read_group',
       [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
-        ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end]],
+        ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end],
+        ...(cid === NORTH ? [['commercial_partner_id', 'not in', SISTER_IDS]] : [])],
        ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false });
 
     /* North reports like finance does: the eight field reps one by one and everyone
@@ -100,16 +104,38 @@ export async function GET(request) {
       const pids = [...new Set([...inv, ...ref].map((r) => r.product_id && r.product_id[0]).filter(Boolean))];
       const { costOf: std, prods } = pids.length ? await loadUnitCosts(exec, cid, pids, { dropship: cid === NORTH }) : { costOf: new Map(), prods: [] };
       const qtyOf = await makeQtyInProductUnit(exec, prods, cid !== NORTH);   // Oceania: metres vs yards
+      /* Worthy Products: the cost Odoo BOOKED on this rep's invoices (cost-of-goods lines), per product per day;
+         today's standard cost only where nothing was booked. Same rule as the month figures and the Sunday email. */
+      const booked = new Map();
+      if (cid === NORTH) {
+        const rows = await exec('account.move.line', 'read_group',
+          [[['move_id.company_id', '=', cid], ['move_id.move_type', 'in', ['out_invoice', 'out_refund']], ['move_id.state', '=', 'posted'],
+            ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end], ['move_id.commercial_partner_id', 'not in', SISTER_IDS],
+            ['move_id.invoice_user_id', 'in', ids], ['display_type', '=', 'cogs'], ['account_id.code', '=like', '7%'],
+            ['product_id', '!=', false], ['date', '!=', false]],
+           ['balance:sum'], ['product_id', 'date:day']], { lazy: false });
+        for (const r of rows) {
+          const d = dayOf(r.__range?.['date:day']?.from); const pid = r.product_id && r.product_id[0]; if (!d || !pid) continue;
+          booked.set(`${pid}|${d}`, (booked.get(`${pid}|${d}`) || 0) + (Number(r.balance) || 0));
+        }
+      }
+      const agg = new Map();   // product|day -> { week, rev, std, unit }
       for (const r of [...inv, ...ref]) {
         const d = dayOf(r.__range?.['date:day']?.from); if (!d) continue;
-        const unit = std.get(r.product_id && r.product_id[0]) || 0;
+        const pid = r.product_id && r.product_id[0];
+        const unit = std.get(pid) || 0;
         const k = `${name}|${weekOf(d)}`;
         if (financeBasis) revenue.set(k, (revenue.get(k) || 0) + toCents(r.price_subtotal ?? 0) * r._sign);
-        cost.set(k, (cost.get(k) || 0) + toCents(qtyOf(r) * unit) * r._sign);
-        /* Only a product that carries a standard cost can back its own revenue.
-           Freight and service lines sell for real money at cost zero, and
-           counting them as costed is what turns a week into a 100% margin. */
-        if (unit > 0) costedRev.set(k, (costedRev.get(k) || 0) + toCents(r.price_subtotal ?? 0) * r._sign);
+        const a = agg.get(`${pid}|${d}`) || { k, rev: 0, std: 0, unit };
+        a.rev += toCents(r.price_subtotal ?? 0) * r._sign; a.std += toCents(qtyOf(r) * unit) * r._sign;
+        agg.set(`${pid}|${d}`, a);
+      }
+      for (const [pk, a] of agg) {
+        const b = booked.get(pk);
+        cost.set(a.k, (cost.get(a.k) || 0) + (b !== undefined ? toCents(b) : a.std));
+        /* Only a product with a real cost can back its own revenue. Freight and service lines sell for real money
+           at cost zero, and counting them as costed is what turns a week into a 100% margin. */
+        if (b !== undefined ? b !== 0 : a.unit > 0) costedRev.set(a.k, (costedRev.get(a.k) || 0) + a.rev);
       }
     };
     for (let i = 0; i < entries.length; i += 5) {

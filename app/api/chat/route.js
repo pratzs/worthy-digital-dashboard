@@ -26,7 +26,7 @@
 import { setOidcToken } from '@/lib/ga4';
 import { NextResponse } from 'next/server';
 import { DATA_TOOLS, runDataTool } from '@/lib/mcpTools';
-import { toolListFor, runForRole } from '@/lib/mcpRoles';
+import { toolListFor, runForRole, NAME_AND_BASIS_RULES } from '@/lib/mcpRoles';
 import { personFor } from '@/lib/people';
 import { takeQuestion, refundQuestion, logUsage } from '@/lib/repStore';
 import { addUsage, chatWho, costUsd } from '@/lib/aiCost';
@@ -209,7 +209,7 @@ const SYSTEM_PURCH = `You answer questions for Worthy's Purchasing and Stock tea
   + `and you do not know the conversion, ask rather than guess a multiplier.\n\n`
   + `When the answer is a list or a breakdown, call present_table once as your last step and add a one or two sentence `
   + `summary in your own words. Keep tables to the rows that matter for the question.`;
-const systemFor = (role) => (role === 'mgmt' ? SYSTEM : SYSTEM_PURCH);
+const systemFor = (role) => (role === 'mgmt' ? `${NAME_AND_BASIS_RULES}\n\n${SYSTEM}` : SYSTEM_PURCH);
 
 export async function POST(request) {
   // Who is asking. Both values are set by the middleware from the signed cookie and nothing else.

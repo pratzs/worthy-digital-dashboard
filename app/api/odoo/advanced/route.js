@@ -1,4 +1,5 @@
 import { cachedAuth } from '@/lib/odooAuth';
+import { SISTER_IDS } from '@/lib/salesBasis';
 import { withRoleFilter } from '@/lib/roleResponse';
 import { NextResponse } from 'next/server';
 import { weekOfMonth } from '@/lib/weekOfMonth';
@@ -68,6 +69,8 @@ async function handler(request) {
       ['state',         '=',  'posted'],
       ['invoice_date',  '>=', `${year}-01-01`],
       ['invoice_date',  '<=', `${year}-12-31`],
+      // Worthy Products never includes sales to Dutch Rusk or Worthy Oceania (docs/SALES-BASIS.md).
+      ...(companyId === 4 ? [['commercial_partner_id', 'not in', SISTER_IDS]] : []),
     ];
     let invoiceIds = [];
     try {
