@@ -2,6 +2,7 @@
  * Worthy Command Center data (lib/command.js). Management only: the middleware lets only the management department
  * reach this path, and the route checks the role again.
  *   GET            everything the page shows (?fresh=1 skips the 15 to 60 minute caches)
+ *   GET ?enquiries=1&start=&end=     worthy.nz form entries: who, what, and who the form emailed (needs WORTHY_FORMS_KEY)
  *   GET ?shopping=1&start=&end=&gscStart=&gscEnd=   Google Shopping visits, product results, Shopify sales channels
  *   GET ?ai=1&start=&end=            visits from AI assistants (GA4) and the latest AI answer checks
  *   POST { action: 'ai-check', force } ask the AI questions again (skipped if the last run is under 20 hours old, unless force)
@@ -18,6 +19,7 @@ import { asanaSafe, asanaWrite } from '@/lib/asana';
 import { clickupSafe, clickupWrite } from '@/lib/clickup';
 import { aiReferrals, latestChecks, runChecks, readGoogleAi, saveGoogleAi } from '@/lib/aiVisibility';
 import { shoppingData } from '@/lib/shopping';
+import { worthyEnquiries } from '@/lib/worthyForms';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -28,6 +30,12 @@ export async function GET(request) {
   if (request.headers.get('x-worthy-role') !== 'mgmt') return denied();
   setOidcToken(request.headers.get('x-vercel-oidc-token'));
   const q = new URL(request.url).searchParams;
+  if (q.get('enquiries') === '1') {
+    const ok = (d) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d || '');
+    if (!ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    try { return NextResponse.json(await worthyEnquiries(q.get('start'), q.get('end'))); }
+    catch (e) { return NextResponse.json({ status: 'error', error: String(e.message || e).slice(0, 200) }); }
+  }
   if (q.get('shopping') === '1') {
     const ok = (d) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d || '');
     const [a, b, c, d] = ['start', 'end', 'gscStart', 'gscEnd'].map((k) => q.get(k));

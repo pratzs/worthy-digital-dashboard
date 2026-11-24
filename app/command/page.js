@@ -478,8 +478,11 @@ export default function CommandCenter() {
   const openEvents = async (siteId, a = rStart, b = rEnd) => {
     const ids = siteId === "all" ? SITES.map((x) => x.id) : [siteId];
     setEvents({ loading: true, site: siteId, start: a, end: b, rows: [] });
-    const parts = await Promise.all(ids.map((id) => fetch(`/api/command?events=${id}&start=${a}&end=${b}`, { cache: "no-store" }).then((r) => r.json()).then((j) => (j.rows || []).map((x) => ({ ...x, site: id }))).catch(() => [])));
-    setEvents({ loading: false, site: siteId, start: a, end: b, rows: parts.flat().sort((a, b) => b.at.localeCompare(a.at)) });
+    const [parts, forms] = await Promise.all([
+      Promise.all(ids.map((id) => fetch(`/api/command?events=${id}&start=${a}&end=${b}`, { cache: "no-store" }).then((r) => r.json()).then((j) => (j.rows || []).map((x) => ({ ...x, site: id }))).catch(() => []))),
+      ids.includes("worthy") ? fetch(`/api/command?enquiries=1&start=${a}&end=${b}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null) : null,
+    ]);
+    setEvents({ loading: false, site: siteId, start: a, end: b, rows: parts.flat().sort((a, b) => b.at.localeCompare(a.at)), forms });
   };
   const w7 = useMemo(() => windowed(daily, yesterday, 7), [daily, yesterday]);
   const searchSites = pick(rangeSearch || data?.search, site);
@@ -1150,6 +1153,11 @@ function EventsModal({ ev, onClose }) {
   const rows = ev.rows.filter((r) => kind === "all" || r.event === kind);
   const when = (at) => { const d = d0(at.slice(0, 10)); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${at.slice(11, 16)}`; };
   const pages = Object.entries(rows.reduce((m, r) => ({ ...m, [r.page]: (m[r.page] || 0) + r.count }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  // worthy.nz form entries (name, email, who it was emailed to), matched to the analytics row within 3 minutes
+  const entries = ev.forms?.status === "ok" ? ev.forms.entries : [];
+  const mins = (t) => Date.parse(`${t.replace(" ", "T").slice(0, 16)}:00Z`) / 60000;
+  const whoFor = (r) => (r.site === "worthy" ? entries.find((e) => Math.abs(mins(e.at) - mins(r.at)) <= 3) : null);
+  const [openEntry, setOpenEntry] = useState(null);
   return (
     <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`${s.modal} ${s.modalWide} ${s.fade}`}>
@@ -1164,16 +1172,46 @@ function EventsModal({ ev, onClose }) {
               <div className={s.stat}><div className={s.statNum}>{n0(rows.reduce((a, r) => a + r.count, 0))}</div><div className={s.statLabel}>Total</div></div>
               {pages.map(([pg, n]) => <div key={pg} className={s.stat}><div className={s.statNum}>{n}</div><div className={s.statLabel}>{pg}</div></div>)}
             </div>
+            {(ev.site === "worthy" || ev.site === "all") && (
+              <div style={{ marginBottom: 18 }}>
+                <div className={s.cardHead} style={{ marginBottom: 8 }}>
+                  <h3 className={s.cardTitle}>Who filled in the worthy.nz forms</h3>
+                  {ev.forms?.status !== "ok" && <span className={`${s.pill} ${s.pillGrey}`}>{ev.forms?.status === "not_connected" ? "Not connected yet" : "worthy.nz offline"}</span>}
+                </div>
+                {ev.forms?.status === "ok" && entries.length === 0 && <div className={s.empty}>None in this period</div>}
+                {entries.length > 0 && (
+                  <div className={s.tableWrap} style={{ maxHeight: "40vh", overflowY: "auto" }}>
+                    <table className={s.table}>
+                      <thead><tr><th>When</th><th>Form</th><th>Name</th><th className={s.hideSm}>Business</th><th>Email</th><th className={s.hideSm}>Emailed to</th></tr></thead>
+                      <tbody>{entries.map((e) => (
+                        <tr key={e.id} style={{ cursor: "pointer" }} onClick={() => setOpenEntry(openEntry === e.id ? null : e.id)}>
+                          <td style={{ whiteSpace: "nowrap" }}>{when(e.at.replace(" ", "T"))}</td>
+                          <td>{e.form}</td>
+                          <td>{e.name || "-"}</td>
+                          <td className={s.hideSm}>{e.business || "-"}</td>
+                          <td style={{ overflowWrap: "anywhere" }}>{e.email ? <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ color: "#5536e6" }}>{e.email}</a> : "-"}</td>
+                          <td className={s.hideSm} style={{ fontSize: 12, color: "#4a4f4b" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                    {openEntry && (() => { const e = entries.find((x) => x.id === openEntry); return e ? (
+                      <div className={s.entryBox}>{Object.entries(e.fields).map(([k, v]) => <div key={k}><b>{cap(k.replace(/[-_]/g, " "))}</b> {String(v)}</div>)}</div>
+                    ) : null; })()}
+                  </div>
+                )}
+              </div>
+            )}
             {kinds.length > 1 && <div className={s.seg} style={{ marginBottom: 10 }}>{[["all", "All"], ...kinds.map((k) => [k, EVENT_LABEL[k] || cap(k.replace(/_/g, " "))])].map(([id, l]) => <button key={id} type="button" className={kind === id ? s.segOn : ""} onClick={() => setKind(id)}>{l}</button>)}</div>}
             {rows.length === 0 && <div className={s.empty}>None in this period</div>}
             {rows.length > 0 && (
               <div className={s.tableWrap} style={{ maxHeight: "55vh", overflowY: "auto" }}>
                 <table className={s.table}>
-                  <thead><tr><th>When</th><th>What</th>{ev.site === "all" && <th>Site</th>}<th>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th></tr></thead>
+                  <thead><tr><th>When</th><th>What</th>{entries.length > 0 && <th>Who</th>}{ev.site === "all" && <th>Site</th>}<th>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th></tr></thead>
                   <tbody>{rows.map((r, i) => (
                     <tr key={i}>
                       <td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td>
                       <td>{EVENT_LABEL[r.event] || cap(r.event.replace(/_/g, " "))}{r.count > 1 ? ` x${r.count}` : ""}</td>
+                      {entries.length > 0 && <td>{(() => { const w = whoFor(r); return w ? `${w.name || w.email}${w.business ? `, ${w.business}` : ""}` : "-"; })()}</td>}
                       {ev.site === "all" && <td><span className={s.siteTag}>{siteName(r.site)}</span></td>}
                       <td style={{ overflowWrap: "anywhere" }}>{r.page}</td>
                       <td className={s.hideSm}>{r.source}</td>

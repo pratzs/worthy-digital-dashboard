@@ -246,6 +246,8 @@
 .todayCard { margin-top: 14px; padding: 14px 20px; }
 .todayHead { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); margin-bottom: 10px; }
 .todayTime { color: var(--mute); font-size: 12px; }
+.entryBox { margin-top: 10px; padding: 12px 14px; background: #fff; border-radius: 14px; border: 1px solid var(--line); font-size: 13px; display: grid; gap: 6px; }
+.entryBox b { font-weight: 500; margin-right: 6px; }
 /* asana */
 .people { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .people::-webkit-scrollbar { display: none; }
