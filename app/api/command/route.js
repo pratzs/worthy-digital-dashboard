@@ -28,6 +28,17 @@ export async function GET(request) {
   if (request.headers.get('x-worthy-role') !== 'mgmt') return denied();
   setOidcToken(request.headers.get('x-vercel-oidc-token'));
   const q = new URL(request.url).searchParams;
+  if (q.get('gscprobe') === '1') {   // temporary: which Search Console types carry the Generative AI report
+    const { googleToken } = await import('@/lib/ga4');
+    const tok = await googleToken('https://www.googleapis.com/auth/webmasters.readonly');
+    const out = {};
+    for (const type of ['generativeAi', 'aiOverview', 'ai_overview', 'aiMode', 'genai', 'generative_ai', 'web']) {
+      const r = await fetch(`https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent('https://dutchrusk.co.nz/')}/searchAnalytics/query`, { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ startDate: '2026-08-23', endDate: '2026-11-22', type, dimensions: ['searchAppearance'], rowLimit: 50 }) });
+      const j = await r.json().catch(() => ({}));
+      out[type] = r.ok ? (j.rows || []).map((x) => `${x.keys?.[0]}:${x.impressions}`) : `${r.status} ${j.error?.message || ''}`.slice(0, 160);
+    }
+    return NextResponse.json(out);
+  }
   if (q.get('shopping') === '1') {
     const ok = (d) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d || '');
     const [a, b, c, d] = ['start', 'end', 'gscStart', 'gscEnd'].map((k) => q.get(k));
