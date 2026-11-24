@@ -50,3 +50,22 @@ Lists: E-Commerce > Active Sprint and Marketing > E-Commerce Requests (`CLICKUP_
 - Google: the keyless GA4 sign-in (see SOCIAL-WEB.md). The service account `dashboard-ga4-reader` has Restricted access on the three Search Console properties, and the Search Console API is on in project `worthy-properties-509000`. Production only.
 
 Without a token that card shows "not connected" and the rest of the page still works.
+
+## Search tab: Google, AI search, Google Shopping
+
+- **AI search** (lib/aiVisibility.js):
+  - One card per assistant: Google AI, Claude, ChatGPT, Gemini, Perplexity, Copilot.
+  - Visits from each assistant come from GA4, with "converted" meaning visits with a key event.
+  - The ChatGPT card shows orders from the Shopify ChatGPT channel.
+  - Daily answer checks: 15 buyer questions (`AI_QUESTIONS`), each put to every assistant with a key. Each answer is scored on three things: names us, links our site, and Dutch Rusk still in Nelson. Clicking a cell opens the full answer.
+  - The checks run when the view opens and the last run is over a day old, or on Check now.
+  - Keys: ANTHROPIC_API_KEY (Claude, set), and optionally OPENAI_API_KEY, GEMINI_API_KEY, PERPLEXITY_API_KEY. Copilot has no API, so it shows visits only.
+  - Claude uses the basic web search tool on purpose, because the filtering version returns no sources.
+  - Rough cost: about NZ$1 a day for Claude.
+- **Google AI** (AI Overviews and AI Mode):
+  - Search Console's Generative AI report has no API (probed 24 Nov 2026; every `type` value was rejected). Its figures are read from the report in a signed-in browser and saved with POST `{action: 'google-ai', site, data}`.
+  - First capture 24 Nov covers 23 Aug to 22 Nov: worthyproducts.nz 19.6k, worthy.nz 2.43k, dutchrusk.co.nz 434.
+- **Google Shopping** (lib/shopping.js):
+  - GA4 Organic Shopping (free listings) and Paid Shopping.
+  - Product landing pages.
+  - Search Console search appearances (Product snippets, Merchant listings) and the searches behind them.
