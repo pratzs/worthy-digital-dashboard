@@ -1274,7 +1274,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
       <div className={s.engineGrid}>
         <section className={s.card}>
           <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>Google AI</h2><span className={`${s.pill} ${gai.length ? s.pillGreen : s.pillGrey}`}>{gai.length ? "Search Console" : "No figures yet"}</span></div>
-          <div className={s.statLine} style={{ gap: 14 }}>
+          <div className={`${s.statLine} ${s.statTight}`}>
             <div className={s.stat}><div className={s.statNum}>{gai.length ? (gai.length === 1 ? gai[0].shown : n0(gaiTotal)) : "-"}</div><div className={s.statLabel}>Times shown in AI Overviews and AI Mode</div></div>
             {gai[0] && <div className={s.stat}><div className={s.statNum} style={{ fontSize: 14, fontWeight: 400 }}>{dShort(gai[0].start)} to {dShort(gai[0].end)}</div><div className={s.statLabel}>Period</div></div>}
           </div>
@@ -1284,7 +1284,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
             <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>{e.name}</h2>
               {e.id === "copilot" ? <span className={`${s.pill} ${s.pillGrey}`}>Visits only</span> : e.connected ? <span className={`${s.pill} ${s.pillGreen}`}>Asked</span> : <span className={`${s.pill} ${s.pillGrey}`}>Add key</span>}
             </div>
-            <div className={s.statLine} style={{ gap: 14 }}>
+            <div className={`${s.statLine} ${s.statTight}`}>
               <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.named}/${e.asked}` : "-"}</div><div className={s.statLabel}>Answers name us</div></div>
               <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.linked}/${e.asked}` : "-"}</div><div className={s.statLabel}>Link our site</div></div>
               <div className={s.stat}><div className={s.statNum}>{ai ? n0(e.visits) : "-"}</div><div className={s.statLabel}>Visits{e.conversions ? `, ${n0(e.conversions)} converted` : ""}</div></div>
