@@ -43,7 +43,7 @@ const TABS = [
   { id: "outreach", label: "Outreach", icon: "mail" },
   { id: "listings", label: "Listings", icon: "pin" },
   { id: "pipeline", label: "Pipeline", icon: "flow" },
-  { id: "meeting", label: "Meeting", icon: "calendar" },
+  { id: "meeting", label: "Ecom x Marketing", icon: "calendar" },
 ];
 
 // ── formatting ──────────────────────────────────────────────────────────────────────────────────────
@@ -511,10 +511,12 @@ export default function CommandCenter() {
     const fromClickup = (clickup?.tasks || []).filter(inS)
       .map((t) => ({ id: `cu_${t.id}`, src: "clickup", rid: t.id, rawStatus: t.status, kind: "pipeline", source: "ClickUp", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
         status: st(t, (x) => (/progress|review/i.test(x.status) ? "in progress" : "next")), label: cap(t.status), doneAt: t.doneAt }));
-    return [...fromAsana, ...fromClickup];
+    void fromAsana;   // Asana is the Ecom x Marketing tab's, not the department pipeline
+    return fromClickup;
   }, [asana, clickup, site, today]);
   const cuOpen = external.filter((x) => x.source === "ClickUp" && x.status !== "done").map((x) => ({ ...x, kind: "asana", status: x.label }));
-  const upcomingAll = [...upcoming, ...asanaOpen, ...cuOpen].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+  void asanaOpen;
+  const upcomingAll = [...upcoming, ...cuOpen].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
   const overdue = upcomingAll.filter((x) => x.due && x.due < today).length;
 
   const feed = useMemo(() => {
@@ -556,7 +558,7 @@ export default function CommandCenter() {
         {/* heading */}
         <div className={s.head}>
           <div>
-            <h1 className={s.title}>{tab === "dashboard" ? "Command Center" : TABS.find((t) => t.id === tab).label === "Meeting" ? "Thursday meeting" : TABS.find((t) => t.id === tab).label}</h1>
+            <h1 className={s.title}>{tab === "dashboard" ? "Command Center" : TABS.find((t) => t.id === tab).label}</h1>
             <div className={s.sub}><span className={s.liveDot} />{updatedText}<span>·</span><span>{siteName(site)}</span><span>·</span><span>{rangeText}</span></div>
           </div>
           <div className={s.actions}>
@@ -915,7 +917,7 @@ function MeetingTab({ data, onEvents, onExt, asana, asanaTasks, external, site, 
   const inSite = (x) => site === "all" || !x.site || x.site === site;
   const asanaDone = asanaTasks.filter((t) => t.done && t.doneAt && t.doneAt.slice(0, 10) >= lastThu)
     .map((t) => ({ id: `as_${t.id}`, kind: "asana", title: t.name, doneAt: t.doneAt.slice(0, 10), owner: t.owner, url: t.url, site: t.sites?.length === 1 ? t.sites[0] : "" }));
-  const doneSince = [...items.filter((x) => x.doneAt && x.doneAt >= lastThu && inSite(x)), ...asanaDone].sort((a, b) => b.doneAt.localeCompare(a.doneAt));
+  const doneSince = [...asanaDone].sort((a, b) => b.doneAt.localeCompare(a.doneAt));
   const nextUp = [...items.filter((x) => x.kind === "pipeline" && x.status !== "done" && inSite(x)), ...external.filter((x) => x.source === "ClickUp" && x.status !== "done")]
     .sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999"))).slice(0, 8);
   const v = [sumOf(w7.cur, "sessions"), sumOf(w7.prev, "sessions")];
@@ -958,20 +960,7 @@ function MeetingTab({ data, onEvents, onExt, asana, asanaTasks, external, site, 
 
       <AsanaCard asana={asana} tasks={asanaTasks} site={site} today={today} lastThu={lastThu} onExt={onExt} saving={saving} />
 
-      <div className={s.grid2} style={{ marginTop: 14 }}>
-        <section className={s.card}>
-          {nextUp.length === 0 && <><div className={s.cardHead}><h2 className={s.cardTitle}>Up next</h2></div><div className={s.empty}>All clear</div></>}
-          {nextUp.length > 0 && <>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Up next</h2></div>
-            {nextUp.map((x) => (
-              <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => (x.source ? window.open(x.url, "_blank", "noopener") : onEdit(x))}>
-                <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{x.source ? `${x.source} · ${x.label}` : cap(x.status)}{x.due ? ` · ${dShort(x.due)}` : ""}{x.site ? ` · ${siteName(x.site)}` : ""}</div></div>
-                <span className={`${s.pill} ${x.status === "in progress" ? s.pillViolet : s.pillGrey}`}>{cap(x.status)}</span>
-              </div>
-            ))}
-          </>}
-        </section>
-
+      <div style={{ marginTop: 14 }}>
         <section className={s.card}>
           <div className={s.cardHead}>
             <h2 className={s.cardTitle}>Done this week</h2>
