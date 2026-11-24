@@ -530,10 +530,10 @@ export default function CommandCenter() {
       <div className={s.shell}>
         {/* top bar */}
         <header className={s.top}>
-          <div className={s.brand}>
-            <div className={s.logo}><span>W</span></div>
-            <span>Worthy</span>
-          </div>
+          <Link className={s.brand} href="/command" aria-label="Worthy Command Center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-black.png" alt="Worthy" className={s.brandLogo} width="1069" height="707" />
+          </Link>
           <nav className={s.nav} aria-label="Command Center sections">
             {TABS.map((t) => (
               <button key={t.id} type="button" className={`${s.navBtn} ${tab === t.id ? s.navOn : ""}`} onClick={() => go(t.id)} aria-current={tab === t.id ? "page" : undefined}>
