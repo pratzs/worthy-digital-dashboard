@@ -31,6 +31,9 @@ const KINDS = {
   spend: { label: "Spend", one: "Marketing spend", statuses: ["recorded"], title: "Channel",
     fields: ["title", "site", "amount", "month", "notes"] },
 };
+// What the listing statuses mean, in plain words
+const STATUS_WORDS = { listing: { "to submit": "To add", submitted: "Waiting on site", live: "Correct", "needs fixing": "Wrong details" } };
+const stLabel = (kind, st) => STATUS_WORDS[kind]?.[st] || cap(st);
 const FIELD_LABEL = { site: "Site", area: "Area", status: "Status", owner: "Owner", due: "Due", link: "Link", notes: "Notes",
   contact: "Contact", score: "Score", amount: "Amount (NZ$)", month: "Month" };
 
@@ -320,7 +323,7 @@ function Editor({ item, onClose, onSave, onDelete, busy, error }) {
   const set = (key) => (e) => setF({ ...f, [key]: e.target.value });
   const input = (key) => {
     if (key === "site") return <select value={f.site || ""} onChange={set("site")}><option value="">All of Worthy</option>{SITES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>;
-    if (key === "status") return <select value={f.status || k.statuses[0]} onChange={set("status")}>{k.statuses.map((x) => <option key={x} value={x}>{cap(x)}</option>)}</select>;
+    if (key === "status") return <select value={f.status || k.statuses[0]} onChange={set("status")}>{k.statuses.map((x) => <option key={x} value={x}>{stLabel(f.kind, x)}</option>)}</select>;
     if (key === "notes") return <textarea value={f.notes || ""} onChange={set("notes")} />;
     if (key === "due") return <input type="date" value={f.due || ""} onChange={set("due")} />;
     if (key === "month") return <input type="month" value={f.month || ""} onChange={set("month")} />;
@@ -855,14 +858,14 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
     <div className={s.fade}>
       <section className={s.card} style={{ marginBottom: 14 }}>
         <div className={s.statLine}>
-          {k.statuses.map((st) => <div key={st} className={s.stat}><div className={s.statNum}>{by(st).length}</div><div className={s.statLabel}>{cap(st)}</div></div>)}
+          {k.statuses.map((st) => <div key={st} className={s.stat}><div className={s.statNum}>{by(st).length}</div><div className={s.statLabel}>{stLabel(kind, st)}</div></div>)}
           <div className={s.stat}><div className={s.statNum} style={{ color: overdue ? "#e5413c" : undefined }}>{overdue}</div><div className={s.statLabel}>Overdue</div></div>
         </div>
       </section>
       <div className={s.board}>
         {k.statuses.map((st) => (
           <section key={st} className={s.col}>
-            <div className={s.colHead}><span>{st}</span><span className={s.count}>{by(st).length}</span></div>
+            <div className={s.colHead}><span>{stLabel(kind, st)}</span><span className={s.count}>{by(st).length}</span></div>
             {by(st).map((x) => {
               const i = k.statuses.indexOf(st);
               const next = k.statuses[i + 1];
@@ -887,7 +890,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
                     )}
                     {next && next !== "lost" && !x.source && !(kind === "listing" && st === "live") && (
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} style={{ marginLeft: "auto", padding: "4px 9px" }} onClick={(e) => { e.stopPropagation(); onMove(x, next); }}>
-                        {cap(next)}<Icon n="move" size={12} />
+                        {stLabel(kind, next)}<Icon n="move" size={12} />
                       </button>
                     )}
                   </div>

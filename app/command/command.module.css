@@ -184,7 +184,7 @@
 /* board columns */
 .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); gap: 14px; overflow-x: auto; padding-bottom: 6px; }
 .col { background: rgba(255,255,255,.45); border-radius: 22px; padding: 14px; border: 1px solid rgba(255,255,255,.8); min-height: 160px; }
-.colHead { display: flex; justify-content: space-between; align-items: center; margin: 2px 4px 12px; font-size: 13px; text-transform: capitalize; }
+.colHead { display: flex; justify-content: space-between; align-items: center; margin: 2px 4px 12px; font-size: 13px; }
 .count { font-size: 11px; color: var(--mute); background: rgba(255,255,255,.8); padding: 2px 9px; border-radius: 999px; }
 .item { background: #fff; border-radius: 16px; padding: 13px 14px; margin-bottom: 8px; cursor: pointer; border: 1px solid rgba(0,0,0,.03); transition: box-shadow .2s, transform .2s; }
 .item:hover { box-shadow: 0 12px 24px -16px rgba(0,0,0,.35); transform: translateY(-1px); }
