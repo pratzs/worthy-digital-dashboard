@@ -13,7 +13,7 @@
  */
 import { NextResponse } from 'next/server';
 import { setOidcToken } from '@/lib/ga4';
-import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail, searchForRange } from '@/lib/command';
+import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail, searchForRange, todaySoFar } from '@/lib/command';
 import { asanaSafe, asanaWrite } from '@/lib/asana';
 import { clickupSafe, clickupWrite } from '@/lib/clickup';
 import { aiReferrals, latestChecks, runChecks, readGoogleAi, saveGoogleAi } from '@/lib/aiVisibility';
@@ -53,8 +53,9 @@ export async function GET(request) {
     catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
   }
   if (q.get('live') === '1') {
-    const [live, log, asana, clickup] = await Promise.all([liveVisitors(), readLog(), asanaSafe(), clickupSafe()]);
-    return NextResponse.json({ live, log, asana, clickup, at: new Date().toISOString() });
+    const fresh = q.get('fresh') === '1';
+    const [live, log, asana, clickup, todayNow] = await Promise.all([liveVisitors(), readLog(), asanaSafe({ fresh }), clickupSafe({ fresh }), todaySoFar({ fresh })]);
+    return NextResponse.json({ live, log, asana, clickup, todayNow, at: new Date().toISOString() });
   }
   return NextResponse.json({ ...(await commandData({ fresh: q.get('fresh') === '1' })), person: request.headers.get('x-worthy-person') || '' });
 }

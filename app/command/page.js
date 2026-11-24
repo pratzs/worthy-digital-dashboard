@@ -380,6 +380,10 @@ export default function CommandCenter() {
   const [saveErr, setSaveErr] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [liveAt, setLiveAt] = useState(null);
+  const [todayNow, setTodayNow] = useState(null);
+  const [loadedAt, setLoadedAt] = useState(null);
+  // Thursday in NZ is meeting day: the whole page refreshes every minute, live figures every 15 seconds
+  const [meeting] = useState(() => new Date().toLocaleDateString("en-NZ", { timeZone: "Pacific/Auckland", weekday: "long" }) === "Thursday");
   const [preset, setPreset] = useState("30d");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -403,26 +407,26 @@ export default function CommandCenter() {
       if (r.status === 401 || r.status === 403) { window.location.href = "/login"; return; }
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
-      setData(j); setLive(j.live); setAsana(j.asana); setClickup(j.clickup); setBoard(j.board); setLog(j.log || []); setLiveAt(j.builtAt); setFailed("");
+      setData(j); setLive(j.live); setAsana(j.asana); setClickup(j.clickup); setBoard(j.board); setLog(j.log || []); setLiveAt(j.liveAt || j.builtAt); setTodayNow(j.todayNow); setLoadedAt(j.builtAt); setFailed("");
     } catch (e) { setFailed(String(e.message || e)); }
     finally { setLoading(false); }
   }, []);
-  const loadLive = useCallback(async () => {
+  const loadLive = useCallback(async (fresh = false) => {
     try {
-      const r = await fetch("/api/command?live=1", { cache: "no-store" });
+      const r = await fetch(`/api/command?live=1${fresh ? "&fresh=1" : ""}`, { cache: "no-store" });
       if (!r.ok) return;
-      const j = await r.json(); setLive(j.live); if (j.asana) setAsana(j.asana); if (j.clickup) setClickup(j.clickup); setLog(j.log || []); setLiveAt(j.at);
+      const j = await r.json(); setLive(j.live); if (j.asana) setAsana(j.asana); if (j.clickup) setClickup(j.clickup); if (j.todayNow) setTodayNow(j.todayNow); setLog(j.log || []); setLiveAt(j.at);
     } catch { /* next tick */ }
   }, []);
   useEffect(() => {
     load();
-    const a = setInterval(() => { if (!document.hidden) loadLive(); }, 30000);
-    const b = setInterval(() => { if (!document.hidden) load(); }, 5 * 60000);
+    const a = setInterval(() => { if (!document.hidden) loadLive(); }, meeting ? 15000 : 30000);
+    const b = setInterval(() => { if (!document.hidden) load(); }, meeting ? 60000 : 5 * 60000);
     const c = setInterval(() => setNow(Date.now()), 1000);
     const vis = () => { if (!document.hidden) loadLive(); };
     document.addEventListener("visibilitychange", vis);
     return () => { clearInterval(a); clearInterval(b); clearInterval(c); document.removeEventListener("visibilitychange", vis); };
-  }, [load, loadLive]);
+  }, [load, loadLive, meeting]);
 
   const save = async (item, action = "save") => {
     setSaving(true); setSaveErr("");
@@ -527,7 +531,8 @@ export default function CommandCenter() {
   }, [log, items]);
   const feedShown = feed.filter((e) => feedTab === "all" || e.type === feedTab).slice(0, 30);
 
-  const updatedText = liveAt ? `Live, updated ${ago(liveAt, now)}` : "Connecting";
+  const updatedText = loadedAt ? `Refreshed ${nzTime(loadedAt)}, live ${ago(liveAt || loadedAt, now)}` : "Connecting";
+  const refreshAll = () => { load(true); };
   const initials = person ? person.slice(0, 2).toUpperCase() : "WO";
 
   return (
@@ -562,7 +567,7 @@ export default function CommandCenter() {
             <div className={s.sub}><span className={s.liveDot} />{updatedText}<span>·</span><span>{siteName(site)}</span><span>·</span><span>{rangeText}</span></div>
           </div>
           <div className={s.actions}>
-            <button type="button" className={s.btn} onClick={() => load(true)} disabled={loading}><Icon n="refresh" size={15} className={loading ? s.spin : ""} />Refresh</button>
+            <button type="button" className={s.btn} onClick={refreshAll} disabled={loading}><Icon n="refresh" size={15} className={loading ? s.spin : ""} />{loading ? "Refreshing" : "Refresh"}</button>
             <select className={s.select} value={preset} onChange={(e) => { setPreset(e.target.value); if (e.target.value === "custom" && !from) { setFrom(rStart); setTo(rEnd); } }} aria-label="Date range">
               {PRESETS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
             </select>
@@ -583,6 +588,7 @@ export default function CommandCenter() {
           </div>
         </div>
 
+        <Freshness data={data} liveAt={liveAt} todayNow={todayNow} asana={asana} clickup={clickup} meeting={meeting} now={now} />
         {failed && !data && <div className={s.card}><div className={s.err}>Could not load: {failed}</div></div>}
 
         {tab === "dashboard" && (
@@ -610,6 +616,7 @@ export default function CommandCenter() {
                 <Spark values={w30.cur.map((r) => r.conversions)} hotLast={7} />
               </div>
             </section>
+            {todayNow && <section className={s.card} style={{ marginTop: 14, paddingTop: 2 }}><TodaySoFar todayNow={todayNow} site={site} /></section>}
 
             <div className={s.grid}>
               <div className={s.stack}>
@@ -723,7 +730,7 @@ export default function CommandCenter() {
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "meeting" && (
-          <MeetingTab data={data} onEvents={openEvents} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
+          <MeetingTab todayNow={todayNow} data={data} onEvents={openEvents} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
             onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onDone={(x) => quickStatus(x, "done")} saving={saving} />
         )}
 
@@ -922,7 +929,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
 }
 
 // ── Thursday meeting ────────────────────────────────────────────────────────────────────────────────
-function MeetingTab({ data, onEvents, onExt, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
+function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
   const t = d0(today); const wd = t.getUTCDay();
   const nextThu = addDays(today, (4 - wd + 7) % 7);
   const lastThu = addDays(nextThu, -7);
@@ -968,6 +975,7 @@ function MeetingTab({ data, onEvents, onExt, asana, asanaTasks, external, site, 
           <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>Live now</div></div>
         </div>
+        <TodaySoFar todayNow={todayNow} site={site} />
       </section>
 
       <AsanaCard asana={asana} tasks={asanaTasks} site={site} today={today} lastThu={lastThu} onExt={onExt} saving={saving} />
@@ -1454,6 +1462,49 @@ function ShoppingSearch({ site, start, end, today }) {
           </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Today so far (since midnight NZ) ────────────────────────────────────────────────────────────────
+function TodaySoFar({ todayNow, site }) {
+  if (!todayNow) return null;
+  const rows = todayNow.sites.filter((x) => x.status === "ok" && (site === "all" || x.id === site));
+  if (!rows.length) return null;
+  const sum = (k, ids) => rows.filter((x) => !ids || ids.includes(x.id)).reduce((a, x) => a + (x[k] || 0), 0);
+  const shops = ["worthyproducts", "dutchrusk"];
+  return (
+    <div className={s.today}>
+      <div className={s.todayHead}><span className={s.liveDot} />Today so far <span className={s.todayTime}>{nzTime(todayNow.at)}</span></div>
+      <div className={s.statLine}>
+        <div className={s.stat}><div className={s.statNum}>{n0(sum("sessions"))}</div><div className={s.statLabel}>Visits</div></div>
+        {site !== "worthy" && <div className={s.stat}><div className={s.statNum}>{n0(sum("conversions", shops))}</div><div className={s.statLabel}>Orders</div></div>}
+        {site !== "worthy" && <div className={s.stat}><div className={s.statNum}>{money(sum("revenue", shops))}</div><div className={s.statLabel}>Online sales</div></div>}
+        {(site === "all" || site === "worthy") && <div className={s.stat}><div className={s.statNum}>{n0(sum("conversions", ["worthy"]))}</div><div className={s.statLabel}>worthy.nz enquiries</div></div>}
+      </div>
+    </div>
+  );
+}
+
+// ── When each source was last read ─────────────────────────────────────────────────────────────────
+function Freshness({ data, liveAt, todayNow, asana, clickup, meeting, now }) {
+  const oldest = (arr) => { const t = (arr || []).map((x) => x.fetchedAt || x.savedAt).filter(Boolean).sort()[0]; return t || null; };
+  const traffic = oldest(data?.traffic), search = oldest(data?.search);
+  const gscTo = (data?.search || []).find((x) => x.range)?.range?.end;
+  const items = [
+    ["Live visitors", liveAt],
+    ["Today so far", todayNow?.at],
+    ["Analytics and Shopify", traffic],
+    [`Search Console${gscTo ? ` (data to ${dShort(gscTo)})` : ""}`, search],
+    ["Asana", asana?.at],
+    ["ClickUp", clickup?.at],
+  ].filter(([, t]) => t);
+  if (!items.length) return null;
+  const stale = (t) => now - Date.parse(t) > (meeting ? 5 : 30) * 60000;
+  return (
+    <div className={s.fresh}>
+      {meeting && <span className={`${s.pill} ${s.pillViolet}`}>Meeting day: refreshing every minute</span>}
+      {items.map(([label, t]) => <span key={label} className={`${s.tag} ${stale(t) ? s.tagStale : ""}`}>{label} {nzTime(t)}</span>)}
     </div>
   );
 }

@@ -233,6 +233,11 @@
 .engineGrid .statNum { font-size: 22px; }
 @media (max-width: 1200px) { .engineGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .engineGrid { grid-template-columns: minmax(0, 1fr); } }
+.fresh { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 4px 14px; align-items: center; }
+.tagStale { color: #b5620e; background: var(--amber-bg); }
+.today { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.todayHead { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); margin-bottom: 10px; }
+.todayTime { color: var(--mute); font-size: 12px; }
 /* asana */
 .people { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .people::-webkit-scrollbar { display: none; }
