@@ -3219,8 +3219,10 @@ export default function EcommerceDashboard({ section = "overview" }) {
           const picked = view === "weekly"
             ? done.find((w) => MONTH_IDX[w.monthLabel] === weeklyMonth && w.week === selectedWeek)
             : [...done].reverse().find((w) => w.complete);
-          const wk = picked && MONTH_IDX[picked.monthLabel] === weeklyMonth && view === "weekly"
-            ? odooWeekRows().filter((r) => r.week === picked.week) : [];
+          // The week's Worthy Products cost comes from the weekly route; load that month's weeks if they are not here yet.
+          const wkData = picked ? cacheRef.current[odooWeekKey(activeStore.id, picked.monthKey)] : null;
+          if (picked && !wkData) setTimeout(() => fetchOdooWeeks(activeStore.id, picked.monthKey), 0);
+          const wk = wkData && !wkData.failed ? (wkData.rows || []).filter((r) => r.week === picked.week) : [];
           const wkCost = wk.reduce((t, r) => t + (r.cost || 0), 0);
           const wkGp = wk.reduce((t, r) => t + (r.grossProfit || 0), 0);
           const weekWp = wk.length && wkGp + wkCost > 0
