@@ -543,7 +543,7 @@ export default function CommandCenter() {
               <div className={s.stack}>
                 <section className={s.card}>
                   <div className={s.cardHead}>
-                    <h2 className={s.cardTitle}>Traffic vs sales</h2>
+                    <h2 className={s.cardTitle}>{lead ? "Traffic vs enquiries" : "Traffic vs sales"}</h2>
                     <div className={s.seg}>
                       {["daily", "weekly", "monthly"].map((m) => <button key={m} type="button" className={mode === m ? s.segOn : ""} onClick={() => setMode(m)}>{cap(m)}</button>)}
                     </div>
