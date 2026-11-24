@@ -111,7 +111,8 @@ const Icon = ({ n, size = 16, stroke = 1.6, className }) => (
 const ASANA_PROJECT = "1219139073710791";
 const statusCls = (st) => (/done/i.test(st || "") ? s.pillGreen : /progress/i.test(st || "") ? s.pillViolet : /review|waiting|approved/i.test(st || "") ? s.pillAmber : s.pillGrey);
 const initialsOf = (n) => String(n || "?").replace(/@.*/, "").split(/[\s.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-const KIND_ICON = { pipeline: "flow", outreach: "mail", listing: "pin", meeting: "calendar", authority: "star", spend: "dollar" };
+const KIND_ICON = { pipeline: "flow", outreach: "mail", listing: "pin", meeting: "calendar", authority: "star", spend: "dollar", asana: "calendar", clickup: "flow" };
+const SRC_LABEL = { asana: "Asana", clickup: "ClickUp" };
 
 // ── small pieces ────────────────────────────────────────────────────────────────────────────────────
 function Delta({ now, before, points = false, invert = false }) {
@@ -404,6 +405,18 @@ export default function CommandCenter() {
     finally { setSaving(false); }
   };
   const quickStatus = (item, status) => save({ ...item, status });
+  /** Change a task in Asana or ClickUp itself. The page updates from what the tool sends back. */
+  const ext = async (src, id, op, value, title) => {
+    setSaving(true); setSaveErr("");
+    try {
+      const r = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "external", source: src, id, op, value, title }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Could not save");
+      if (j.asana) setAsana(j.asana); if (j.clickup) setClickup(j.clickup); setLog(j.log || []);
+      return true;
+    } catch (e) { setSaveErr(String(e.message || e)); alert(String(e.message || e)); return false; }
+    finally { setSaving(false); }
+  };
   const person = data?.person || "";
   const newItem = (kind, extra = {}) => { setSaveErr(""); setEditing({ kind, status: KINDS[kind].statuses[0], site: site === "all" ? "" : site, owner: person ? cap(person) : "", ...extra }); };
   const defaultKind = { dashboard: "pipeline", search: "authority", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "pipeline" }[tab];
@@ -440,16 +453,16 @@ export default function CommandCenter() {
   const upcoming = items.filter((x) => inSite(x) && ((x.kind === "pipeline" && x.status !== "done") || (x.kind === "meeting" && x.status === "open") || (x.kind === "outreach" && ["prospect", "contacted", "replied"].includes(x.status) && x.due)))
     .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
   const asanaTasks = (asana?.tasks || []).filter((t) => site === "all" || !t.sites?.length || t.sites.includes(site));
-  const asanaOpen = asanaTasks.filter((t) => !t.done).map((t) => ({ id: `as_${t.id}`, kind: "asana", title: t.name, due: t.due, owner: t.owner, site: t.sites?.length === 1 ? t.sites[0] : "", url: t.url, status: t.status }));
+  const asanaOpen = asanaTasks.filter((t) => !t.done).map((t) => ({ id: `as_${t.id}`, src: "asana", rid: t.id, kind: "asana", title: t.name, due: t.due, owner: t.owner, site: t.sites?.length === 1 ? t.sites[0] : "", url: t.url, status: t.status }));
   const external = useMemo(() => {
     const inS = (t) => site === "all" || !t.sites?.length || t.sites.includes(site);
     const st = (t, map) => (t.done ? "done" : map(t));
     const one = (t) => (t.sites?.length === 1 ? t.sites[0] : "");
     const fromAsana = (asana?.tasks || []).filter(inS).filter((t) => !t.done || (t.doneAt && t.doneAt.slice(0, 10) >= addDays(today, -14)))
-      .map((t) => ({ id: `as_${t.id}`, kind: "pipeline", source: "Asana", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
+      .map((t) => ({ id: `as_${t.id}`, src: "asana", rid: t.id, kind: "pipeline", source: "Asana", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
         status: st(t, (x) => (/progress|review/i.test(x.status || "") ? "in progress" : "next")), label: t.done ? "Done" : t.status || "Open", doneAt: t.doneAt ? t.doneAt.slice(0, 10) : null }));
     const fromClickup = (clickup?.tasks || []).filter(inS)
-      .map((t) => ({ id: `cu_${t.id}`, kind: "pipeline", source: "ClickUp", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
+      .map((t) => ({ id: `cu_${t.id}`, src: "clickup", rid: t.id, rawStatus: t.status, kind: "pipeline", source: "ClickUp", title: t.name, url: t.url, owner: t.owner, due: t.due, site: one(t), sites: t.sites,
         status: st(t, (x) => (/progress|review/i.test(x.status) ? "in progress" : "next")), label: cap(t.status), doneAt: t.doneAt }));
     return [...fromAsana, ...fromClickup];
   }, [asana, clickup, site, today]);
@@ -572,7 +585,7 @@ export default function CommandCenter() {
                           <div className={s.feedIcon}><Icon n={KIND_ICON[e.kind] || "flow"} size={15} /></div>
                           <div style={{ minWidth: 0 }}>
                             <div className={s.feedTitle}>{e.title}</div>
-                            <div className={s.feedMeta}>{KINDS[e.kind]?.label || ""}{e.person ? ` · ${cap(e.person)}` : ""} · {e.dateOnly ? dShort(e.dateOnly) : ago(e.at, now)}</div>
+                            <div className={s.feedMeta}>{KINDS[e.kind]?.label || SRC_LABEL[e.kind] || ""}{e.person ? ` · ${cap(e.person)}` : ""} · {e.dateOnly ? dShort(e.dateOnly) : ago(e.at, now)}</div>
                           </div>
                           <span className={`${s.pill} ${e.type === "done" ? s.pillGreen : e.type === "moved" ? s.pillViolet : e.type === "added" ? s.pillAmber : s.pillGrey}`}>{e.type === "done" ? cap(e.what === "live" ? "live" : "done") : cap(e.type)}</span>
                         </div>
@@ -596,7 +609,7 @@ export default function CommandCenter() {
                           </div>
                         </div>
                         {x.kind === "asana"
-                          ? <span className={`${s.pill} ${statusCls(x.status)}`}>{x.status || "Open"}</span>
+                          ? <button type="button" className={s.toggle} aria-label={`Mark ${x.title} done`} title={`Done in ${SRC_LABEL[x.src]}`} onClick={() => ext(x.src, x.rid, "done", null, x.title)} disabled={saving} />
                           : x.kind !== "outreach"
                           ? <button type="button" className={s.toggle} aria-label={`Mark ${x.title} done`} onClick={() => quickStatus(x, "done")} disabled={saving} />
                           : <span className={`${s.pill} ${s.pillAmber}`}>{cap(x.status)}</span>}
@@ -649,9 +662,9 @@ export default function CommandCenter() {
         {tab === "search" && <SearchTab data={data} site={site} items={items} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
         {tab === "outreach" && <BoardTab kind="outreach" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
-        {tab === "pipeline" && <BoardTab kind="pipeline" items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
+        {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "meeting" && (
-          <MeetingTab data={data} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
+          <MeetingTab data={data} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
             onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onDone={(x) => quickStatus(x, "done")} saving={saving} />
         )}
 
@@ -777,7 +790,7 @@ function SearchTab({ data, site, items, onEdit, onAdd }) {
 }
 
 // ── Outreach / Listings / Pipeline ──────────────────────────────────────────────────────────────────
-function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove }) {
+function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
   const k = KINDS[kind];
   const mine = items.filter((x) => x.kind === kind && (site === "all" || !x.site || x.site === site));
   const by = (st) => mine.filter((x) => x.status === st).sort((a, b) => st === "done" || st === "won" || st === "live" ? String(b.doneAt || b.updatedAt || "").localeCompare(String(a.doneAt || a.updatedAt || "")) : String(a.due || "9999").localeCompare(String(b.due || "9999")));
@@ -811,6 +824,12 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove }) {
                     {x.doneAt && st === doneWord && <span>{cap(doneWord)} {dShort(x.doneAt)}</span>}
                     {x.owner && <span>· {x.owner}</span>}
                     {x.link && <a href={x.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "#5536e6", display: "inline-flex" }} aria-label="Open link"><Icon n="link" size={13} /></a>}
+                    {x.src && st !== "done" && (
+                      <button type="button" className={`${s.btn} ${s.btnSmall}`} style={{ marginLeft: "auto", padding: "4px 9px" }}
+                        onClick={(e) => { e.stopPropagation(); if (x.src === "clickup" && st === "next") onExt("clickup", x.rid, "status", "in progress", x.title); else onExt(x.src, x.rid, "done", null, x.title); }}>
+                        {x.src === "clickup" && st === "next" ? "Start" : "Done"}<Icon n={st === "next" && x.src === "clickup" ? "move" : "check"} size={12} />
+                      </button>
+                    )}
                     {next && next !== "lost" && !x.source && (
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} style={{ marginLeft: "auto", padding: "4px 9px" }} onClick={(e) => { e.stopPropagation(); onMove(x, next); }}>
                         {cap(next)}<Icon n="move" size={12} />
@@ -831,7 +850,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove }) {
 }
 
 // ── Thursday meeting ────────────────────────────────────────────────────────────────────────────────
-function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
+function MeetingTab({ data, onExt, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
   const t = d0(today); const wd = t.getUTCDay();
   const nextThu = addDays(today, (4 - wd + 7) % 7);
   const lastThu = addDays(nextThu, -7);
@@ -879,7 +898,7 @@ function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7,
         </div>
       </section>
 
-      <AsanaCard asana={asana} tasks={asanaTasks} site={site} today={today} lastThu={lastThu} />
+      <AsanaCard asana={asana} tasks={asanaTasks} site={site} today={today} lastThu={lastThu} onExt={onExt} saving={saving} />
 
       <div className={s.grid2} style={{ marginTop: 14 }}>
         <section className={s.card}>
@@ -962,7 +981,10 @@ function MeetingTab({ data, asana, asanaTasks, external, site, items, today, w7,
 }
 
 // ── Asana: Ecom x Marketing ─────────────────────────────────────────────────────────────────────────
-function AsanaCard({ asana, tasks, site, today, lastThu }) {
+function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
+  const [editDue, setEditDue] = useState(null);
+  const [noteFor, setNoteFor] = useState(null);
+  const [note, setNote] = useState("");
   const [view, setView] = useState("open");
   const [person, setPerson] = useState("all");
   const [openIds, setOpenIds] = useState({});
@@ -1011,18 +1033,27 @@ function AsanaCard({ asana, tasks, site, today, lastThu }) {
             return (
               <div key={t.id} className={s.task}>
                 <div className={s.taskMain}>
-                  <span className={`${s.check} ${t.done ? s.checkOn : ""}`}>{t.done && <Icon n="check" size={11} stroke={2.6} />}</span>
+                  <button type="button" className={`${s.check} ${t.done ? s.checkOn : ""}`} disabled={saving} title={t.done ? "Reopen in Asana" : "Mark done in Asana"} aria-label={t.done ? `Reopen ${t.name}` : `Mark ${t.name} done`} onClick={() => onExt("asana", t.id, t.done ? "reopen" : "done", null, t.name)}>{t.done && <Icon n="check" size={11} stroke={2.6} />}</button>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <a className={s.taskName} href={t.url} target="_blank" rel="noreferrer">{t.name}</a>
                     <div className={s.itemMeta} style={{ marginTop: 6 }}>
                       <span className={s.ownerChip}><span className={s.personAvSm}>{initialsOf(t.owner || "?")}</span>{t.owner ? t.owner.replace(/@.*/, "") : "Unassigned"}</span>
-                      {t.done ? <span>Done {dShort(t.doneAt)}</span> : t.due ? <span className={t.due < today ? s.overdue : ""}>{t.due < today ? "Overdue " : "Due "}{dShort(t.due)}</span> : null}
+                      {t.done ? <span>Done {dShort(t.doneAt)}</span> : editDue === t.id
+                        ? <input type="date" className={s.dateIn} autoFocus defaultValue={t.due || ""} onBlur={() => setEditDue(null)} onChange={async (e) => { const v = e.target.value; setEditDue(null); if (v !== t.due) await onExt("asana", t.id, "due", v, t.name); }} />
+                        : <button type="button" className={`${s.linkBtn} ${t.due && t.due < today ? s.overdue : ""}`} title="Change due date in Asana" onClick={() => setEditDue(t.id)}>{t.due ? `${t.due < today ? "Overdue " : "Due "}${dShort(t.due)}` : "Set due date"}</button>}
+                      <button type="button" className={s.linkBtn} onClick={() => { setNoteFor(noteFor === t.id ? null : t.id); setNote(""); }}>Note</button>
                       {site === "all" && t.sites?.map((x) => <span key={x} className={s.siteTag}>{siteName(x)}</span>)}
                       {t.priority && <span className={s.siteTag}>{t.priority}</span>}
                     </div>
                   </div>
                   <span className={`${s.pill} ${statusCls(t.done ? "Done" : t.status)}`}>{t.done ? "Done" : t.status || "Open"}</span>
                 </div>
+                {noteFor === t.id && (
+                  <form className={s.noteRow} onSubmit={async (e) => { e.preventDefault(); if (!note.trim()) return; if (await onExt("asana", t.id, "comment", note.trim(), t.name)) { setNoteFor(null); setNote(""); } }}>
+                    <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note to this task in Asana" />
+                    <button type="submit" className={`${s.btn} ${s.btnSmall} ${s.btnDark}`} disabled={saving}>Send</button>
+                  </form>
+                )}
                 {t.subtaskCount > 0 && (
                   <button type="button" className={s.subToggle} onClick={() => setOpenIds({ ...openIds, [t.id]: !isOpen })}>
                     <span className={s.barTrack} style={{ width: 80, display: "inline-block" }}><span className={s.barFill} style={{ display: "block", width: `${t.subtasks.length ? (subDone / t.subtasks.length) * 100 : 0}%` }} /></span>
@@ -1032,7 +1063,7 @@ function AsanaCard({ asana, tasks, site, today, lastThu }) {
                 )}
                 {isOpen && t.subtasks.map((x) => (
                   <div key={x.id} className={s.sub}>
-                    <span className={`${s.check} ${x.done ? s.checkOn : ""}`}>{x.done && <Icon n="check" size={10} stroke={2.6} />}</span>
+                    <button type="button" className={`${s.check} ${x.done ? s.checkOn : ""}`} disabled={saving} aria-label={x.done ? `Reopen ${x.name}` : `Mark ${x.name} done`} onClick={() => onExt("asana", x.id, x.done ? "reopen" : "done", null, x.name)}>{x.done && <Icon n="check" size={10} stroke={2.6} />}</button>
                     <a href={x.url} target="_blank" rel="noreferrer" className={s.subName} style={{ textDecoration: x.done ? "line-through" : "none" }}>{x.name}</a>
                     <span className={s.rowMeta} style={{ marginTop: 0, whiteSpace: "nowrap" }}>{x.owner ? x.owner.replace(/@.*/, "") : ""}{x.due && !x.done ? ` · ${dShort(x.due)}` : ""}</span>
                   </div>

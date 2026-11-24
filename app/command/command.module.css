@@ -231,6 +231,12 @@
 .taskName { font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; line-height: 1.35; }
 .taskName:hover { text-decoration: underline; }
 .check { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #b9bdb9; display: grid; place-items: center; flex: none; margin-top: 1px; color: #fff; }
+button.check { padding: 0; background: transparent; cursor: pointer; }
+button.check:hover { border-color: var(--green); }
+.linkBtn { border: 0; background: transparent; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted rgba(0,0,0,.25); text-underline-offset: 3px; }
+.dateIn { font: inherit; font-size: 12px; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.noteRow { display: flex; gap: 8px; margin: 10px 0 0 30px; }
+.noteRow input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: #fff; }
 .checkOn { background: var(--green); border-color: var(--green); }
 .subToggle { display: inline-flex; align-items: center; gap: 10px; margin: 10px 0 0 30px; border: 0; background: transparent; font: inherit; font-size: 12px; color: var(--ink2); cursor: pointer; padding: 0; }
 .sub { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; margin: 8px 0 0 30px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; }
@@ -262,7 +268,7 @@
   .kpiNum { font-size: 32px; }
   .card { padding: 16px; border-radius: 22px; }
   .chartSvg { height: 230px; }
-  .sub, .subToggle { margin-left: 0; }
+  .sub, .subToggle, .noteRow { margin-left: 0; }
   .board { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; }
   .fields { grid-template-columns: 1fr; }
   .search { width: 100%; }

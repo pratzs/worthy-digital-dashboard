@@ -2,14 +2,16 @@
  * Worthy Command Center data (lib/command.js). Management only: the middleware lets only the management department
  * reach this path, and the route checks the role again.
  *   GET            everything the page shows (?fresh=1 skips the 15 to 60 minute caches)
+ *   GET ?events=worthy&start=&end=   each key event (enquiry) on that site: time, event, page, source, town, device
  *   GET ?live=1    visitors right now, the Asana meeting tasks and the ClickUp cards, for the page's 30-second refresh
  *   POST           { action: 'save' | 'delete', item }  change the typed-in board
+ *   POST           { action: 'external', source: 'asana' | 'clickup', id, op, value, title }  change the task in Asana or ClickUp
  */
 import { NextResponse } from 'next/server';
 import { setOidcToken } from '@/lib/ga4';
-import { commandData, liveVisitors, writeBoard, readLog } from '@/lib/command';
-import { asanaSafe } from '@/lib/asana';
-import { clickupSafe } from '@/lib/clickup';
+import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail } from '@/lib/command';
+import { asanaSafe, asanaWrite } from '@/lib/asana';
+import { clickupSafe, clickupWrite } from '@/lib/clickup';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -20,6 +22,13 @@ export async function GET(request) {
   if (request.headers.get('x-worthy-role') !== 'mgmt') return denied();
   setOidcToken(request.headers.get('x-vercel-oidc-token'));
   const q = new URL(request.url).searchParams;
+  if (q.get('events')) {
+    const site = q.get('events');
+    const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+    if (!['worthy', 'dutchrusk', 'worthyproducts'].includes(site) || !ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    try { return NextResponse.json(await keyEventDetail(site, q.get('start'), q.get('end'))); }
+    catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
+  }
   if (q.get('live') === '1') {
     const [live, log, asana, clickup] = await Promise.all([liveVisitors(), readLog(), asanaSafe(), clickupSafe()]);
     return NextResponse.json({ live, log, asana, clickup, at: new Date().toISOString() });
@@ -32,6 +41,19 @@ export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }
   const person = request.headers.get('x-worthy-person') || 'management';
+  // Changes to Asana tasks and ClickUp cards, made straight in those tools and written to the activity log
+  if (body.action === 'external') {
+    const { source, id, op, value, title } = body;
+    try {
+      if (source === 'asana') await asanaWrite(id, op, value);
+      else if (source === 'clickup') await clickupWrite(id, op, value);
+      else throw new Error('Unknown source');
+      const what = op === 'done' ? 'done' : op === 'reopen' ? 'reopened' : op === 'due' ? `due moved to ${value || 'none'}` : op === 'status' ? `moved to ${value}` : 'commented';
+      await logEvent({ what, kind: source, title: String(title || id).slice(0, 200), person, source, id, op, value: op === 'comment' ? String(value || '').slice(0, 300) : value });
+      const [asana, clickup, log] = await Promise.all([asanaSafe(), clickupSafe(), readLog()]);
+      return NextResponse.json({ ok: true, asana, clickup, log });
+    } catch (e) { return NextResponse.json({ error: String(e.message || e) }, { status: 400 }); }
+  }
   try {
     const board = await writeBoard(body.action === 'delete' ? 'delete' : 'save', body.item || {}, person);
     return NextResponse.json({ ok: true, board, log: await readLog() });
