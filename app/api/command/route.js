@@ -67,7 +67,7 @@ export async function POST(request) {
   const person = request.headers.get('x-worthy-person') || 'management';
   // Google's AI Overviews / AI Mode figures, read from Search Console's Generative AI report (it has no API yet)
   if (body.action === 'google-ai') {
-    try { await saveGoogleAi(body.site, body.data); await logEvent({ what: 'Google AI figures saved', kind: 'search', title: `Google AI: ${body.site}`, person }); return NextResponse.json({ ok: true, googleAi: await readGoogleAi() }); }
+    try { await saveGoogleAi(body.site, body.data); await logEvent({ what: 'Google AI figures saved', kind: 'search', title: `Google AI figures, ${({ worthy: 'worthy.nz', worthyproducts: 'worthyproducts.nz', dutchrusk: 'dutchrusk.co.nz' })[body.site] || body.site}`, person }); return NextResponse.json({ ok: true, googleAi: await readGoogleAi() }); }
     catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 400 }); }
   }
   // Ask the AI questions again (the page does this when the last run is over a day old, or on Check now)

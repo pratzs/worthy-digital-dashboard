@@ -441,6 +441,7 @@ export default function CommandCenter() {
   const quickStatus = (item, status) => save({ ...item, status });
   /** Change a task in Asana or ClickUp itself. The page updates from what the tool sends back. */
   const ext = async (src, id, op, value, title) => {
+    if ((op === "done" || op === "reopen") && !window.confirm(`${op === "done" ? "Mark done" : "Reopen"} in ${SRC_LABEL[src]}?\n\n${title}`)) return false;
     setSaving(true); setSaveErr("");
     try {
       const r = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "external", source: src, id, op, value, title }) });
@@ -613,7 +614,7 @@ export default function CommandCenter() {
                 <Spark values={w30.cur.map((r) => r.conversions)} hotLast={7} />
               </div>
             </section>
-            {todayNow && <section className={s.card} style={{ marginTop: 14, paddingTop: 2 }}><TodaySoFar todayNow={todayNow} site={site} /></section>}
+            {todayNow && <section className={`${s.card} ${s.todayCard}`}><TodaySoFar todayNow={todayNow} site={site} bar /></section>}
 
             <div className={s.grid}>
               <div className={s.stack}>
@@ -630,7 +631,7 @@ export default function CommandCenter() {
                       <span><i style={{ background: "#5536e6" }} />{lead ? "Enquiries" : "Online sales"}</span>
                       <span><i style={{ background: "#a9adaa" }} />Previous</span>
                     </div>
-                    <DatePair start={rStart} end={rEnd} max={yesterday} onChange={pickDates} small />
+                    <Range>{rangeText}</Range>
                   </div>
                   <TrafficChart rows={rows} mode={chartMode} lead={lead} />
                 </section>
@@ -647,8 +648,8 @@ export default function CommandCenter() {
                         <div key={i} className={s.feedItem}>
                           <div className={s.feedIcon}><Icon n={KIND_ICON[e.kind] || "flow"} size={15} /></div>
                           <div style={{ minWidth: 0 }}>
-                            <div className={s.feedTitle}>{e.title}</div>
-                            <div className={s.feedMeta}>{KINDS[e.kind]?.label || SRC_LABEL[e.kind] || ""}{e.person ? ` · ${cap(e.person)}` : ""} · {e.dateOnly ? dShort(e.dateOnly) : ago(e.at, now)}</div>
+                            <div className={s.feedTitle}>{String(e.title).replace(/Google AI: (\w+)/, (m, id) => `Google AI figures, ${siteName(id)}`)}</div>
+                            <div className={s.feedMeta}>{[KINDS[e.kind]?.label || SRC_LABEL[e.kind] || (e.kind === "search" ? "Search" : ""), e.person ? cap(e.person) : ""].filter(Boolean).join(" · ")} · {e.dateOnly ? dShort(e.dateOnly) : ago(e.at, now)}</div>
                           </div>
                           <span className={`${s.pill} ${e.type === "done" ? s.pillGreen : e.type === "moved" ? s.pillViolet : e.type === "added" ? s.pillAmber : s.pillGrey}`}>{e.type === "done" ? cap(e.what === "live" ? "live" : "done") : cap(e.type)}</span>
                         </div>
@@ -1464,12 +1465,23 @@ function ShoppingSearch({ site, start, end, today }) {
 }
 
 // ── Today so far (since midnight NZ) ────────────────────────────────────────────────────────────────
-function TodaySoFar({ todayNow, site }) {
+function TodaySoFar({ todayNow, site, bar }) {
   if (!todayNow) return null;
   const rows = todayNow.sites.filter((x) => x.status === "ok" && (site === "all" || x.id === site));
   if (!rows.length) return null;
   const sum = (k, ids) => rows.filter((x) => !ids || ids.includes(x.id)).reduce((a, x) => a + (x[k] || 0), 0);
   const shops = ["worthyproducts", "dutchrusk"];
+  if (bar) {
+    const items = [[n0(sum("sessions")), "visits"]];
+    if (site !== "worthy") items.push([n0(sum("conversions", shops)), "orders"], [money(sum("revenue", shops)), "online sales"]);
+    if (site === "all" || site === "worthy") items.push([n0(sum("conversions", ["worthy"])), "worthy.nz enquiries"]);
+    return (
+      <div className={s.todayBar}>
+        <div className={s.todayHead}><span className={s.liveDot} />Today so far <span className={s.todayTime}>{nzTime(todayNow.at)}</span></div>
+        {items.map(([v, l]) => <span key={l}><span className={s.tNum}>{v}</span><span className={s.tLab}>{l}</span></span>)}
+      </div>
+    );
+  }
   return (
     <div className={s.today}>
       <div className={s.todayHead}><span className={s.liveDot} />Today so far <span className={s.todayTime}>{nzTime(todayNow.at)}</span></div>
@@ -1501,7 +1513,7 @@ function Freshness({ data, liveAt, todayNow, asana, clickup, meeting, now }) {
   return (
     <div className={s.fresh}>
       {meeting && <span className={`${s.pill} ${s.pillViolet}`}>Meeting day: refreshing every minute</span>}
-      {items.map(([label, t]) => <span key={label} className={`${s.tag} ${stale(t) ? s.tagStale : ""}`}>{label} {nzTime(t)}</span>)}
+      {items.map(([label, t]) => <span key={label} className={`${s.freshItem} ${stale(t) ? s.tagStale : ""}`}>{label} <b>{nzTime(t)}</b></span>)}
     </div>
   );
 }
