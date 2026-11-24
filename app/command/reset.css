@@ -1,0 +1,3 @@
+/* Command Center only: the root layout loads no global reset, so the browser's 8px body margin showed as a gap. */
+body { margin: 0; }
+.cc-root, .cc-root *, .cc-root *::before, .cc-root *::after { box-sizing: border-box; }
