@@ -7,7 +7,7 @@
  * The weekly view only ever shows one month, so this fetches exactly that month
  * and nothing more.
  */
-import { SISTER_IDS, NOT_FREIGHT } from '@/lib/salesBasis';
+import { sisterIdsOf, ON_BASIS, NOT_FREIGHT } from '@/lib/salesBasis';
 import { cachedAuth } from '@/lib/odooAuth';
 import { loadUnitCosts, makeQtyInProductUnit } from '@/lib/odooCost';
 import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
@@ -61,14 +61,14 @@ export async function GET(request) {
       ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end],
       ['display_type', '=', 'product'], ['product_id', '!=', false], ['date', '!=', false],
       // Worthy Products never includes sales to its sister companies (docs/SALES-BASIS.md).
-      ...(cid === NORTH ? [['move_id.commercial_partner_id', 'not in', SISTER_IDS], ...NOT_FREIGHT] : []),   // freight never counted
+      ...(ON_BASIS(cid) ? [['move_id.commercial_partner_id', 'not in', sisterIdsOf(cid)], ...NOT_FREIGHT] : []),   // freight never counted
     ];
 
     // Who sold in this month, and what each invoice is worth per day.
     const moves = await exec('account.move', 'read_group',
       [[['company_id', '=', cid], ['move_type', 'in', ['out_invoice', 'out_refund']],
         ['state', '=', 'posted'], ['invoice_date', '>=', start], ['invoice_date', '<=', end],
-        ...(cid === NORTH ? [['commercial_partner_id', 'not in', SISTER_IDS]] : [])],
+        ...(ON_BASIS(cid) ? [['commercial_partner_id', 'not in', sisterIdsOf(cid)]] : [])],
        ['amount_untaxed:sum'], ['invoice_date:day', 'invoice_user_id', 'move_type']], { lazy: false });
 
     /* North reports like finance does: the eight field reps one by one and everyone
@@ -76,7 +76,7 @@ export async function GET(request) {
        PRODUCT LINES only. So here a group is a set of users, and its revenue comes
        from the same product lines its cost does. Other companies keep one row per
        user and the invoice total. */
-    const financeBasis = usesFinanceBasis(cid);
+    const financeBasis = usesFinanceBasis(cid) || ON_BASIS(cid);
     const groups = new Map();    // group name -> user ids (false = no salesperson)
     const revenue = new Map();   // "group|week" -> cents
     for (const r of moves) {
@@ -98,7 +98,7 @@ export async function GET(request) {
     const runOne = async ([name, ids]) => {
       const fetchSide = (type, sign) => exec('account.move.line', 'read_group',
         [[...lineDom(type), ['move_id.invoice_user_id', 'in', ids]],
-         ['quantity:sum', 'price_subtotal:sum'], ['product_id', 'product_uom_id', 'date:day']], { lazy: false })
+         ['quantity:sum', 'balance:sum'], ['product_id', 'product_uom_id', 'date:day']], { lazy: false })
         .then((rows) => rows.map((r) => ({ ...r, _sign: sign })));
       const [inv, ref] = await Promise.all([fetchSide('out_invoice', 1), fetchSide('out_refund', -1)]);
       const pids = [...new Set([...inv, ...ref].map((r) => r.product_id && r.product_id[0]).filter(Boolean))];
@@ -107,12 +107,12 @@ export async function GET(request) {
       /* Worthy Products: the cost Odoo BOOKED on this rep's invoices (cost-of-goods lines), per product per day;
          today's standard cost only where nothing was booked. Same rule as the month figures and the Sunday email. */
       const booked = new Map();
-      if (cid === NORTH) {
+      if (ON_BASIS(cid)) {
         const rows = await exec('account.move.line', 'read_group',
           [[['move_id.company_id', '=', cid], ['move_id.move_type', 'in', ['out_invoice', 'out_refund']], ['move_id.state', '=', 'posted'],
-            ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end], ['move_id.commercial_partner_id', 'not in', SISTER_IDS],
+            ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end], ['move_id.commercial_partner_id', 'not in', sisterIdsOf(cid)],
             ['move_id.invoice_user_id', 'in', ids], ['display_type', '=', 'cogs'], ['account_id.code', '=like', '7%'],
-            ['product_id', '!=', false], ['date', '!=', false]],
+            ['product_id', '!=', false], ['date', '!=', false], ['product_id', 'not in', [28085, 28084, 6691, 7503]]],   // Oceania variants Odoo cannot name
            ['balance:sum'], ['product_id', 'date:day']], { lazy: false });
         for (const r of rows) {
           const d = dayOf(r.__range?.['date:day']?.from); const pid = r.product_id && r.product_id[0]; if (!d || !pid) continue;
@@ -125,9 +125,10 @@ export async function GET(request) {
         const pid = r.product_id && r.product_id[0];
         const unit = std.get(pid) || 0;
         const k = `${name}|${weekOf(d)}`;
-        if (financeBasis) revenue.set(k, (revenue.get(k) || 0) + toCents(r.price_subtotal ?? 0) * r._sign);
+        // balance is in company currency and already signed (a credit note is negative once negated)
+        if (financeBasis) revenue.set(k, (revenue.get(k) || 0) + toCents(-(Number(r.balance) || 0)));
         const a = agg.get(`${pid}|${d}`) || { k, rev: 0, std: 0, unit };
-        a.rev += toCents(r.price_subtotal ?? 0) * r._sign; a.std += toCents(qtyOf(r) * unit) * r._sign;
+        a.rev += toCents(-(Number(r.balance) || 0)); a.std += toCents(qtyOf(r) * unit) * r._sign;
         agg.set(`${pid}|${d}`, a);
       }
       for (const [pk, a] of agg) {

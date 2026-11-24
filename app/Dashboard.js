@@ -1137,7 +1137,7 @@ const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
    projection from last year's shape, not a budget. */
 /* Worthy Products only: sales to the sister companies (Dutch Rusk, Worthy Oceania), kept out of every figure above and
    reconciled back to everything invoiced. Same basis as the Sunday email and the chat (docs/SALES-BASIS.md). */
-const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent }) => {
+const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent, companyName = "Worthy Products" }) => {
   const T = theme;
   if (!cur?.sisterSales) return null;
   const month = [...(cur.months || [])].reverse().find((m) => m.started && m.sisters);
@@ -1151,11 +1151,12 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent }) => {
   const th = { textAlign: "right", padding: "8px 10px", fontSize: 11, color: T.textLabel, fontWeight: 600, whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` };
   const td = { textAlign: "right", padding: "9px 10px", fontSize: 13, color: T.text, whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` };
   const name = { ...td, textAlign: "left", fontWeight: 600, color: T.textHead };
+  // Whichever sister companies this business has (lib/salesBasis.js SISTER_SETS), in that order.
+  const sisterKeys = Object.keys(cur.sisterSales).filter((k) => cur.sisterSales[k] && cur.sisterSales[k].name);
   const rows = [
-    ["Dutch Rusk", (c) => c.s.dutchRusk.sales, (c) => c.s.dutchRusk.marginPct],
-    ["Worthy Oceania", (c) => c.s.oceania.sales, (c) => c.s.oceania.marginPct],
+    ...sisterKeys.map((k) => [cur.sisterSales[k].name, (c) => c.s[k]?.sales ?? 0, (c) => c.s[k]?.marginPct ?? null]),
     ["Sister companies total", (c) => c.s.total.sales, (c) => c.s.total.marginPct, true],
-    ["Worthy Products", (c) => c.wp.sales ?? 0, (c) => c.wp.margin],
+    [companyName, (c) => c.wp.sales ?? 0, (c) => c.wp.margin],
     ["All product sales", (c) => (c.wp.sales ?? 0) + c.s.total.sales, (c) => {
       const costed = (c.wp.costed ?? 0) + (c.s.total.costedSales ?? 0), cost = (c.wp.cost ?? 0) + (c.s.total.cost ?? 0);
       return c.wp.costed != null && costed > 0 ? Math.round(((costed - cost) / costed) * 10000) / 100 : null;
@@ -3211,7 +3212,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
           {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
         </div>
 
-        {isMgmt && activeStore.id === "worthy" && channelTab === "odoo" && onFYView() && (() => {
+        {isMgmt && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && onFYView() && (() => {
           const cur = fyPayload(selectedYear);
           if (!cur?.sisterSales) return null;
           const done = (cur.weeks || []).filter((w) => w.sisters);
@@ -3226,7 +3227,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
           const wkGp = wk.reduce((t, r) => t + (r.grossProfit || 0), 0);
           const weekWp = wk.length && wkGp + wkCost > 0
             ? { margin: Math.round((wkGp / (wkGp + wkCost)) * 10000) / 100, cost: wkCost, costed: wkGp + wkCost } : null;
-          return <SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency} theme={T} accent={accent} />;
+          return <SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency} theme={T} accent={accent}
+            companyName={activeStore.id === "nova" ? "Worthy Oceania" : "Worthy Products"} />;
         })()}
 
         {onFYView() && view !== "weekly" && (
