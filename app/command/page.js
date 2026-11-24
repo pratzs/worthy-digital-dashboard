@@ -1260,9 +1260,20 @@ function AiSearch({ site, start, end, onAdd, data }) {
   questions.filter((q) => q.position > 10 && q.impressions >= 20).slice(0, 3).forEach((q) => actions.push({ key: `gq-${q.site}-${q.query}`, site: q.site, title: `People ask "${q.query}" and we sit at ${n1(q.position)}`, detail: `${n0(q.impressions)} searches. Answer it plainly on ${siteName(q.site)}; AI assistants read the same pages.` }));
 
   const doneAt = ai?.latest?.at;
+  // Google AI Overviews / AI Mode, from Search Console's Generative AI report
+  const gai = Object.entries(ai?.googleAi || {}).filter(([id]) => site === "all" || id === site).map(([id, v]) => ({ id, ...v }));
+  const gaiTotal = gai.reduce((a, x) => a + x.impressions, 0);
+  const gaiPages = gai.flatMap((x) => x.pages.map((p) => ({ ...p, site: x.id }))).sort((a, b) => b.impressions - a.impressions).slice(0, 12);
   return (
     <div className={s.fade}>
       <div className={s.engineGrid}>
+        <section className={s.card}>
+          <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>Google AI</h2><span className={`${s.pill} ${gai.length ? s.pillGreen : s.pillGrey}`}>{gai.length ? "Search Console" : "No figures yet"}</span></div>
+          <div className={s.statLine} style={{ gap: 14 }}>
+            <div className={s.stat}><div className={s.statNum}>{gai.length ? (gai.length === 1 ? gai[0].shown : n0(gaiTotal)) : "-"}</div><div className={s.statLabel}>Times shown in AI Overviews and AI Mode</div></div>
+            {gai[0] && <div className={s.stat}><div className={s.statNum} style={{ fontSize: 14, fontWeight: 400 }}>{dShort(gai[0].start)} to {dShort(gai[0].end)}</div><div className={s.statLabel}>Period</div></div>}
+          </div>
+        </section>
         {engines.map((e) => (
           <section key={e.id} className={s.card}>
             <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>{e.name}</h2>
@@ -1320,6 +1331,17 @@ function AiSearch({ site, start, end, onAdd, data }) {
           </section>
         </div>
         <div className={s.stack}>
+          {gaiPages.length > 0 && (
+            <section className={s.card}>
+              <div className={s.cardHead}><h2 className={s.cardTitle}>Pages Google's AI shows</h2><Range>{`${dShort(gai[0].start)} to ${dShort(gai[0].end)}`}</Range></div>
+              {gaiPages.map((p) => (
+                <div key={p.url} className={s.row}>
+                  <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.url.replace(/^https?:\/\/(www\.)?/, "")}</div><div className={s.rowMeta}>{siteName(p.site)}</div></div>
+                  <div className={s.statNum} style={{ fontSize: 20 }}>{n0(p.impressions)}</div>
+                </div>
+              ))}
+            </section>
+          )}
           <section className={s.card}>
             <div className={s.cardHead}><h2 className={s.cardTitle}>Pages AI sends people to</h2><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
             {ai && pages.length === 0 && <div className={s.empty}>None in this period</div>}

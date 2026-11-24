@@ -16,7 +16,7 @@ import { setOidcToken } from '@/lib/ga4';
 import { commandData, liveVisitors, writeBoard, readLog, logEvent, keyEventDetail, searchForRange } from '@/lib/command';
 import { asanaSafe, asanaWrite } from '@/lib/asana';
 import { clickupSafe, clickupWrite } from '@/lib/clickup';
-import { aiReferrals, latestChecks, runChecks } from '@/lib/aiVisibility';
+import { aiReferrals, latestChecks, runChecks, readGoogleAi, saveGoogleAi } from '@/lib/aiVisibility';
 import { shoppingData } from '@/lib/shopping';
 
 export const dynamic = 'force-dynamic';
@@ -28,17 +28,6 @@ export async function GET(request) {
   if (request.headers.get('x-worthy-role') !== 'mgmt') return denied();
   setOidcToken(request.headers.get('x-vercel-oidc-token'));
   const q = new URL(request.url).searchParams;
-  if (q.get('gscprobe') === '1') {   // temporary: which Search Console types carry the Generative AI report
-    const { googleToken } = await import('@/lib/ga4');
-    const tok = await googleToken('https://www.googleapis.com/auth/webmasters.readonly');
-    const out = {};
-    for (const type of ['generativeAi', 'aiOverview', 'ai_overview', 'aiMode', 'genai', 'generative_ai', 'web']) {
-      const r = await fetch(`https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent('https://dutchrusk.co.nz/')}/searchAnalytics/query`, { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ startDate: '2026-08-23', endDate: '2026-11-22', type, dimensions: ['searchAppearance'], rowLimit: 50 }) });
-      const j = await r.json().catch(() => ({}));
-      out[type] = r.ok ? (j.rows || []).map((x) => `${x.keys?.[0]}:${x.impressions}`) : `${r.status} ${j.error?.message || ''}`.slice(0, 160);
-    }
-    return NextResponse.json(out);
-  }
   if (q.get('shopping') === '1') {
     const ok = (d) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d || '');
     const [a, b, c, d] = ['start', 'end', 'gscStart', 'gscEnd'].map((k) => q.get(k));
@@ -48,8 +37,8 @@ export async function GET(request) {
   if (q.get('ai') === '1') {
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
     if (!ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-    const [referrals, checks] = await Promise.all([aiReferrals(q.get('start'), q.get('end')), latestChecks()]);
-    return NextResponse.json({ referrals, ...checks });
+    const [referrals, checks, googleAi] = await Promise.all([aiReferrals(q.get('start'), q.get('end')), latestChecks(), readGoogleAi()]);
+    return NextResponse.json({ referrals, ...checks, googleAi });
   }
   if (q.get('search') === '1') {
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
@@ -75,6 +64,11 @@ export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }
   const person = request.headers.get('x-worthy-person') || 'management';
+  // Google's AI Overviews / AI Mode figures, read from Search Console's Generative AI report (it has no API yet)
+  if (body.action === 'google-ai') {
+    try { await saveGoogleAi(body.site, body.data); await logEvent({ what: 'Google AI figures saved', kind: 'search', title: `Google AI: ${body.site}`, person }); return NextResponse.json({ ok: true, googleAi: await readGoogleAi() }); }
+    catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 400 }); }
+  }
   // Ask the AI questions again (the page does this when the last run is over a day old, or on Check now)
   if (body.action === 'ai-check') {
     try {
