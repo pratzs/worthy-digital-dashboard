@@ -113,13 +113,13 @@ export async function GET(request) {
             ['move_id.invoice_date', '>=', start], ['move_id.invoice_date', '<=', end], ['move_id.commercial_partner_id', 'not in', sisterIdsOf(cid)],
             ['move_id.invoice_user_id', 'in', ids], ['display_type', '=', 'cogs'], ['account_id.code', '=like', '7%'],
             ['product_id', '!=', false], ['date', '!=', false], ['product_id', 'not in', [28085, 28084, 6691, 7503]]],   // Oceania variants Odoo cannot name
-           ['balance:sum', 'quantity:sum'], ['product_id', 'date:day']], { lazy: false }).then((rs) => rs.map((r) => ({ ...r, _type: type })));
+           ['balance:sum', 'quantity:sum'], ['product_id', 'product_uom_id', 'date:day']], { lazy: false }).then((rs) => rs.map((r) => ({ ...r, _type: type })));
         const rows = [...await cogsSide('out_invoice'), ...await cogsSide('out_refund')];
         for (const r of rows) {
           const d = dayOf(r.__range?.['date:day']?.from); const pid = r.product_id && r.product_id[0]; if (!d || !pid) continue;
           const sign = r._type === 'out_refund' ? -1 : 1;
           const cur = booked.get(`${pid}|${d}`) || { cost: 0, qty: 0 };
-          cur.cost += Number(r.balance) || 0; cur.qty += sign * (Number(r.quantity) || 0);
+          cur.cost += Number(r.balance) || 0; cur.qty += sign * qtyOf(r);   // product's own unit, like the invoice lines
           booked.set(`${pid}|${d}`, cur);
         }
       }
