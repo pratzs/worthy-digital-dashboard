@@ -1184,7 +1184,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
         </div>
         <div className={s.miniHead}><Icon n="funnel" size={13} />Visit to sale</div>
         <div className={s.statLine}>
-          <div className={s.stat}><div className={s.statNum}>{n0(v[0])}</div><div className={s.statLabel}>Visits <Delta now={v[0]} before={v[1]} /></div></div>
+          {/* Visit to sale: with all sites, the shops' own NZ visits, the same visits the conversion rate is worked out on (worthy.nz visits are counted with its enquiries). */}<div className={s.stat}><div className={s.statNum}>{n0(site === "all" ? sv[0] : v[0])}</div><div className={s.statLabel}>{site === "all" ? "Shop visits, NZ" : "Visits"} <Delta now={site === "all" ? sv[0] : v[0]} before={site === "all" ? sv[1] : v[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
           <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, start, end)}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
           {!lead && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
