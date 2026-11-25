@@ -53,14 +53,14 @@ One rule everywhere: dashboard, chat, connectors and the Odoo Sunday emails.
 ## Open items (26 Nov 2026)
 
 - Kishan to retry ChatGPT (disconnect and reconnect the Worthy connector) and the dashboard after the sales basis fix. Corrected Odoo reports were re-sent to him 25 Nov; screenshots in OneDrive `Worthy Ecommerce - Documents\Sales figures check 25 Nov 2026`.
-- Social and Web: Facebook and Instagram wait on a Meta read-only token from Anu (`META_ACCESS_TOKEN`). Dutch Rusk Shopify figures need the `read_reports` scope (app re-approval); GA4 is used meanwhile.
+- Social and Web: Facebook and Instagram live since 26 Nov (Anu's token). Facebook post lists need `pages_read_user_content` added to the Worthydashboardreader system user (optional). Dutch Rusk Shopify figures need the `read_reports` scope (app re-approval); GA4 is used meanwhile.
 - Command Center: ChatGPT, Gemini and Perplexity answer checks need `OPENAI_API_KEY`, `GEMINI_API_KEY`, `PERPLEXITY_API_KEY` (optional). ClickUp storage is full, so card attachments fail (put the OneDrive path in a comment instead).
 - Purchasing: a real production sign-in test (Kylie, Hari) has never been run; it needs the real password typed by Pratham.
 - Management chat answers cost about US$0.30 each because `get_financial_year` and `get_debtors` return large payloads; trimming them is not done.
 - `lib/repTargets.js` (rep budgets) sits in the public repo; moving it to an env value or the store is recommended.
 - Oceania per-rep and weekly margins still leave out the four fabric variants Odoo cannot name (one invoice this year, May, $834.05 cost); month and year totals include them.
 - A stash in `C:\wdd` ("Debtors: add Over 60 days late tile", from before November) is unreviewed.
-- ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web, waiting on the Meta token), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
+- ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web, waiting on the Dutch Rusk Shopify permission), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
 
 ## History in short
 

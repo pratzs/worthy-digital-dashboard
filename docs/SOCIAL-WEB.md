@@ -34,6 +34,8 @@ To switch it off: remove the reader from the two GA4 access lists, or disable th
 
 Set `META_ACCESS_TOKEN` in Vercel to a read-only system user token from Meta Business Suite with `pages_show_list`, `pages_read_engagement`, `read_insights`, `instagram_basic`, `instagram_manage_insights`. Each figure is asked for on its own and left out if Meta refuses it (Meta retires page metrics often).
 
+Live 26 Nov 2026: token from Anu for the system user Worthydashboardreader (all five permissions granted), set on Vercel Production by Pratham. It sees Facebook pages Worthy and Worthy Products and Instagram accounts @worthyoceania and @worthyproducts_. Verified on /social-web and through `get_web_and_social` (chat and connector). Facebook post lists stay empty: they need `pages_read_user_content` on the system user; the page totals do not.
+
 ## Asking about it in the chat and the connector (20 Nov 2026)
 
 Management can ask in the dashboard chat (Ask a Question) and in their own ChatGPT/Claude management connector: tool `get_web_and_social` (`lib/webTool.js`, registered in `lib/mcpTools.js`). Same figures as the page, for any period: `from`/`to` (compared with the same number of days just before, or `compareFrom`/`compareTo`), `site` = all, worthy, worthyproducts, dutchrusk or social. Management only: it is not in the department allow-list in `lib/mcpRoles.js`, so Purchasing and Business Development are never offered it and are refused if they call it. Both routes pass the Vercel OIDC token to `lib/ga4.js` (`setOidcToken`), so Google Analytics works there on production too. People using the management connector in their own Claude must disconnect and reconnect it to see the new tool (Claude keeps the old tool list).
