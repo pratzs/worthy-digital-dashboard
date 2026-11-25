@@ -349,7 +349,7 @@ button.check:hover { border-color: var(--green); }
 .chain { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; row-gap: 12px; margin-top: 6px; }
 .chainStep { display: flex; align-items: center; flex: 1 1 150px; min-width: 0; }
 .chainLink { flex: none; display: flex; flex-direction: column; align-items: center; padding: 0 10px; color: var(--mute); font-size: 11px; text-align: center; max-width: 110px; }
-.chainLink::after { content: '→'; font-size: 18px; color: var(--ink); line-height: 1; margin-top: 4px; }
+.chainArrow { color: var(--ink); line-height: 1; margin-top: 4px; display: inline-flex; }
 .chainBox { flex: 1; min-width: 0; background: rgba(255,255,255,.75); border: 1px solid rgba(40,32,20,.06); border-radius: 18px; padding: 14px 16px; }
 .chainNum { font-size: 30px; font-weight: 300; letter-spacing: -0.02em; line-height: 1.1; }
 .shareBar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.05); gap: 2px; }
@@ -358,5 +358,5 @@ button.check:hover { border-color: var(--green); }
 .shareLegend span { display: inline-flex; align-items: center; gap: 7px; }
 .shareLegend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
 @media (max-width: 760px) { .chainNum { font-size: 24px; } .chainLink { max-width: 80px; padding: 0 6px; } }
-@media (max-width: 420px) { .chain { flex-direction: column; } .chainStep { flex-direction: column; align-items: stretch; flex: none; } .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainLink::after { content: '↓'; margin-top: 0; } }
-.chainCompact { flex-direction: column; } .chainCompact .chainStep { flex-direction: column; align-items: stretch; flex: none; } .chainCompact .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainCompact .chainLink::after { content: '93'; margin-top: 0; } .chainCompact .chainNum { font-size: 24px; }
+@media (max-width: 420px) { .chain { flex-direction: column; } .chainStep { flex-direction: column; align-items: stretch; flex: none; } .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainArrow { transform: rotate(90deg); margin-top: 0; } }
+.chainCompact { flex-direction: column; } .chainCompact .chainStep { flex-direction: column; align-items: stretch; flex: none; } .chainCompact .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainCompact .chainArrow { transform: rotate(90deg); margin-top: 0; } .chainCompact .chainNum { font-size: 24px; }

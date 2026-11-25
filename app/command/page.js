@@ -1574,7 +1574,7 @@ function Trend({ now, before, points = false }) {
   if (points) { d = now - before; txt = `${Math.abs(d * 100).toFixed(1)} pts`; }
   else { if (!before) return null; d = (now - before) / before; if (!Number.isFinite(d)) return null; txt = `${Math.abs(d * 100).toFixed(1)}%`; }
   if (Math.abs(d) < 0.0005) return <span className={s.trend}>no change</span>;
-  return <span className={`${s.trend} ${d < 0 ? s.trendDown : ""}`}>{d < 0 ? "▼" : "▲"} {txt}</span>;
+  return <span className={`${s.trend} ${d < 0 ? s.trendDown : ""}`}><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">{d < 0 ? <path d="M12 20 3 4h18z" /> : <path d="M12 4l9 16H3z" />}</svg>{txt}</span>;
 }
 
 function Big({ value, label, pair, fmt = n0, points, accent }) {
@@ -1657,7 +1657,7 @@ function Chain({ steps, compact = false }) {
     <div className={`${s.chain} ${compact ? s.chainCompact : ""}`}>
       {steps.map((st, i) => (
         <div key={st.label} className={s.chainStep}>
-          {i > 0 && <div className={s.chainLink}><span>{st.link}</span></div>}
+          {i > 0 && <div className={s.chainLink}><span>{st.link}</span><span className={s.chainArrow}><Icon n="move" size={16} /></span></div>}
           <div className={s.chainBox}>
             <div className={s.chainNum} style={st.accent ? { color: "var(--orange)" } : undefined}>{st.value}</div>
             <div className={s.statLabel}>{st.label}</div>
