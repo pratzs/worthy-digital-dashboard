@@ -60,7 +60,7 @@ One rule everywhere: dashboard, chat, connectors and the Odoo Sunday emails.
 - `lib/repTargets.js` (rep budgets) sits in the public repo; moving it to an env value or the store is recommended.
 - Oceania per-rep and weekly margins still leave out the four fabric variants Odoo cannot name (one invoice this year, May, $834.05 cost); month and year totals include them.
 - A stash in `C:\wdd` ("Debtors: add Over 60 days late tile", from before November) is unreviewed.
-- ClickUp cards in review: 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
+- ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web, waiting on the Meta token), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
 
 ## History in short
 
