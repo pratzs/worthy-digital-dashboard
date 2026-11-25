@@ -80,6 +80,23 @@ const nzTodayIso = () => { const d = nzNow(); return `${d.getFullYear()}-${Strin
 const nzTime = (iso) => new Date(iso).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
 const cap = (t) => String(t || "").charAt(0).toUpperCase() + String(t || "").slice(1);
 
+// ── browser cache ───────────────────────────────────────────────────────────────────────────────────
+/* What the page keeps in this browser, so a refresh never loses anything:
+     cc-view-v1      the view (tab, dates, site, chart mode, feed filter), until changed
+     cc-data-v1      the last Command Center data, shown at once on reload (up to 24 h old) while fresh figures load
+     cc-social-v1:*  Social & Web figures per date range, reused for 30 minutes (the server's own cache time)
+     cc-draft-v1     an editor that was open with unsaved text, reopened after a refresh
+   Saved work (tasks, outreach, listings, Asana, ClickUp) lives on the server, never only here. */
+const HOUR = 3600000;
+const cache = {
+  entry(k, maxAge) {
+    try { const v = JSON.parse(localStorage.getItem(k) || "null"); if (!v || (maxAge && Date.now() - v.at > maxAge)) return null; return v; } catch { return null; }
+  },
+  get(k, maxAge) { return this.entry(k, maxAge)?.data ?? null; },
+  set(k, data) { try { localStorage.setItem(k, JSON.stringify({ at: Date.now(), data })); } catch { /* storage full or blocked: the page still works */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* fine */ } },
+};
+
 // ── icons ───────────────────────────────────────────────────────────────────────────────────────────
 const PATHS = {
   grid: <><rect x="3" y="3" width="7.5" height="7.5" rx="2" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" /></>,
@@ -333,6 +350,7 @@ function TrafficChart({ rows, mode, lead }) {
 // ── board editor ────────────────────────────────────────────────────────────────────────────────────
 function Editor({ item, onClose, onSave, onDelete, busy, error }) {
   const [f, setF] = useState(item);
+  useEffect(() => { cache.set("cc-draft-v1", f); }, [f]);
   const k = KINDS[f.kind];
   const set = (key) => (e) => setF({ ...f, [key]: e.target.value });
   const input = (key) => {
@@ -404,13 +422,33 @@ export default function CommandCenter() {
   const [rangeSearch, setRangeSearch] = useState(null);
   const [events, setEvents] = useState(null);
 
+  const [restored, setRestored] = useState(false);
   useEffect(() => {
-    const fromHash = () => { const h = window.location.hash.slice(1); if (TABS.some((t) => t.id === h)) setTab(h); };
-    fromHash();
+    const fromHash = () => { const h = window.location.hash.slice(1); if (TABS.some((t) => t.id === h)) { setTab(h); return true; } return false; };
+    const restore = () => {
+      const v = cache.get("cc-view-v1");
+      const hashTab = fromHash();
+      if (v) {
+        if (!hashTab && TABS.some((t) => t.id === v.tab)) setTab(v.tab);
+        if (PRESETS.some(([id]) => id === v.preset)) setPreset(v.preset);
+        if (v.preset === "custom") { setFrom(v.from || ""); setTo(v.to || ""); }
+        if (["daily", "weekly", "monthly"].includes(v.mode)) setMode(v.mode);
+        if (v.feedTab) setFeedTab(v.feedTab);
+      }
+      const snap = cache.get("cc-data-v1", 24 * HOUR);
+      if (snap) { setData(snap); setLive(snap.live); setAsana(snap.asana); setClickup(snap.clickup); setBoard(snap.board); setLog(snap.log || []); setLiveAt(snap.liveAt || snap.builtAt); setTodayNow(snap.todayNow); setLoadedAt(snap.builtAt); }
+      const draft = cache.get("cc-draft-v1", 7 * 24 * HOUR);
+      if (draft?.kind && KINDS[draft.kind]) setEditing(draft);
+      setRestored(true);
+    };
+    restore();
     try { const sv = localStorage.getItem("cc-site"); if (sv) setSite(sv); } catch { /* fine */ }
     window.addEventListener("hashchange", fromHash);
     return () => window.removeEventListener("hashchange", fromHash);
   }, []);
+  useEffect(() => {
+    if (restored) cache.set("cc-view-v1", { tab, preset, from, to, mode, feedTab });
+  }, [restored, tab, preset, from, to, mode, feedTab]);
   const go = (t) => { setTab(t); try { history.replaceState(null, "", `#${t}`); } catch { /* fine */ } window.scrollTo({ top: 0, behavior: "smooth" }); };
   const chooseSite = (v) => { setSite(v); try { localStorage.setItem("cc-site", v); } catch { /* fine */ } };
 
@@ -422,6 +460,7 @@ export default function CommandCenter() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
       setData(j); setLive(j.live); setAsana(j.asana); setClickup(j.clickup); setBoard(j.board); setLog(j.log || []); setLiveAt(j.liveAt || j.builtAt); setTodayNow(j.todayNow); setLoadedAt(j.builtAt); setFailed("");
+      cache.set("cc-data-v1", j);
     } catch (e) { setFailed(String(e.message || e)); }
     finally { setLoading(false); }
   }, []);
@@ -448,7 +487,8 @@ export default function CommandCenter() {
       const r = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, item }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Could not save");
-      setBoard(j.board); setLog(j.log || []); setEditing(null);
+      setBoard(j.board); setLog(j.log || []); setEditing(null); cache.del("cc-draft-v1");
+      setData((cur) => { if (cur) cache.set("cc-data-v1", { ...cur, board: j.board, log: j.log || [] }); return cur; });
     } catch (e) { setSaveErr(String(e.message || e)); }
     finally { setSaving(false); }
   };
@@ -551,7 +591,8 @@ export default function CommandCenter() {
   const feedShown = feed.filter((e) => feedTab === "all" || e.type === feedTab).slice(0, 30);
 
   const updatedText = loadedAt ? `Refreshed ${nzTime(loadedAt)}, live ${ago(liveAt || loadedAt, now)}` : "Connecting";
-  const refreshAll = () => { load(true); };
+  const [nonce, setNonce] = useState(0);
+  const refreshAll = () => { load(true); setNonce((n) => n + 1); };
   // Typing a date switches to your own dates, keeping the other end where it was
   const pickDates = (a, b) => { setPreset("custom"); setFrom(a); setTo(b); };
   const initials = person ? person.slice(0, 2).toUpperCase() : "WO";
@@ -741,7 +782,7 @@ export default function CommandCenter() {
         )}
 
         {tab === "search" && <SearchTab data={rangeSearch ? { ...data, search: rangeSearch } : data} site={site} items={items} start={rStart} end={rEnd} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
-        {tab === "social" && <SocialTab site={site} start={rStart} end={rEnd} />}
+        {tab === "social" && <SocialTab site={site} start={rStart} end={rEnd} nonce={nonce} />}
         {tab === "outreach" && <BoardTab kind="outreach" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
@@ -753,7 +794,7 @@ export default function CommandCenter() {
       </div>
 
       {events && <EventsModal ev={events} onClose={() => setEvents(null)} />}
-      {editing && <Editor key={editing.id || "new"} item={editing} busy={saving} error={saveErr} onClose={() => setEditing(null)} onSave={(f) => save(f)} onDelete={(f) => save(f, "delete")} />}
+      {editing && <Editor key={editing.id || "new"} item={editing} busy={saving} error={saveErr} onClose={() => { setEditing(null); cache.del("cc-draft-v1"); }} onSave={(f) => save(f)} onDelete={(f) => save(f, "delete")} />}
     </div>
   );
 }
@@ -1725,20 +1766,25 @@ function SocialAccount({ a }) {
   );
 }
 
-function SocialTab({ site, start, end }) {
+function SocialTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
+  const ck = `cc-social-v1:${want}`;
   useEffect(() => {
     let stop = false;
-    fetch(`/api/social-web?from=${start}&to=${end}`, { cache: "no-store" })
+    // Within 30 minutes the server would send the same figures, so the browser's copy is used; Refresh always asks again.
+    const fresh = nonce > 0;
+    if (!fresh && cache.entry(ck, 0.5 * HOUR)) return () => { stop = true; };
+    fetch(`/api/social-web?from=${start}&to=${end}${fresh ? "&fresh=1" : ""}`, { cache: "no-store" })
       .then((r) => r.json().then((j) => (r.ok ? j : Promise.reject(new Error(j.error || r.status)))))
-      .then((j) => { if (!stop) { setD({ ...j, key: `${start}|${end}` }); setErr(""); } })
+      .then((j) => { if (!stop) { cache.set(ck, j); setD({ ...j, key: `${start}|${end}` }); setErr(""); } })
       .catch((e) => { if (!stop) setErr(`${start}|${end}|${String(e.message || e)}`); });
     return () => { stop = true; };
-  }, [start, end]);
-  // Figures for an earlier date range are never shown while the new range loads.
-  const cur = d && d.key === want ? d : null;
+  }, [start, end, ck, nonce]);
+  // Figures for an earlier date range are never shown while the new range loads; this range's saved copy shows at once.
+  const saved = useMemo(() => cache.get(ck, 24 * HOUR), [ck]);
+  const cur = d && d.key === want ? d : saved ? { ...saved, key: want } : null;
   const errText = err.startsWith(`${want}|`) ? err.slice(want.length + 1) : "";
 
   const p = cur?.web?.periods;
