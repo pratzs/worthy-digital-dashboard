@@ -7,7 +7,7 @@ Management only (`/social-web`, section `socialweb` in `lib/auth.js`). Purchasin
 | What | Source | Code |
 |---|---|---|
 | worthy.nz | Google Analytics 4, property 459697422 (account "Worthy") | `lib/ga4.js`, `lib/webStats.js` |
-| dutchrusk.co.nz | Google Analytics 4, property 554865794 (account "V J TRADING", stream G-4C5Y1Y26NV) | same |
+| dutchrusk.co.nz | Shopify (ShopifyQL) through the Dutch Rusk Catalog Manager app (since 26 Nov 2026) | `lib/webStats.js` |
 | worthyproducts.nz | Shopify (ShopifyQL) with the dashboard's existing store token | `lib/webStats.js` |
 | Facebook and Instagram | Meta Graph API, every page the token can see plus its linked Instagram account | `lib/socialMeta.js` |
 | LinkedIn and TikTok | typed in once a month on the page, kept in the shared store (Upstash) | `lib/socialManual.js` |
@@ -16,7 +16,9 @@ Period: the last 30 complete New Zealand days against the 30 days before, plus t
 
 worthyproducts.nz sessions, sources, devices and conversion are **New Zealand only**. Overseas bot visits (October 2026: about 110,000 direct sessions from the USA, Brazil, Colombia and Ecuador, 2 to 15 October, 0.2% conversion) otherwise swamp the real traffic of about 4,000 sessions a month. Orders and sales are not filtered.
 
-Dutch Rusk uses GA4 because the Dutch Rusk app does not have the `read_reports` scope Shopify needs for ShopifyQL. Adding it needs the store to re-approve the app.
+dutchrusk.co.nz is on the same basis as worthyproducts.nz: New Zealand sessions, sources, devices and conversion; Online Store orders and net sales. Until 26 Nov 2026 it used GA4 (property 554865794, account "V J TRADING"), which recorded about 7% less revenue than Shopify.
+
+How Dutch Rusk is read: the dashboard has no Dutch Rusk token. The Dutch Rusk Catalog Manager app (repo `dutch-rusk-catalog-manager`, Render service `srv-d6u8b8nafjfc73fvaip0`) has the `read_reports` scope (app version 295, approved by the store 26 Nov 2026) and uses expiring offline tokens that it refreshes itself, so it runs the query for the dashboard: `POST https://dutch-rusk-catalog-manager.onrender.com/api/shopifyql` with header `x-reports-key`, body `{"q": "FROM ..."}`. It only runs ShopifyQL. The key is `DUTCHRUSK_REPORTS_KEY` in Vercel and `REPORTS_API_KEY` on Render (same value). To switch it off, delete either one.
 
 ## Google sign-in (no key file)
 
