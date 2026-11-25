@@ -1837,8 +1837,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
        requested at once; the same request a few seconds later goes through. */
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        /* A retry goes to Odoo directly (fresh=1) rather than to the shared copy. */
-        const src = FY_SOURCE[storeId](year) + ((fresh || attempt > 0) && storeId !== "luxe" ? "&fresh=1" : "");
+        /* A retry asks the shared copy again; only the "Try again" button goes to Odoo directly (fresh=1), so a busy
+           Odoo never gets one heavy read per visitor (26 Nov 2026). */
+        const src = FY_SOURCE[storeId](year) + (fresh && storeId !== "luxe" ? "&fresh=1" : "");
         const r = await fetch(src, { cache: "no-store" });
         const json = await r.json();
         cacheRef.current[key] = json?.error ? { failed: json.error } : json;
@@ -1850,6 +1851,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
     }
     loadingRef.current[key] = false;
     forceUpdate();
+    /* The server answered with its last good copy (Odoo still reading): ask again in a minute and swap in the new
+       figures. The page shows the time Odoo was read, so the copy on screen is never passed off as newer. */
+    if (cacheRef.current[key]?.stale) {
+      setTimeout(() => {
+        if (cacheRef.current[key]?.stale) { delete cacheRef.current[key]; fetchFYFor(storeId, year); }
+      }, 60000);
+    }
   };
 
   /* Per-rep weekly margin for the Odoo companies. Week-level cost is too heavy
