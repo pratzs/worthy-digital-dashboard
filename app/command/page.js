@@ -1603,7 +1603,7 @@ function MonthBars({ rows, k, fmt = n0 }) {
   );
 }
 
-function BarList({ rows, k, fmt = n0, limit = 6 }) {
+function BarList({ rows, k, fmt = n0, limit = 6, caps = false }) {
   if (!rows?.length) return <div className={s.empty}>None in this period</div>;
   const list = rows.slice(0, limit);
   const total = rows.reduce((t, r) => t + (r[k] || 0), 0) || 1;
@@ -1612,7 +1612,7 @@ function BarList({ rows, k, fmt = n0, limit = 6 }) {
     <div className={s.bars}>
       {list.map((r, i) => (
         <div key={r.name} className={s.barRow}>
-          <span style={{ overflowWrap: "anywhere", textTransform: "capitalize" }}>{r.name}</span>
+          <span style={{ overflowWrap: "anywhere", textTransform: caps ? "capitalize" : "none" }}>{r.name}</span>
           <div className={s.barTrack}><div className={`${s.barInk} ${i === 0 ? s.barAccent : ""}`} style={{ width: `${((r[k] || 0) / max) * 100}%` }} /></div>
           <span className={s.num}>{fmt(r[k])} <span className={s.was}>{Math.round(((r[k] || 0) / total) * 100)}%</span></span>
         </div>
@@ -1650,9 +1650,9 @@ function Ring({ rows, k }) {
 }
 
 // A chain of figures that follow from each other, with what links each step to the next.
-function Chain({ steps }) {
+function Chain({ steps, compact = false }) {
   return (
-    <div className={s.chain}>
+    <div className={`${s.chain} ${compact ? s.chainCompact : ""}`}>
       {steps.map((st, i) => (
         <div key={st.label} className={s.chainStep}>
           {i > 0 && <div className={s.chainLink}><span>{st.link}</span></div>}
@@ -1707,15 +1707,13 @@ function WebSiteCard({ x, range }) {
           <div className={s.grid2} style={{ marginTop: 24 }}>
             <div>
               <Mini icon="compass">Where visits came from</Mini>
-              <BarList rows={x.sources} k="sessions" />
+              <BarList rows={x.sources} k="sessions" caps />
             </div>
             {shop
               ? <div><Mini icon="devices">Device</Mini><Ring rows={x.devices} k="sessions" /></div>
               : <div><Mini icon="eye">Most viewed pages</Mini><BarList rows={(x.pages || []).map((r) => ({ ...r, name: r.name }))} k="views" /></div>}
           </div>
-          {!shop && t.revenue && t.revenue[0] > 0 && (
-            <div className={s.was} style={{ marginTop: 16 }}>Google Analytics also records {n0(t.orders?.[0])} orders and {moneyShort(t.revenue[0])} for this site; Shopify is the record for sales.</div>
-          )}
+
         </>)}
     </section>
   );
@@ -1737,7 +1735,7 @@ function SocialAccount({ a }) {
         <Chain steps={[
           { label: "Views", value: short(v), pair: t.views },
           { label: "Engagements", value: short(e), pair: t.engagements, link: v && e !== undefined ? `${((e / v) * 100).toFixed(1)}% engaged` : "", accent: true },
-        ]} />
+        ]} compact />
       ) : <div className={s.empty}>No views recorded in this period</div>}
       <div className={`${s.statLine} ${s.statTight}`} style={{ marginTop: 12 }}>
         {SOCIAL_KEYS.filter(([k]) => k !== "views" && k !== "engagements" && t[k]).map(([k, l]) => (
@@ -1804,6 +1802,11 @@ function SocialTab({ site, start, end, nonce = 0 }) {
   const eng = pairSum(accounts, (a) => a.totals?.engagements);
   const followers = accounts.reduce((t, a) => t + (a.followers || 0), 0);
   const shopNames = shops.length === 1 ? shops[0].name : "the shops";
+  const shopMonths = (() => {
+    const m = {};
+    shops.forEach((x) => (x.months || []).forEach((r) => { const o = m[r.month] || { month: r.month, revenue: 0 }; o.revenue += r.revenue || 0; m[r.month] = o; }));
+    return Object.values(m).sort((a, b) => (a.month < b.month ? -1 : 1));
+  })();
   const manual = cur?.manual;
   const manualMonths = manual ? [...new Set(Object.values(manual.values || {}).flatMap((m) => Object.keys(m)))].sort().reverse() : [];
 
@@ -1843,6 +1846,12 @@ function SocialTab({ site, start, end, nonce = 0 }) {
                 { label: "Orders", value: n0(orders?.[0]), pair: orders, link: conv !== null ? `${(conv * 100).toFixed(2)}% converted` : "" },
                 { label: "Online sales", value: moneyShort(sales?.[0]), pair: sales, link: orders?.[0] ? `${money(sales[0] / orders[0])} an order` : "", accent: true },
               ]} />
+              {shopMonths.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <Mini icon="bars">Online sales by month{shops.length === 1 ? `, ${shops[0].name}` : ""}</Mini>
+                  <MonthBars rows={shopMonths} k="revenue" fmt={money} />
+                </div>
+              )}
               {shops.length > 1 && sales?.[0] > 0 && (
                 <div style={{ marginTop: 18 }}>
                   <Mini icon="pie">Share of online sales</Mini>

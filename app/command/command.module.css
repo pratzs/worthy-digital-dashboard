@@ -359,3 +359,4 @@ button.check:hover { border-color: var(--green); }
 .shareLegend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
 @media (max-width: 760px) { .chainNum { font-size: 24px; } .chainLink { max-width: 80px; padding: 0 6px; } }
 @media (max-width: 420px) { .chain { flex-direction: column; } .chainStep { flex-direction: column; align-items: stretch; } .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainLink::after { content: '↓'; margin-top: 0; } }
+.chainCompact { flex-direction: column; } .chainCompact .chainStep { flex-direction: column; align-items: stretch; flex: none; } .chainCompact .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainCompact .chainLink::after { content: '93'; margin-top: 0; } .chainCompact .chainNum { font-size: 24px; }
