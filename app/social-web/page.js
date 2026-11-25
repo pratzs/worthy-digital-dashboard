@@ -1,5 +1,6 @@
 "use client";
 
+import SiteNav from "@/app/design/SiteNav";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BarList, Big, Card, CardHead, Empty, Icon, Mini, MonthBars, Pill, Range, Ring, Skeleton, StatLine, Trend, dLong as day, money, monthLabel as mon, n0, pct, ui } from "@/app/design/ui";
@@ -206,9 +207,8 @@ export default function SocialWeb() {
   return (
     <div className={css.page}>
       <div className={css.wrap}>
-        <div className={css.head}>
-          <Link href="/" className={css.crumb}><Icon n="home" size={13} />Dashboard</Link>
-          <span className={css.slash}>/</span>
+        <SiteNav current="socialweb" />
+        <div className={css.head} id="main" tabIndex={-1}>
           <h1 className={css.h1}><span className={css.chip}><Icon n="globe" size={18} /></span>Social and Web</h1>
           <span className={css.spacer} />
           <button onClick={() => load(true)} disabled={loading} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="refresh" size={13} />{loading ? "Loading..." : "Refresh"}</button>

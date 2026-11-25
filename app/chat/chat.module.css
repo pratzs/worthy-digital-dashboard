@@ -84,3 +84,5 @@
   .msgCol { max-width: 94%; }
   .starters { grid-template-columns: minmax(0, 1fr); }
 }
+
+.siteNav { padding: clamp(12px, 2vw, 20px) clamp(16px, 3vw, 32px) 0; }

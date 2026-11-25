@@ -1,5 +1,6 @@
 "use client";
 
+import SiteNav from "@/app/design/SiteNav";
 import { useEffect, useState } from "react";
 import { BarList, Card, CardHead, Icon, KpiStrip, Pill, Skeleton, ui } from "@/app/design/ui";
 import css from "./rep-usage.module.css";
@@ -25,7 +26,8 @@ export default function RepUsage() {
   return (
     <div className={css.page}>
       <div className={css.wrap}>
-        <div className={css.head}>
+        <SiteNav current="repusage" />
+        <div className={css.head} id="main" tabIndex={-1}>
           <span className={css.chip}><Icon n="sparkle" size={18} /></span>
           <h1 className={css.h1}>AI assistant usage and cost</h1>
         </div>
@@ -38,7 +40,7 @@ export default function RepUsage() {
               { label: "AI cost this month", value: usd(d.cost.thisMonthUsd), icon: "dollar", accent: true },
               { label: "Last month", value: usd(d.cost.lastMonthUsd), icon: "calendar" },
               { label: "Questions this month", value: d.cost.thisMonthQuestions.toLocaleString(), icon: "search" },
-              { label: "Most the allowance permits per 30 days", value: `${d.cost.mostQuestionsPerCycle.toLocaleString()} questions`, icon: "hourglass" },
+              { label: "Questions the allowance permits per 30 days", value: d.cost.mostQuestionsPerCycle.toLocaleString("en-NZ"), icon: "hourglass" },
             ]} />
           )}
 

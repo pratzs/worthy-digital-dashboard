@@ -1,5 +1,6 @@
 "use client";
 
+import SiteNav from "@/app/design/SiteNav";
 import { fyTargetOf } from "@/lib/repTargetMath";
 import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
@@ -2967,51 +2968,18 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
       <div className={st.shell}>
       {/* TOP BAR: logo, the pages this department may open, who is signed in */}
-      <header className={st.top}>
-        <div className={st.brand}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-black.png" alt="Worthy Logo" className={st.brandLogo} />
-        </div>
-        <nav className={st.nav} aria-label="Dashboard pages">
-          {(() => {
-            // Categories & Products, Fast & Slow Movers and Customers share one tab.
-            const GROUP = ["products", "movers", "customers"];
-            // Sales by Rep lives on the Overview and Sales page now, so it has no tab of its own.
-            const mine = (me?.sections || []).filter(x => x.id !== "reps");
-            const grouped = mine.filter(x => GROUP.includes(x.id));
-            const tabs = mine.filter(x => !GROUP.includes(x.id));
-            if (grouped.length) {
-              const at = Math.max(0, tabs.findIndex(x => x.id === "credits" || x.id === "debtors"));
-              tabs.splice(tabs.some(x => x.id === "credits" || x.id === "debtors") ? at : tabs.length, 0,
-                { id: "analytics", path: grouped[0].path, label: "Analytics" });
-            }
-            // Carry the chosen company, year and view to the other page, so switching tabs on
-            // Worthy Products South stays on South instead of dropping back to North.
-            const keep = new URLSearchParams({
-              store: activeStore.id, fy: String(selectedYear), view, tab: channelTab,
-              m: String(weeklyMonth), w: String(selectedWeek),
-            }).toString();
-            return tabs.map(sec => {
-              const on = sec.id === "analytics" ? GROUP.includes(section) : sec.id === section;
-              return (
-                <Link key={sec.id} href={`${sec.path}#${keep}`} className={`${st.navBtn} ${on ? st.navOn : ""}`} aria-current={on ? "page" : undefined}>
-                  <Icon n={SECTION_ICONS[sec.id] || "grid"} size={15} />{sec.label}
-                </Link>
-              );
-            });
-          })()}
-        </nav>
-        <div className={st.tools}>
-          {me && <span className={st.me} title={me.label}><span className={st.avatar}>{initials}</span><span className={st.meLabel}>{me.label}</span></span>}
-          <button type="button" onClick={async () => { await fetch("/api/auth/login", { method: "DELETE" }); window.location.href = "/login"; }}
-            className={`${ui.btn} ${ui.btnSmall}`}>
-            Sign out
-          </button>
-        </div>
-      </header>
+      {(() => {
+        // Carry the chosen company, year and view to the other pages, so switching tabs on South stays on South.
+        const keep = new URLSearchParams({
+          store: activeStore.id, fy: String(selectedYear), view, tab: channelTab,
+          m: String(weeklyMonth), w: String(selectedWeek),
+        }).toString();
+        const SUB = { products: "Categories & Products", movers: "Fast & Slow Movers", customers: "Customers" };
+        return <SiteNav current={section} me={me} keep={keep} trail={SUB[section] ? [{ label: SUB[section] }] : []} />;
+      })()}
 
       {/* HEADING: company, source and freshness, then the company and year switchers */}
-      <div className={st.head}>
+      <div className={st.head} id="main" tabIndex={-1}>
         <div style={{ minWidth: 0 }}>
           <h1 className={st.title}>{activeStore.name}</h1>
           <div className={st.sub}>

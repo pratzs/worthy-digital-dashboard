@@ -5,6 +5,7 @@
  * team's own pipeline, outreach, listings and Thursday meeting actions, for worthy.nz, worthyproducts.nz and
  * dutchrusk.co.nz. Data: app/api/command (lib/command.js).
  */
+import SiteNav from "@/app/design/SiteNav";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import s from "./command.module.css";
@@ -563,11 +564,9 @@ export default function CommandCenter() {
     <div className={s.page}>
       <div className={s.shell}>
         {/* top bar */}
-        <header className={s.top}>
-          <Link className={s.brand} href="/command" aria-label="Worthy Command Center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-black.png" alt="Worthy" className={s.brandLogo} width="1069" height="707" />
-          </Link>
+        <SiteNav current="command" trail={tab !== "dashboard" ? [{ label: TABS.find((t) => t.id === tab)?.label }] : []} />
+        <header className={s.top} style={{ marginTop: 10 }}>
+          <span />
           <nav className={s.nav} aria-label="Command Center sections">
             {TABS.map((t) => (
               <button key={t.id} type="button" className={`${s.navBtn} ${tab === t.id ? s.navOn : ""}`} onClick={() => go(t.id)} aria-current={tab === t.id ? "page" : undefined}>
@@ -576,16 +575,14 @@ export default function CommandCenter() {
             ))}
           </nav>
           <div className={s.tools}>
-            <Link className={s.iconBtn} href="/" title="Back to the dashboard"><Icon n="home" size={18} /></Link>
             <button type="button" className={s.iconBtn} title={overdue ? `${overdue} overdue` : "Nothing overdue"} onClick={() => go("meeting")}>
               <Icon n="bell" size={18} />{overdue > 0 && <span className={s.dot} />}
             </button>
-            <div className={s.avatar} title={cap(person)}>{initials}</div>
           </div>
         </header>
 
         {/* heading */}
-        <div className={s.head}>
+        <div className={s.head} id="main" tabIndex={-1}>
           <div>
             <h1 className={s.title}>{tab === "dashboard" ? "Command Center" : TABS.find((t) => t.id === tab).label}</h1>
             <div className={s.sub}><span className={s.liveDot} />{updatedText}<span>·</span><span>{siteName(site)}</span><span>·</span><span>{rangeText}</span></div>

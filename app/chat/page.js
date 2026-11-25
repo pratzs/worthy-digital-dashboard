@@ -1,5 +1,6 @@
 "use client";
 
+import SiteNav from "@/app/design/SiteNav";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/app/design/icons";
@@ -494,9 +495,9 @@ export default function ChatPage() {
 
   return (
     <div className={css.page}>
-      <header className={css.top}>
+      <div className={css.siteNav}><SiteNav current="chat" me={me} /></div>
+      <header className={css.top} id="main" tabIndex={-1}>
         <div className={css.brand}>
-          <img src="/logo-black.png" alt="Worthy" className={css.logo} />
           <div>
             <h1 className={css.title}><span className={css.chip}><Icon n="sparkle" size={15} /></span>Ask a Question</h1>
             <div className={css.sub}><Icon n="refresh" size={12} />Live from Odoo and Ostendo</div>
@@ -513,7 +514,6 @@ export default function ChatPage() {
               <Icon n="trash" size={13} />Forget {KEY_HELP[provider]?.label} key
             </button>
           )}
-          <Link href="/" className={css.btn}><Icon n="home" size={13} />Back to dashboard</Link>
           {me && <span className={css.who}><Icon n="user" size={12} />{me.name ? `${me.name}, ` : ""}{me.label}</span>}
         </div>
       </header>
