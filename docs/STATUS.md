@@ -73,6 +73,23 @@ Year figures (`lib/odooFyCache.js`): one Odoo read per company and year at a tim
 - Command Center 'Online sales' and conversion add Google Analytics revenue for dutchrusk.co.nz (about 7% below Shopify's own figure, 27 Oct to 25 Nov: GA $710,312 vs Shopify $765,245). `DUTCHRUSK_REPORTS_KEY` is in Vercel and the Social and Web page uses it (26 Nov), so the Command Center can switch to the same Shopify figures (`shopifyql(q, 'dutchrusk')` in `lib/webStats.js`).
 - ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web; Dutch Rusk on Shopify figures since 26 Nov), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
 
+## Improvements to do (edge cases found 26 Nov 2026)
+
+Most important first.
+1. **Reliable warm-up.** The GitHub job meant to run every 5 minutes runs 2 or 3 times a day. Move it to a scheduler that keeps time (a Render cron on the Dutch Rusk app calling `/api/cron/warm`, or Vercel Pro cron) so saved copies, including last year's, are always fresh before anyone opens the page.
+2. **Weekly figures need the same protection** as the year figures (`/api/odoo/weeks` reads Odoo per visitor with no shared lock or saved copy; a busy Odoo leaves the weekly margin blank).
+3. **Say when figures are old.** The page shows the Odoo time, but nothing stands out when the saved copy is over 15 minutes old because Odoo is slow. Add an orange "Odoo slow, figures from 10:05" notice.
+4. **Chat and connector answers should state the Odoo time** when they answer from the saved copy.
+5. **Spam enquiries.** A form entry with no visit behind it (e.g. "katalogTew", 22 Nov) is counted as an enquiry. Mark likely spam and leave it out of the count, listed separately.
+6. **Partial month.** "Sales by month" shows the current month as a full bar; mark it as "to 26 Nov" so it is not read as a drop.
+7. **Self-host the font.** A Vercel build failed on 26 Nov because Google Fonts did not answer; serve Outfit from the repo with next/font/local.
+8. **Long tables** (Debtors, customers, products, rep tables): add paging or "show more" with a count, so phones are not scrolled through hundreds of rows.
+9. **Test the department logins** (Purchasing: Kylie, Hari; Business Development) on production: the new navigation shows only their pages, but no real sign-in has been tried since the redesign.
+10. **Health alerts** for the Meta token, the Dutch Rusk reports key and the Render app (Render can sleep; a slow first answer falls back to the last good copy).
+11. **New freight or sister-company codes** would silently enter sales: alert when an invoice line uses a delivery product or a related-company partner that is not in `lib/salesBasis.js`.
+12. **Management chat cost** (about US$0.30 a question): trim `get_financial_year` and `get_debtors` payloads.
+13. **Rep budgets in the public repo** (`lib/repTargets.js`): move to an environment value or the store.
+
 ## History in short
 
 - Mar to Sep 2026: dashboard built for Odoo North and Oceania, Ostendo South and the Shopify stores.
