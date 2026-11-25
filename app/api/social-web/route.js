@@ -4,7 +4,7 @@
  * management department reach this path, and the route checks the role again.
  */
 import { NextResponse } from 'next/server';
-import { webStats } from '@/lib/webStats';
+import { webStats, customPeriods, periods } from '@/lib/webStats';
 import { setOidcToken, ga4Properties } from '@/lib/ga4';
 import { metaStats } from '@/lib/socialMeta';
 import { readManual, MANUAL_ACCOUNTS, MANUAL_FIELDS } from '@/lib/socialManual';
@@ -22,6 +22,17 @@ export async function GET(request) {
     catch (e) { return NextResponse.json({ ok: false, error: String(e.message || e) }); }
   }
   const fresh = q.get('fresh') === '1';
-  const [web, meta, manual] = await Promise.all([webStats({ fresh }), metaStats({ fresh }), readManual()]);
+  /* The Command Center asks for its own dates (from, to). The usual last 30 days goes through the shared cache; any
+     other period is worked out for those dates and compared with the same number of days just before. */
+  let period = null;
+  if (q.get('from') && q.get('to')) {
+    try { period = customPeriods({ from: q.get('from'), to: q.get('to') }); }
+    catch (e) { return NextResponse.json({ error: e.message }, { status: 400 }); }
+    const usual = periods();
+    if (period.start === usual.start && period.end === usual.end) period = null;
+  }
+  const [web, meta, manual] = await Promise.all([
+    webStats({ fresh, period }), metaStats({ fresh, period }), readManual(),
+  ]);
   return NextResponse.json({ web, meta, manual: { accounts: MANUAL_ACCOUNTS, fields: MANUAL_FIELDS, values: manual } });
 }

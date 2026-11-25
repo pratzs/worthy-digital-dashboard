@@ -40,6 +40,7 @@ const FIELD_LABEL = { site: "Site", area: "Area", status: "Status", owner: "Owne
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "grid" },
   { id: "search", label: "Search", icon: "search" },
+  { id: "social", label: "Social & Web", icon: "heart" },
   { id: "outreach", label: "Outreach", icon: "mail" },
   { id: "listings", label: "Listings", icon: "pin" },
   { id: "pipeline", label: "Pipeline", icon: "flow" },
@@ -106,6 +107,7 @@ const PATHS = {
   down: <path d="M12 5v14M6 13l6 6 6-6" />,
   link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
   star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9Z" />,
+  heart: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />,
   dollar: <><path d="M12 3v18" /><path d="M16.5 7.5C16 6 14.3 5 12 5 9.5 5 8 6.3 8 8c0 4 8.5 2.5 8.5 7 0 1.8-1.7 3-4.5 3-2.4 0-4.1-1-4.6-2.6" /></>,
 };
 const Icon = ({ n, size = 16, stroke = 1.6, className }) => (
@@ -454,7 +456,7 @@ export default function CommandCenter() {
   };
   const person = data?.person || "";
   const newItem = (kind, extra = {}) => { setSaveErr(""); setEditing({ kind, status: KINDS[kind].statuses[0], site: site === "all" ? "" : site, owner: person ? cap(person) : "", ...extra }); };
-  const defaultKind = { dashboard: "pipeline", search: "authority", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "pipeline" }[tab];
+  const defaultKind = { dashboard: "pipeline", search: "authority", social: "pipeline", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "pipeline" }[tab];
 
   // ── derived numbers ──
   const today = data?.today || nzTodayIso();
@@ -727,6 +729,7 @@ export default function CommandCenter() {
         )}
 
         {tab === "search" && <SearchTab data={rangeSearch ? { ...data, search: rangeSearch } : data} site={site} items={items} start={rStart} end={rEnd} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
+        {tab === "social" && <SocialTab site={site} start={rStart} end={rEnd} />}
         {tab === "outreach" && <BoardTab kind="outreach" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
@@ -1498,6 +1501,263 @@ function ShoppingSearch({ site, start, end, today }) {
           </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Social & Web tab (same figures as /social-web, for the Command Center's dates and site) ─────────────────
+// Which site each social account belongs to: Worthy Products accounts to worthyproducts.nz, the rest to worthy.nz.
+const socialSite = (a) => (/products/i.test(a.name) ? "worthyproducts" : "worthy");
+
+function MonthBars({ rows, k, fmt = n0 }) {
+  if (!rows?.length) return null;
+  const max = Math.max(1, ...rows.map((r) => r[k] || 0));
+  const short = (v) => ((v || 0) >= 1000 ? `${((v || 0) / 1000).toFixed(1)}k` : n0(v));
+  return (
+    <div className={s.monthBars}>
+      {rows.map((r, i) => (
+        <div key={r.month} title={`${monthLabel(r.month)}: ${fmt(r[k])}`}>
+          <b>{fmt === money ? moneyShort(r[k]).replace("$", "") : short(r[k])}</b>
+          <i className={i === rows.length - 1 ? s.hot : ""} style={{ height: `${Math.max(3, ((r[k] || 0) / max) * 100)}%` }} />
+          <span>{monthLabel(r.month).slice(0, 3)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BarList({ rows, k, fmt = n0, violet }) {
+  if (!rows?.length) return <div className={s.empty}>None in this period</div>;
+  const max = Math.max(1, ...rows.map((r) => r[k] || 0));
+  return (
+    <div className={s.bars}>
+      {rows.map((r) => (
+        <div key={r.name} className={s.barRow}>
+          <span style={{ overflowWrap: "anywhere" }}>{r.name}</span>
+          <div className={s.barTrack}><div className={`${s.barFill} ${violet ? s.barFillV : ""}`} style={{ width: `${((r[k] || 0) / max) * 100}%` }} /></div>
+          <span className={s.num}>{fmt(r[k])}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Stat({ label, pair, fmt = n0, points }) {
+  if (!pair) return null;
+  return (
+    <div className={s.stat}>
+      <div className={s.statNum}>{fmt(pair[0])}</div>
+      <div className={s.statLabel}>{label} <Delta now={pair[0]} before={pair[1]} points={points} /></div>
+    </div>
+  );
+}
+
+function WebSiteCard({ x, range }) {
+  const shop = x.source === "shopify";
+  const t = x.totals || {};
+  return (
+    <section className={s.card}>
+      <div className={s.cardHead}>
+        <h2 className={s.cardTitle}>{x.name}</h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className={`${s.pill} ${s.pillGrey}`}>{shop ? "Shopify" : "Google Analytics"}</span>
+          <Range>{range}</Range>
+        </div>
+      </div>
+      {x.status !== "ok"
+        ? <div className={s.empty}>{x.status === "not_connected" ? "Not connected yet" : x.status === "no_property" ? "Waiting for its Google Analytics property" : `Could not load: ${x.error || "error"}`}</div>
+        : (<>
+          <div className={s.statLine}>
+            {shop ? (<>
+              <Stat label="NZ sessions" pair={t.sessions} />
+              <Stat label="Conversion rate" pair={t.conversion} fmt={(v) => pct(v, 2)} points />
+              <Stat label="Online orders" pair={t.orders} />
+              <Stat label="Online sales" pair={t.revenue} fmt={moneyShort} />
+            </>) : (<>
+              <Stat label="Visitors" pair={t.visitors} />
+              <Stat label="New visitors" pair={t.newVisitors} />
+              <Stat label="Sessions" pair={t.sessions} />
+              <Stat label="Engaged sessions" pair={t.engagedRate} fmt={(v) => pct(v)} points />
+              <Stat label="Page views" pair={t.pageViews} />
+              <Stat label={x.id === "worthy" ? "Enquiries and key events" : "Key events"} pair={t.keyEvents} />
+              {t.orders && t.orders[0] > 0 && <Stat label="Orders in Google Analytics" pair={t.orders} />}
+              {t.revenue && t.revenue[0] > 0 && <Stat label="Revenue in Google Analytics" pair={t.revenue} fmt={moneyShort} />}
+            </>)}
+          </div>
+          <div className={s.grid2} style={{ marginTop: 22 }}>
+            <div>
+              <div className={s.statLabel} style={{ marginBottom: 10 }}>{shop ? "Where NZ visitors came from" : "Where visitors came from"}</div>
+              <BarList rows={x.sources} k="sessions" />
+            </div>
+            <div>
+              <div className={s.statLabel} style={{ marginBottom: 10 }}>Device</div>
+              <BarList rows={x.devices} k="sessions" violet />
+            </div>
+          </div>
+          {(x.pages?.length > 0 || x.channels?.length > 0) && (
+            <div className={s.tableWrap} style={{ marginTop: 20 }}>
+              <table className={s.table}>
+                {x.pages?.length > 0
+                  ? (<><thead><tr><th>Most viewed page</th><th className={s.num}>Views</th><th className={s.num}>Visitors</th></tr></thead>
+                    <tbody>{x.pages.map((r) => <tr key={r.name}><td style={{ overflowWrap: "anywhere" }}>{r.name}</td><td className={s.num}>{n0(r.views)}</td><td className={s.num}>{n0(r.visitors)}</td></tr>)}</tbody></>)
+                  : (<><thead><tr><th>Sales channel</th><th className={s.num}>Orders</th><th className={s.num}>Net sales</th></tr></thead>
+                    <tbody>{x.channels.map((r) => <tr key={r.name}><td>{r.name}</td><td className={s.num}>{n0(r.orders)}</td><td className={s.num}>{money(r.revenue)}</td></tr>)}</tbody></>)}
+              </table>
+            </div>
+          )}
+          <div className={s.grid2} style={{ marginTop: 22 }}>
+            <div>
+              <div className={s.statLabel}>{shop ? "NZ sessions by month" : "Visitors by month"}</div>
+              <MonthBars rows={x.months} k={shop ? "sessions" : "visitors"} />
+            </div>
+            {shop && (
+              <div>
+                <div className={s.statLabel}>Online sales by month</div>
+                <MonthBars rows={x.months} k="revenue" fmt={money} />
+              </div>
+            )}
+          </div>
+        </>)}
+    </section>
+  );
+}
+
+const SOCIAL_KEYS = [["views", "Views"], ["reach", "Reach"], ["engagements", "Engagements"], ["profileViews", "Profile visits"], ["newFollows", "New followers"]];
+
+function SocialTab({ site, start, end }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const want = `${start}|${end}`;
+  useEffect(() => {
+    let stop = false;
+    fetch(`/api/social-web?from=${start}&to=${end}`, { cache: "no-store" })
+      .then((r) => r.json().then((j) => (r.ok ? j : Promise.reject(new Error(j.error || r.status)))))
+      .then((j) => { if (!stop) { setD({ ...j, key: `${start}|${end}` }); setErr(""); } })
+      .catch((e) => { if (!stop) setErr(`${start}|${end}|${String(e.message || e)}`); });
+    return () => { stop = true; };
+  }, [start, end]);
+  // Figures for an earlier date range are never shown while the new range loads.
+  const cur = d && d.key === want ? d : null;
+  const errText = err.startsWith(`${want}|`) ? err.slice(want.length + 1) : "";
+
+  const p = cur?.web?.periods;
+  const range = p ? `${dShort(p.start)} to ${dShort(p.end)} vs ${dShort(p.prevStart)} to ${dShort(p.prevEnd)}` : `${dShort(start)} to ${dShort(end)}`;
+  const sites = (cur?.web?.sites || []).filter((x) => site === "all" || x.id === site);
+  const okSites = sites.filter((x) => x.status === "ok");
+  const accounts = (cur?.meta?.accounts || []).filter((a) => site === "all" || socialSite(a) === site);
+  const pairSum = (list, get) => { let a = 0, b = 0, any = false; list.forEach((x) => { const v = get(x); if (v) { any = true; a += v[0] || 0; b += v[1] || 0; } }); return any ? [a, b] : null; };
+  /* Never mix bases: the shops count New Zealand sessions and Online Store sales from Shopify; worthy.nz is the company
+     site (Google Analytics visitors, no sales). The strip shows the shops, or worthy.nz on its own when it is picked. */
+  const shops = okSites.filter((x) => x.source === "shopify");
+  const companyOnly = site === "worthy";
+  const visitSites = companyOnly ? okSites : shops;
+  const visitPair = (x) => (x.source === "shopify" ? x.totals?.sessions : x.totals?.visitors);
+  const visits = pairSum(visitSites, visitPair);
+  const sales = shops.length ? pairSum(shops, (x) => x.totals?.revenue) : null;
+  const keyEvents = companyOnly ? pairSum(okSites, (x) => x.totals?.keyEvents) : null;
+  const shopNames = site === "all" && shops.length === 1 ? `, ${shops[0].name}` : "";
+  const views = pairSum(accounts, (a) => a.totals?.views);
+  const eng = pairSum(accounts, (a) => a.totals?.engagements);
+  const followers = accounts.reduce((t, a) => t + (a.followers || 0), 0);
+  const monthsAll = (() => {
+    const m = {};
+    visitSites.forEach((x) => (x.months || []).forEach((r) => { const o = m[r.month] || { month: r.month, visits: 0, revenue: 0 }; o.visits += x.source === "shopify" ? (r.sessions || 0) : (r.visitors || 0); o.revenue += x.source === "shopify" ? (r.revenue || 0) : 0; m[r.month] = o; }));
+    return Object.values(m).sort((a, b) => (a.month < b.month ? -1 : 1));
+  })();
+  const manual = cur?.manual;
+  const manualMonths = manual ? [...new Set(Object.values(manual.values || {}).flatMap((m) => Object.keys(m)))].sort().reverse().slice(0, 3) : [];
+
+  return (
+    <div className={s.fade}>
+      <section className={s.kpis}>
+        <div className={s.kpi}>
+          <div className={s.kpiTop}><div className={s.kpiNum}>{visits ? n0(visits[0]) : "-"}</div><div className={`${s.chip} ${s.chipOrange}`}><Icon n="globe" size={15} /></div></div>
+          <div className={s.kpiLabel}>{companyOnly ? "Visitors, worthy.nz" : `Shop visits, NZ${shopNames}`} {visits && <Delta now={visits[0]} before={visits[1]} />}</div>
+          <Spark values={monthsAll.length ? monthsAll.map((r) => r.visits) : new Array(12).fill(0)} hotLast={1} />
+        </div>
+        {companyOnly ? (
+          <div className={s.kpi}>
+            <div className={s.kpiTop}><div className={s.kpiNum}>{keyEvents ? n0(keyEvents[0]) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n="mail" size={15} /></div></div>
+            <div className={s.kpiLabel}>Key events {keyEvents && <Delta now={keyEvents[0]} before={keyEvents[1]} />}</div>
+          </div>
+        ) : (
+          <div className={s.kpi}>
+            <div className={s.kpiTop}><div className={s.kpiNum}>{sales ? moneyShort(sales[0]) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n="cart" size={15} /></div></div>
+            <div className={s.kpiLabel}>Online sales{shopNames} {sales && <Delta now={sales[0]} before={sales[1]} />}</div>
+            <Spark values={monthsAll.length ? monthsAll.map((r) => r.revenue) : new Array(12).fill(0)} hotLast={1} />
+          </div>
+        )}
+        <div className={s.kpi}>
+          <div className={s.kpiTop}><div className={s.kpiNum}>{views ? n0(views[0]) : "-"}</div><div className={`${s.chip} ${s.chipGreen}`}><Icon n="eye" size={15} /></div></div>
+          <div className={s.kpiLabel}>Social views {views && <Delta now={views[0]} before={views[1]} />}</div>
+          <div className={s.statLabel} style={{ marginTop: 16 }}>{accounts.length ? `Facebook and Instagram, ${accounts.length} accounts` : ""}</div>
+        </div>
+        <div className={s.kpi}>
+          <div className={s.kpiTop}><div className={s.kpiNum}>{eng ? n0(eng[0]) : "-"}</div><div className={s.chip}><Icon n="heart" size={15} /></div></div>
+          <div className={s.kpiLabel}>Social engagements {eng && <Delta now={eng[0]} before={eng[1]} />}</div>
+          <div className={s.statLabel} style={{ marginTop: 16 }}>{accounts.length ? `${n0(followers)} followers across ${accounts.length} accounts` : ""}</div>
+        </div>
+      </section>
+
+      {errText && <section className={s.card} style={{ marginTop: 14 }}><div className={s.err}>Could not load: {errText}</div></section>}
+      {!cur && !errText && <div className={s.skeleton} style={{ height: 320, marginTop: 14 }} />}
+
+      {cur && (
+        <div className={s.grid}>
+          <div className={s.stack}>
+            {sites.map((x) => <WebSiteCard key={x.id} x={x} range={range} />)}
+          </div>
+          <aside className={s.stack}>
+            {cur.meta?.status !== "ok" && <section className={s.card}><div className={s.cardTitle}>Facebook and Instagram</div><div className={s.empty}>{cur.meta?.status === "not_connected" ? "Not connected yet" : `Could not load: ${cur.meta?.error || ""}`}</div></section>}
+            {cur.meta?.status === "ok" && accounts.length === 0 && <section className={s.card}><div className={s.cardTitle}>Social media</div><div className={s.empty}>No social accounts for {siteName(site)}</div></section>}
+            {accounts.map((a) => (
+              <section key={a.platform + a.name} className={s.site}>
+                <div className={s.siteHead}>
+                  <div className={s.siteName}>{a.name}</div>
+                  <span className={`${s.pill} ${a.platform === "Instagram" ? s.pillViolet : s.pillGrey}`}>{a.platform}</span>
+                </div>
+                <div className={s.siteSub}>{n0(a.followers)} followers{a.postsTotal ? ` · ${n0(a.postsTotal)} posts` : ""}</div>
+                <div className={`${s.statLine} ${s.statTight}`} style={{ marginTop: 14 }}>
+                  {SOCIAL_KEYS.filter(([k]) => a.totals?.[k]).map(([k, l]) => (
+                    <div key={k} className={s.stat}>
+                      <div className={s.statNum} style={{ fontSize: 22 }}>{n0(a.totals[k][0])}</div>
+                      <div className={s.statLabel}>{l} <Delta now={a.totals[k][0]} before={a.totals[k][1]} /></div>
+                    </div>
+                  ))}
+                </div>
+                {a.posts?.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    {a.posts.slice(0, 3).map((po, i) => (
+                      <a key={i} href={po.link} target="_blank" rel="noreferrer" className={s.row} style={{ textDecoration: "none", color: "inherit" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div className={s.rowTitle} style={{ fontWeight: 400 }}>{po.text || "(no caption)"}</div>
+                          <div className={s.rowMeta}>{dShort(String(po.when).slice(0, 10))} · {n0(po.reactions)} likes · {n0(po.comments)} comments</div>
+                        </div>
+                        <Icon n="out" size={14} />
+                      </a>
+                    ))}
+                  </div>
+                )}
+                <div className={s.siteBtns}><a href={a.link} target="_blank" rel="noreferrer"><Icon n="out" size={13} />Open</a></div>
+              </section>
+            ))}
+            {manual && (
+              <section className={s.card}>
+                <div className={s.cardHead}><h2 className={s.cardTitle}>LinkedIn and TikTok</h2><Link className={`${s.btn} ${s.btnSmall}`} href="/social-web">Enter figures</Link></div>
+                {manualMonths.length === 0 && <div className={s.empty}>No figures entered yet</div>}
+                {manual.accounts.flatMap((acc) => manualMonths.filter((m) => manual.values?.[acc.id]?.[m]).slice(0, 1).map((m) => (
+                  <div key={acc.id} className={s.row}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className={s.rowTitle}>{acc.name}</div>
+                      <div className={s.rowMeta}>{acc.platform} · {monthLabel(m)} · {manual.fields.filter((f) => manual.values[acc.id][m][f.id] !== undefined && manual.values[acc.id][m][f.id] !== "").map((f) => `${f.label} ${n0(Number(manual.values[acc.id][m][f.id]))}`).join(" · ")}</div>
+                    </div>
+                  </div>
+                )))}
+              </section>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
