@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import s from "./command.module.css";
+import { Icon } from "../design/icons";
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────
 const SITES = [
@@ -97,53 +98,8 @@ const cache = {
   del(k) { try { localStorage.removeItem(k); } catch { /* fine */ } },
 };
 
-// ── icons ───────────────────────────────────────────────────────────────────────────────────────────
-const PATHS = {
-  grid: <><rect x="3" y="3" width="7.5" height="7.5" rx="2" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" /></>,
-  search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
-  mail: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></>,
-  pin: <><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" /><circle cx="12" cy="9.5" r="2.5" /></>,
-  flow: <><circle cx="5" cy="6" r="2.2" /><circle cx="5" cy="18" r="2.2" /><circle cx="19" cy="12" r="2.2" /><path d="M7.2 6H11a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3M7.2 18H11a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3" /></>,
-  calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
-  refresh: <><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></>,
-  plus: <path d="M12 5v14M5 12h14" />,
-  bell: <><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15Z" /><path d="M10 20a2 2 0 0 0 4 0" /></>,
-  home: <><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /></>,
-  eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
-  click: <><path d="m9 9 11 4-5 2-2 5Z" /><path d="M5 3v3M3 5h3M3.5 9.5 5.5 8M9.5 3.5 8 5.5" /></>,
-  cart: <><path d="M3 4h2.5l2.2 11h10.6L20.5 7H7" /><circle cx="9.5" cy="19.5" r="1.5" /><circle cx="17" cy="19.5" r="1.5" /></>,
-  target: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.8" fill="currentColor" /></>,
-  globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z" /></>,
-  chart: <><path d="M4 20V4M4 20h16" /><path d="m7 15 4-4 3 3 5-6" /></>,
-  out: <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></>,
-  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
-  move: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
-  edit: <><path d="M4 20h4L19 9l-4-4L4 16Z" /></>,
-  trash: <><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></>,
-  up: <path d="M12 19V5M6 11l6-6 6 6" />,
-  down: <path d="M12 5v14M6 13l6 6 6-6" />,
-  link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
-  star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9Z" />,
-  bag: <><path d="M6 7h12l1 13H5Z" /><path d="M9 9V6a3 3 0 0 1 6 0v3" /></>,
-  store: <><path d="M4 9 5.5 4h13L20 9" /><path d="M4 9h16v1.5a2.7 2.7 0 0 1-5.3.6 2.7 2.7 0 0 1-5.4 0A2.7 2.7 0 0 1 4 10.5Z" /><path d="M5.5 13v7h13v-7" /><path d="M10 20v-4h4v4" /></>,
-  building: <><path d="M5 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16" /><path d="M16 10h2.5a1.5 1.5 0 0 1 1.5 1.5V21" /><path d="M3 21h18" /><path d="M9 7h3M9 11h3M9 15h3" /></>,
-  funnel: <path d="M3.5 5h17l-6.5 8v5.5l-4 2V13Z" />,
-  megaphone: <><path d="M4 10v4l12 5V5Z" /><path d="M16 9.5a3 3 0 0 1 0 5" /><path d="M7 15l1.2 4.5h2.6L10 16.3" /></>,
-  compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5Z" /></>,
-  devices: <><rect x="2.5" y="5" width="13" height="10" rx="1.5" /><path d="M6 19h6M9 15v4" /><rect x="17.5" y="8" width="4" height="11" rx="1.2" /></>,
-  bars: <><path d="M4 20h16" /><path d="M7 16v-5M12 16V6M17 16v-8" /></>,
-  pie: <><path d="M12 3a9 9 0 1 0 9 9h-9Z" /><path d="M15 3.5A9 9 0 0 1 20.5 9H15Z" /></>,
-  users: <><circle cx="9" cy="8.5" r="3.2" /><path d="M3 19.5a6 6 0 0 1 12 0" /><path d="M15.5 5.5a3.2 3.2 0 0 1 0 6.2M17.5 14a5.5 5.5 0 0 1 3.5 5.5" /></>,
-  instagram: <><rect x="3.5" y="3.5" width="17" height="17" rx="5" /><circle cx="12" cy="12" r="3.8" /><circle cx="17" cy="7" r="0.7" fill="currentColor" stroke="none" /></>,
-  facebook: <path d="M14.5 21v-7.5h2.6l.4-3h-3V8.6c0-.9.3-1.6 1.6-1.6h1.6V4.3c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.3H8.9v3h2.6V21" />,
-  heart: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />,
-  dollar: <><path d="M12 3v18" /><path d="M16.5 7.5C16 6 14.3 5 12 5 9.5 5 8 6.3 8 8c0 4 8.5 2.5 8.5 7 0 1.8-1.7 3-4.5 3-2.4 0-4.1-1-4.6-2.6" /></>,
-};
-const Icon = ({ n, size = 16, stroke = 1.6, className }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>{PATHS[n]}</svg>
-);
 const ASANA_PROJECT = "1219139073710791";
-const statusCls = (st) => (/done/i.test(st || "") ? s.pillGreen : /progress/i.test(st || "") ? s.pillViolet : /review|waiting|approved/i.test(st || "") ? s.pillAmber : s.pillGrey);
+const statusCls = (st) => (/done/i.test(st || "") ? s.pillDark : /progress/i.test(st || "") ? s.pillInk : /review|waiting|approved/i.test(st || "") ? s.pillSoft : s.pillGrey);
 const initialsOf = (n) => String(n || "?").replace(/@.*/, "").split(/[\s.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 const KIND_ICON = { pipeline: "flow", outreach: "mail", listing: "pin", meeting: "calendar", authority: "star", spend: "dollar", asana: "calendar", clickup: "flow" };
 const SRC_LABEL = { asana: "Asana", clickup: "ClickUp" };
@@ -155,20 +111,21 @@ function Delta({ now, before, points = false, invert = false }) {
   if (points) { d = now - before; txt = `${Math.abs(d * 100).toFixed(1)} pts`; }
   else { if (!before) return null; d = (now - before) / before; if (!Number.isFinite(d)) return null; txt = `${Math.abs(d * 100).toFixed(1)}%`; }
   const good = invert ? d < 0 : d > 0;
-  const cls = Math.abs(d) < 0.0005 ? s.flat : good ? s.up : s.down;
-  return <span className={`${s.delta} ${cls}`}>{d >= 0 ? "+" : "-"}{txt}</span>;
+  // Rising or falling is drawn as a triangle; ink when the change is good, the accent when it is not
+  if (Math.abs(d) < 0.0005) return <span className={`${s.delta} ${s.deltaFlat}`}>{txt}</span>;
+  return <span className={`${s.delta} ${good ? "" : s.deltaBad}`}><Icon n={d >= 0 ? "tri-up" : "tri-down"} size={8} />{txt}</span>;
 }
 
-function Spark({ values, hotLast = 0 }) {
+function Spark({ values, hotLast = 0, accent = false }) {
   const max = Math.max(1, ...values);
   return (
-    <div className={s.spark}>
+    <div className={`${s.spark} ${accent ? s.sparkAccent : ""}`}>
       {values.map((v, i) => <i key={i} className={i >= values.length - hotLast ? s.hot : ""} style={{ height: `${Math.max(6, (v / max) * 100)}%` }} />)}
     </div>
   );
 }
 
-function Gauge({ value, label, color, text }) {
+function Gauge({ value, label, accent = false, text }) {
   const v = Math.max(0, Math.min(1, value || 0));
   const R = 34, cx = 46, cy = 44, a0 = Math.PI * 1.1, a1 = -Math.PI * 0.1;
   const pt = (a) => [cx + R * Math.cos(a), cy - R * Math.sin(a)];
@@ -178,8 +135,8 @@ function Gauge({ value, label, color, text }) {
     <div className={s.gauge}>
       <svg viewBox="0 0 92 60" role="img" aria-label={`${label} ${text}`}>
         <path d={arc(a0, a1)} stroke="rgba(0,0,0,.07)" strokeWidth="4" fill="none" strokeLinecap="round" />
-        {v > 0.003 && <path d={arc(a0, end)} stroke={color} strokeWidth="4" fill="none" strokeLinecap="round" />}
-        <text x="46" y="48" textAnchor="middle" fontSize="15" fontWeight="300" fill="#141614">{text}</text>
+        {v > 0.003 && <path d={arc(a0, end)} stroke={accent ? "var(--orange)" : "var(--ink)"} strokeOpacity={accent ? 1 : 0.78} strokeWidth="4" fill="none" strokeLinecap="round" />}
+        <text x="46" y="48" textAnchor="middle" fontSize="15" fontWeight="300" fill={accent ? "var(--orange)" : "var(--ink)"}>{text}</text>
       </svg>
       <div className={s.gaugeLabel}>{label}</div>
     </div>
@@ -187,6 +144,11 @@ function Gauge({ value, label, color, text }) {
 }
 
 const Range = ({ children }) => <span className={s.tag}><Icon n="calendar" size={11} />{children}</span>;
+/** Card title with its icon chip, same as the Social & Web tab. */
+const Title = ({ icon, children, as: H = "h2", className = s.cardTitle, style }) => <H className={`${className} ${s.titleRow}`} style={style}><span className={s.titleIcon}><Icon n={icon} size={15} /></span><span style={{ minWidth: 0 }}>{children}</span></H>;
+/** A thin bar for a value against the largest in its list (drawn from the figure beside it, adds no number). */
+const RowBar = ({ value, max, accent = false }) => <div className={s.rowBar}><i className={accent ? s.meterAccent : ""} style={{ width: `${max ? Math.max(0, Math.min(1, (value || 0) / max)) * 100 : 0}%` }} /></div>;
+const Meter = ({ value, max, accent = false }) => <div className={s.meter}><i className={accent ? s.meterAccent : ""} style={{ width: `${max ? Math.max(0, Math.min(1, (value || 0) / max)) * 100 : 0}%` }} /></div>;
 
 // ── data shaping ────────────────────────────────────────────────────────────────────────────────────
 const pick = (arr, site) => (arr || []).filter((x) => x.status === "ok" && (site === "all" || x.id === site));
@@ -306,39 +268,39 @@ function TrafficChart({ rows, mode, lead }) {
           <pattern id="cc-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(20,22,20,.07)" strokeWidth="2" />
           </pattern>
-          <linearGradient id="cc-fadeA" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#f2892a" stopOpacity=".16" /><stop offset="1" stopColor="#f2892a" stopOpacity="0" /></linearGradient>
+          <linearGradient id="cc-fadeA" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#141614" stopOpacity=".08" /><stop offset="1" stopColor="#141614" stopOpacity="0" /></linearGradient>
         </defs>
         {rows.map((r, i) => r.weekend ? <rect key={`w${i}`} x={x(i) - step / 2} y={padT} width={step} height={ih} fill="url(#cc-hatch)" rx="3" /> : null)}
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
           <g key={f}>
             <line x1={padL} x2={padL + iw} y1={padT + ih - f * ih} y2={padT + ih - f * ih} stroke="rgba(20,22,20,.16)" strokeDasharray="5 5" />
             <text x={padL - 8} y={padT + ih - f * ih + 4} textAnchor="end" fontSize="11" fill="#8b918c">{axisNum(maxA * f)}</text>
-            <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#5536e6" opacity=".7">{f ? `${lead ? "" : "$"}${axisNum(maxB * f)}` : ""}</text>
+            <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#f2892a" opacity=".85">{f ? `${lead ? "" : "$"}${axisNum(maxB * f)}` : ""}</text>
           </g>
         ))}
         {rows.map((r, i) => (i % every === 0 || i === rows.length - 1) && (i === rows.length - 1 || rows.length - 1 - i >= every / 2) ? <text key={`l${i}`} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="#8b918c">{r.label}</text> : null)}
         {hover !== null && <rect x={x(hover) - Math.max(step, 14) / 2} y={padT} width={Math.max(step, 14)} height={ih} fill="url(#cc-hatch)" rx="4" />}
         <path d={`${smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} L${x(rows.length - 1)},${padT + ih} L${x(0)},${padT + ih} Z`} fill="url(#cc-fadeA)" />
-        <path d={smoothPath(rows.map((r, i) => (r.c === null ? null : [x(i), yA(r.c)])))} stroke="#a9adaa" strokeWidth="1.6" fill="none" />
-        <path d={smoothPath(rows.map((r, i) => [x(i), yB(r.b)]))} stroke="#5536e6" strokeWidth="2.4" fill="none" />
-        <path d={smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} stroke="#f2892a" strokeWidth="2.6" fill="none" />
+        <path d={smoothPath(rows.map((r, i) => (r.c === null ? null : [x(i), yA(r.c)])))} stroke="#141614" strokeOpacity=".22" strokeWidth="1.6" strokeDasharray="4 4" fill="none" />
+        <path d={smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} stroke="#141614" strokeWidth="2.4" fill="none" />
+        <path d={smoothPath(rows.map((r, i) => [x(i), yB(r.b)]))} stroke="#f2892a" strokeWidth="2.6" fill="none" />
         {h && (
           <g>
-            <line x1={x(hover)} x2={x(hover)} y1={padT + 4} y2={padT + ih} stroke="#f2892a" strokeWidth="2" />
-            <circle cx={x(hover)} cy={padT + 4} r="6" fill="#f2892a" />
-            <circle cx={x(hover)} cy={yB(h.b)} r="4.5" fill="#fff" stroke="#5536e6" strokeWidth="2" />
-            <circle cx={x(hover)} cy={yA(h.a)} r="5.5" fill="#f2892a" stroke="#fff" strokeWidth="2" />
+            <line x1={x(hover)} x2={x(hover)} y1={padT + 4} y2={padT + ih} stroke="#141614" strokeOpacity=".5" strokeWidth="1.5" />
+            <circle cx={x(hover)} cy={padT + 4} r="4" fill="#141614" />
+            <circle cx={x(hover)} cy={yB(h.b)} r="5.5" fill="#f2892a" stroke="#fff" strokeWidth="2" />
+            <circle cx={x(hover)} cy={yA(h.a)} r="4.5" fill="#fff" stroke="#141614" strokeWidth="2" />
           </g>
         )}
       </svg>
       {h && (
         <div className={s.tip} style={{ left: Math.min(Math.max(x(hover), 90), w - 90), top: Math.max(yA(h.a), 70) }}>
           <div><b>{h.long}</b></div>
-          {change !== null && <div className={s.tipRow}><span>Change</span><b style={{ color: change >= 0 ? "#1f9d47" : "#e5413c" }}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
-          <div className={s.tipRow}><span style={{ color: "#f2892a" }}>Visits</span><b>{n0(h.a)}</b></div>
+          {change !== null && <div className={s.tipRow}><span>Change</span><b style={{ color: change >= 0 ? "#141614" : "#f2892a", display: "inline-flex", alignItems: "center", gap: 3 }}><Icon n={change >= 0 ? "tri-up" : "tri-down"} size={8} />{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
+          <div className={s.tipRow}><span>Visits</span><b>{n0(h.a)}</b></div>
           {lead
-            ? <div className={s.tipRow}><span style={{ color: "#5536e6" }}>Enquiries</span><b>{n0(h.conv)}</b></div>
-            : <><div className={s.tipRow}><span style={{ color: "#5536e6" }}>Online sales</span><b>{money(h.b)}</b></div>
+            ? <div className={s.tipRow}><span style={{ color: "#f2892a" }}>Enquiries</span><b>{n0(h.conv)}</b></div>
+            : <><div className={s.tipRow}><span style={{ color: "#f2892a" }}>Online sales</span><b>{money(h.b)}</b></div>
               <div className={s.tipRow}><span>Orders</span><b>{n0(h.conv)}</b></div></>}
           {h.c !== null && <div className={s.tipRow}><span>Previous</span><b>{n0(h.c)}</b></div>}
         </div>
@@ -366,7 +328,7 @@ function Editor({ item, onClose, onSave, onDelete, busy, error }) {
   return (
     <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <form className={`${s.modal} ${s.fade}`} onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
-        <h3 className={s.modalTitle}>{item.id ? `Edit ${k.one.toLowerCase()}` : `New ${k.one.toLowerCase()}`}</h3>
+        <Title as="h3" className={s.modalTitle} icon={item.id ? "edit" : KIND_ICON[f.kind] || "plus"}>{item.id ? `Edit ${k.one.toLowerCase()}` : `New ${k.one.toLowerCase()}`}</Title>
         <div className={s.fields}>
           {!item.id && (
             <label className={`${s.field} ${s.fieldWide}`}>Type
@@ -652,24 +614,24 @@ export default function CommandCenter() {
             {/* KPI strip */}
             <section className={s.kpis}>
               <div className={s.kpi}>
-                <div className={s.kpiTop}><div className={s.kpiNum}>{n0(liveNow)}</div><div className={`${s.chip} ${s.chipGreen}`}><Icon n="eye" size={15} /></div></div>
+                <div className={s.kpiTop}><div className={s.kpiNum}>{n0(liveNow)}</div><div className={s.chip}><Icon n="eye" size={15} /></div></div>
                 <div className={s.kpiLabel}>Visitors right now</div>
                 <Spark values={liveMinutes} hotLast={5} />
               </div>
               <div className={s.kpi}>
-                <div className={s.kpiTop}><div className={s.kpiNum}>{searchSites.length ? n0(nbClicks[0]) : "-"}</div><div className={`${s.chip} ${s.chipOrange}`}><Icon n="click" size={15} /></div></div>
+                <div className={s.kpiTop}><div className={s.kpiNum}>{searchSites.length ? n0(nbClicks[0]) : "-"}</div><div className={s.chip}><Icon n="search" size={15} /></div></div>
                 <div className={s.kpiLabel}>Non-branded search clicks {searchSites.length > 0 && <Delta now={nbClicks[0]} before={nbClicks[1]} />}</div>
                 <Spark values={nbDaily.length ? nbDaily : new Array(28).fill(0)} hotLast={7} />
               </div>
-              <div className={`${s.kpi} ${lead ? s.kpiClick : ""}`} onClick={lead ? () => openEvents(site) : undefined} role={lead ? "button" : undefined} tabIndex={lead ? 0 : undefined}>
-                <div className={s.kpiTop}><div className={s.kpiNum}>{data ? (lead ? n0(conv[0]) : moneyShort(rev[0])) : "-"}</div><div className={`${s.chip} ${s.chipViolet}`}><Icon n={lead ? "mail" : "cart"} size={15} /></div></div>
-                <div className={s.kpiLabel}>{lead ? "Enquiries" : "Online sales"} {lead ? <Delta now={conv[0]} before={conv[1]} /> : <Delta now={rev[0]} before={rev[1]} />}</div>
-                <Spark values={w30.cur.map((r) => (lead ? r.conversions : r.revenue))} hotLast={7} />
-              </div>
               <div className={`${s.kpi} ${s.kpiClick}`} onClick={() => openEvents(site)} role="button" tabIndex={0}>
-                <div className={s.kpiTop}><div className={s.kpiNum}>{cr[0] === null ? "-" : (cr[0] * 100).toFixed(2)}<small>%</small></div><div className={s.chip}><Icon n="target" size={15} /></div></div>
+                <div className={s.kpiTop}><div className={s.kpiNum}>{cr[0] === null ? "-" : (cr[0] * 100).toFixed(2)}<small>%</small></div><div className={s.chip}><Icon n="funnel" size={15} /></div></div>
                 <div className={s.kpiLabel}>{lead ? "Enquiry rate" : "Conversion rate"} <Delta now={cr[0]} before={cr[1]} points /></div>
                 <Spark values={w30.cur.map((r) => r.conversions)} hotLast={7} />
+              </div>
+              <div className={`${s.kpi} ${lead ? s.kpiClick : ""}`} onClick={lead ? () => openEvents(site) : undefined} role={lead ? "button" : undefined} tabIndex={lead ? 0 : undefined}>
+                <div className={s.kpiTop}><div className={s.kpiNum}>{data ? (lead ? n0(conv[0]) : moneyShort(rev[0])) : "-"}</div><div className={`${s.chip} ${s.chipOrange}`}><Icon n={lead ? "mail" : "bag"} size={15} /></div></div>
+                <div className={s.kpiLabel}>{lead ? "Enquiries" : "Online sales"} {lead ? <Delta now={conv[0]} before={conv[1]} /> : <Delta now={rev[0]} before={rev[1]} />}</div>
+                <Spark values={w30.cur.map((r) => (lead ? r.conversions : r.revenue))} hotLast={7} accent />
               </div>
             </section>
             {todayNow && <section className={`${s.card} ${s.todayCard}`}><TodaySoFar todayNow={todayNow} site={site} bar /></section>}
@@ -678,16 +640,16 @@ export default function CommandCenter() {
               <div className={s.stack}>
                 <section className={s.card}>
                   <div className={s.cardHead}>
-                    <h2 className={s.cardTitle}>{lead ? "Traffic vs enquiries" : "Traffic vs sales"}</h2>
+                    <Title icon="chart">{lead ? "Traffic vs enquiries" : "Traffic vs sales"}</Title>
                     <div className={s.seg}>
                       {["daily", "weekly", "monthly"].map((m) => { const off = (m === "weekly" && w30.days < 21) || (m === "monthly" && w30.days < 85); return <button key={m} type="button" className={chartMode === m ? s.segOn : ""} disabled={off} title={off ? "Pick a longer period" : undefined} style={off ? { opacity: 0.4, cursor: "not-allowed" } : undefined} onClick={() => setMode(m)}>{cap(m)}</button>; })}
                     </div>
                   </div>
                   <div className={s.cardHead} style={{ marginBottom: 6 }}>
                     <div className={s.legend}>
-                      <span><i style={{ background: "#f2892a" }} />Visits</span>
-                      <span><i style={{ background: "#5536e6" }} />{lead ? "Enquiries" : "Online sales"}</span>
-                      <span><i style={{ background: "#a9adaa" }} />Previous</span>
+                      <span><i style={{ background: "var(--ink)" }} />Visits</span>
+                      <span><i style={{ background: "var(--orange)" }} />{lead ? "Enquiries" : "Online sales"}</span>
+                      <span><i style={{ background: "var(--ink)", opacity: 0.22 }} />Previous</span>
                     </div>
                     <Range>{rangeText}</Range>
                   </div>
@@ -696,7 +658,7 @@ export default function CommandCenter() {
 
                 <div className={s.grid2}>
                   <section className={s.card}>
-                    <div className={s.cardHead}><h2 className={s.cardTitle}>Live activity</h2></div>
+                    <div className={s.cardHead}><Title icon="zap">Live activity</Title></div>
                     <div className={s.seg} style={{ marginBottom: 12 }}>
                       {[["all", "All"], ["done", "Done"], ["moved", "Moved"], ["added", "Added"]].map(([id, l]) => <button key={id} type="button" className={feedTab === id ? s.segOn : ""} onClick={() => setFeedTab(id)}>{l}</button>)}
                     </div>
@@ -709,7 +671,7 @@ export default function CommandCenter() {
                             <div className={s.feedTitle}>{String(e.title).replace(/Google AI: (\w+)/, (m, id) => `Google AI figures, ${siteName(id)}`)}</div>
                             <div className={s.feedMeta}>{[KINDS[e.kind]?.label || SRC_LABEL[e.kind] || (e.kind === "search" ? "Search" : ""), e.person ? cap(e.person) : ""].filter(Boolean).join(" · ")} · {e.dateOnly ? dShort(e.dateOnly) : ago(e.at, now)}</div>
                           </div>
-                          <span className={`${s.pill} ${e.type === "done" ? s.pillGreen : e.type === "moved" ? s.pillViolet : e.type === "added" ? s.pillAmber : s.pillGrey}`}>{e.type === "done" ? cap(e.what === "live" ? "live" : "done") : cap(e.type)}</span>
+                          <span className={`${s.pill} ${e.type === "done" ? s.pillDark : e.type === "moved" ? s.pillInk : e.type === "added" ? s.pillSoft : s.pillGrey}`}>{e.type === "done" ? cap(e.what === "live" ? "live" : "done") : cap(e.type)}</span>
                         </div>
                       ))}
                     </div>
@@ -717,7 +679,7 @@ export default function CommandCenter() {
 
                   <section className={s.card}>
                     <div className={s.cardHead}>
-                      <h2 className={s.cardTitle}>Next up</h2>
+                      <Title icon="hourglass">Next up{overdue > 0 && <span className={s.accentNum} style={{ fontSize: 13, marginLeft: 8 }}>{overdue} overdue</span>}</Title>
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => go("pipeline")}>All work</button>
                     </div>
                     {upcomingAll.length === 0 && <div className={s.empty}>All clear</div>}
@@ -734,7 +696,7 @@ export default function CommandCenter() {
                           ? <button type="button" className={s.toggle} aria-label={`Mark ${x.title} done`} title={`Done in ${SRC_LABEL[x.src]}`} onClick={() => ext(x.src, x.rid, "done", null, x.title)} disabled={saving} />
                           : x.kind !== "outreach"
                           ? <button type="button" className={s.toggle} aria-label={`Mark ${x.title} done`} onClick={() => quickStatus(x, "done")} disabled={saving} />
-                          : <span className={`${s.pill} ${s.pillAmber}`}>{cap(x.status)}</span>}
+                          : <span className={`${s.pill} ${s.pillSoft}`}>{cap(x.status)}</span>}
                       </div>
                     ))}
                   </section>
@@ -757,16 +719,16 @@ export default function CommandCenter() {
                   return (
                     <section key={x.id} className={s.site} style={{ opacity: dim ? 0.45 : 1, cursor: "pointer" }} onClick={() => chooseSite(site === x.id ? "all" : x.id)}>
                       <div className={s.siteHead}>
-                        <div className={s.siteName}>{x.name}</div>
+                        <div className={`${s.siteName} ${s.titleRow}`}><span className={s.titleIcon}><Icon n={x.id === "worthy" ? "building" : "store"} size={14} /></span>{x.name}</div>
                         {lv?.status === "ok"
-                          ? <span className={`${s.pill} ${lv.now > 0 ? s.pillGreen : s.pillGrey}`}>{lv.now > 0 ? `${lv.now} live` : "Quiet"}</span>
-                          : <span className={`${s.pill} ${data ? s.pillRed : s.pillGrey}`}>{data ? "Not connected" : "Loading"}</span>}
+                          ? <span className={`${s.pill} ${lv.now > 0 ? s.pillDark : s.pillGrey}`}>{lv.now > 0 ? `${lv.now} live` : "Quiet"}</span>
+                          : <span className={`${s.pill} ${data ? s.pillAccent : s.pillGrey}`}>{data ? "Not connected" : "Loading"}</span>}
                       </div>
                       <div className={s.siteSub}>{okS ? `Avg position ${n1(sr.totals.nonBrandedPosition[0])} · ${n0(sr.totals.queries[0])} search terms` : sr?.status === "error" ? "Offline" : ""}</div>
                       <div className={s.gauges}>
-                        <Gauge value={p1} color="#e5413c" label="Page 1 terms" text={okS ? `${Math.round(p1 * 100)}%` : "-"} />
-                        <Gauge value={Math.min(1, ctr * 5)} color="#f2892a" label="Search CTR" text={okS ? `${(ctr * 100).toFixed(1)}%` : "-"} />
-                        <Gauge value={Math.min(1, crt * 10)} color="#5536e6" label={x.id === "worthy" ? "Enquiry rate" : "Conversion"} text={ts ? `${(crt * 100).toFixed(1)}%` : "-"} />
+                        <Gauge value={p1} label="Page 1 terms" text={okS ? `${Math.round(p1 * 100)}%` : "-"} />
+                        <Gauge value={Math.min(1, ctr * 5)} label="Search CTR" text={okS ? `${(ctr * 100).toFixed(1)}%` : "-"} />
+                        <Gauge value={Math.min(1, crt * 10)} accent label={x.id === "worthy" ? "Enquiry rate" : "Conversion"} text={ts ? `${(crt * 100).toFixed(1)}%` : "-"} />
                       </div>
                       <div className={s.siteBtns} onClick={(e) => e.stopPropagation()}>
                         <a href={x.url} target="_blank" rel="noreferrer"><Icon n="globe" size={13} />Visit</a>
@@ -799,13 +761,18 @@ export default function CommandCenter() {
   );
 }
 
+const posClass = (p) => (p <= 3 ? s.pos1 : p <= 10 ? s.pos2 : p <= 20 ? s.pos3 : s.pos4);
+// The same bands as the rankings filter: top 3, rest of page 1, page 2, beyond
+const POS_BANDS = [["top3", "Top 3", (p) => p <= 3], ["page1", "Rest of page 1", (p) => p > 3 && p <= 10], ["page2", "Page 2", (p) => p > 10 && p <= 20], ["beyond", "Beyond", (p) => p > 20]];
+const BAND_SHADE = [1, 0.78, 0.35, 0.14];
+
 // ── Search tab ──────────────────────────────────────────────────────────────────────────────────────
 function SearchTab(props) {
   const [mode, setMode] = useState("google");
   return (
     <>
       <div className={s.seg} style={{ marginBottom: 14 }}>
-        {[["google", "Google"], ["ai", "AI search"], ["shopping", "Google Shopping"]].map(([id, l]) => <button key={id} type="button" className={mode === id ? s.segOn : ""} onClick={() => setMode(id)}>{l}</button>)}
+        {[["google", "Google", "search"], ["ai", "AI search", "sparkle"], ["shopping", "Google Shopping", "bag"]].map(([id, l, ic]) => <button key={id} type="button" className={mode === id ? s.segOn : ""} onClick={() => setMode(id)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon n={ic} size={13} />{l}</button>)}
       </div>
       {mode === "google" ? <GoogleSearch {...props} /> : mode === "ai" ? <AiSearch {...props} /> : <ShoppingSearch {...props} />}
     </>
@@ -824,8 +791,8 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
   const shown = all.filter((r) => inBand(r.position) && (!q || r.query.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => { const k = sort.k; const av = k === "move" ? (a.prevPosition ? a.prevPosition - a.position : -999) : a[k]; const bv = k === "move" ? (b.prevPosition ? b.prevPosition - b.position : -999) : b[k]; return typeof av === "string" ? av.localeCompare(bv) * sort.dir : (av - bv) * sort.dir; })
     .slice(0, 200);
-  const th = (k, label, num) => <th className={num ? s.num : ""} onClick={() => setSort({ k, dir: sort.k === k ? -sort.dir : k === "position" || k === "query" ? 1 : -1 })}>{label}{sort.k === k ? (sort.dir > 0 ? " ↑" : " ↓") : ""}</th>;
-  const posCls = (p) => (p <= 3 ? s.pos1 : p <= 10 ? s.pos2 : p <= 20 ? s.pos3 : s.pos4);
+  const th = (k, label, num) => <th className={num ? s.num : ""} onClick={() => setSort({ k, dir: sort.k === k ? -sort.dir : k === "position" || k === "query" ? 1 : -1 })} aria-sort={sort.k === k ? (sort.dir > 0 ? "ascending" : "descending") : undefined}><span className={s.thSort}>{label}{sort.k === k && <Icon n={sort.dir > 0 ? "tri-up" : "tri-down"} size={7} />}</span></th>;
+  const posCls = posClass;
   const range = sites[0]?.range;
   const pages = sites.flatMap((x) => x.pages.map((p) => ({ ...p, site: x.id }))).sort((a, b) => b.clicks - a.clicks).slice(0, 10);
   const idx = pick(data?.indexing, site);
@@ -834,17 +801,27 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
   return (
     <div className={s.fade}>
       <section className={s.kpis}>
-        <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("nonBrandedClicks", 0)) : "-"}</div><div className={s.kpiLabel}>Non-branded clicks <Delta now={T("nonBrandedClicks", 0)} before={T("nonBrandedClicks", 1)} /></div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("nonBrandedImpressions", 0)) : "-"}</div><div className={s.kpiLabel}>Impressions <Delta now={T("nonBrandedImpressions", 0)} before={T("nonBrandedImpressions", 1)} /></div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{data ? n0(T("pageOne", 0)) : "-"}</div><div className={s.kpiLabel}>Terms on page 1 <Delta now={T("pageOne", 0)} before={T("pageOne", 1)} /></div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{data ? n1(wpos(0)) : "-"}</div><div className={s.kpiLabel}>Average position <Delta now={wpos(0)} before={wpos(1)} invert /></div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{data ? n0(T("nonBrandedImpressions", 0)) : "-"}</div><div className={s.chip}><Icon n="eye" size={15} /></div></div><div className={s.kpiLabel}>Impressions <Delta now={T("nonBrandedImpressions", 0)} before={T("nonBrandedImpressions", 1)} /></div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={`${s.kpiNum} ${s.accentNum}`}>{data ? n0(T("nonBrandedClicks", 0)) : "-"}</div><div className={`${s.chip} ${s.chipOrange}`}><Icon n="click" size={15} /></div></div><div className={s.kpiLabel}>Non-branded clicks <Delta now={T("nonBrandedClicks", 0)} before={T("nonBrandedClicks", 1)} /></div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{data ? n0(T("pageOne", 0)) : "-"}</div><div className={s.chip}><Icon n="trophy" size={15} /></div></div><div className={s.kpiLabel}>Terms on page 1 <Delta now={T("pageOne", 0)} before={T("pageOne", 1)} /></div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{data ? n1(wpos(0)) : "-"}</div><div className={s.chip}><Icon n="target" size={15} /></div></div><div className={s.kpiLabel}>Average position <Delta now={wpos(0)} before={wpos(1)} invert /></div></div>
       </section>
       <div className={s.grid}>
         <section className={s.card}>
           <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Non-branded rankings</h2>
+            <Title icon="trophy">Non-branded rankings</Title>
             {range && <Range>{`${dShort(range.start)} to ${dShort(range.end)}`}</Range>}
           </div>
+          {all.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div className={s.shareBar}>
+                {POS_BANDS.map(([id, , test], i) => { const n = all.filter((r) => test(r.position)).length; return n ? <i key={id} style={{ width: `${(n / all.length) * 100}%`, background: i === 0 ? "var(--orange)" : "var(--ink)", opacity: BAND_SHADE[i] }} /> : null; })}
+              </div>
+              <div className={s.shareLegend}>
+                {POS_BANDS.map(([id, l, test], i) => <span key={id}><i style={{ background: i === 0 ? "var(--orange)" : "var(--ink)", opacity: BAND_SHADE[i] }} />{l} {n0(all.filter((r) => test(r.position)).length)}</span>)}
+              </div>
+            </div>
+          )}
           <div className={s.cardHead}>
             <div className={s.seg}>{[["all", "All"], ["top3", "Top 3"], ["page1", "Page 1"], ["page2", "Page 2"], ["beyond", "Beyond"]].map(([id, l]) => <button key={id} type="button" className={band === id ? s.segOn : ""} onClick={() => setBand(id)}>{l}</button>)}</div>
             <input className={s.search} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -862,7 +839,7 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
                       <td style={{ overflowWrap: "anywhere" }}>{r.query}</td>
                       {site === "all" && <td className={s.hideSm}><span className={s.siteTag}>{siteName(r.site)}</span></td>}
                       <td className={s.num}><span className={`${s.posBadge} ${posCls(r.position)}`}>{n1(r.position)}</span></td>
-                      <td className={s.num} style={{ color: mv === null ? "#8b918c" : mv > 0.05 ? "#1f9d47" : mv < -0.05 ? "#e5413c" : "#8b918c" }}>{mv === null ? "New" : Math.abs(mv) < 0.05 ? "Same" : <>{mv > 0 ? "▲" : "▼"} {n1(Math.abs(mv))}</>}</td>
+                      <td className={s.num}><span className={`${s.move} ${mv === null ? s.moveFlat : mv > 0.05 ? s.moveUp : mv < -0.05 ? s.moveDown : s.moveFlat}`}>{mv === null ? "New" : Math.abs(mv) < 0.05 ? "Same" : <><Icon n={mv > 0 ? "tri-up" : "tri-down"} size={8} />{n1(Math.abs(mv))}</>}</span></td>
                       <td className={s.num}>{n0(r.clicks)}</td>
                       <td className={s.num}>{n0(r.impressions)}</td>
                       <td className={`${s.num} ${s.hideSm}`}>{pct(r.ctr)}</td>
@@ -875,17 +852,17 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
         </section>
         <div className={s.stack}>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Biggest climbers</h2></div>
+            <div className={s.cardHead}><Title icon="trending">Biggest climbers</Title></div>
             {winners.length === 0 && <div className={s.empty}>{data ? "None yet" : ""}</div>}
             {winners.filter((r) => r.move > 0).slice(0, 6).map((r) => (
               <div key={`${r.site}-${r.query}`} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{r.query}</div><div className={s.rowMeta}>{siteName(r.site)} · {n1(r.prevPosition)} to {n1(r.position)}</div></div>
-                <span className={`${s.pill} ${s.pillGreen}`}>+{n1(r.move)}</span>
+                <span className={`${s.pill} ${s.pillDark} ${s.pillPlain}`}><Icon n="tri-up" size={8} />+{n1(r.move)}</span>
               </div>
             ))}
           </section>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Indexing</h2></div>
+            <div className={s.cardHead}><Title icon="folder">Indexing</Title></div>
             {idx.length === 0 && <div className={s.empty}>{data ? "Offline" : ""}</div>}
             {idx.map((x) => x.sitemaps.map((m) => (
               <div key={m.path} className={s.row}>
@@ -893,29 +870,30 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
                   <div className={s.rowTitle}>{siteName(x.id)}</div>
                   <div className={s.rowMeta}>{n0(m.submitted)} pages · read {m.lastDownloaded ? dShort(m.lastDownloaded) : "-"}</div>
                 </div>
-                <span className={`${s.pill} ${m.errors ? s.pillRed : m.pending ? s.pillAmber : s.pillGreen}`}>{m.errors ? `${m.errors} errors` : m.pending ? "Pending" : "Read"}</span>
+                <span className={`${s.pill} ${m.errors ? s.pillAccent : m.pending ? s.pillSoft : s.pillInk}`}>{m.errors ? `${m.errors} errors` : m.pending ? "Pending" : "Read"}</span>
               </div>
             )))}
           </section>
           <section className={s.card}>
             <div className={s.cardHead}>
-              <h2 className={s.cardTitle}>Authority</h2>
+              <Title icon="award">Authority</Title>
               <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("authority", { month: new Date().toISOString().slice(0, 7) })}><Icon n="plus" size={13} />Record</button>
             </div>
             {auth.length === 0 && <div className={s.empty}>Nothing yet</div>}
             {auth.slice(0, 8).map((x) => (
               <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{siteName(x.site)}{x.month ? ` · ${monthLabel(x.month)}` : ""}</div></div>
-                <div className={s.statNum} style={{ fontSize: 22 }}>{x.score || "-"}</div>
+                <div className={s.rowNum} style={{ fontSize: 22 }}>{x.score || "-"}</div>
               </div>
             ))}
           </section>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Top pages</h2></div>
-            {pages.map((p) => (
+            <div className={s.cardHead}><Title icon="star">Top pages</Title><span className={s.tag}><Icon n="click" size={11} />Clicks</span></div>
+            {pages.map((p, i) => (
               <div key={p.page} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.page.replace(/^https?:\/\/(www\.)?/, "")}</div><div className={s.rowMeta}>{n0(p.impressions)} shown · position {n1(p.position)}</div></div>
-                <div className={s.statNum} style={{ fontSize: 20 }}>{n0(p.clicks)}</div>
+                <div className={`${s.rowNum} ${i === 0 ? s.rowNumAccent : ""}`}>{n0(p.clicks)}</div>
+                <RowBar value={p.clicks} max={pages[0]?.clicks} accent={i === 0} />
               </div>
             ))}
           </section>
@@ -924,6 +902,14 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
     </div>
   );
 }
+
+// Status steps in ink strength: earliest lightest, the finished step full ink, lost faint, wrong details in the accent
+const statusTone = (kind, st) => {
+  if (st === "needs fixing") return { background: "var(--orange)", opacity: 1 };
+  if (st === "lost") return { background: "var(--ink)", opacity: 0.08 };
+  if (["done", "won", "live"].includes(st)) return { background: "var(--ink)", opacity: 0.85 };
+  return { background: "var(--ink)", opacity: [0.18, 0.4, 0.62][KINDS[kind].statuses.indexOf(st)] ?? 0.4 };
+};
 
 // ── Outreach / Listings / Pipeline ──────────────────────────────────────────────────────────────────
 function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
@@ -935,15 +921,21 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
   return (
     <div className={s.fade}>
       <section className={s.card} style={{ marginBottom: 14 }}>
+        <div className={s.cardHead}><Title icon={KIND_ICON[kind] || "flow"}>{k.label} by status</Title></div>
         <div className={s.statLine}>
-          {k.statuses.map((st) => <div key={st} className={s.stat}><div className={s.statNum}>{by(st).length}</div><div className={s.statLabel}>{stLabel(kind, st)}</div></div>)}
-          <div className={s.stat}><div className={s.statNum} style={{ color: overdue ? "#e5413c" : undefined }}>{overdue}</div><div className={s.statLabel}>Overdue</div></div>
+          {k.statuses.map((st) => <div key={st} className={s.stat}><div className={s.statNum}>{by(st).length}</div><div className={s.statLabel} style={{ display: "flex", alignItems: "center", gap: 6 }}><span className={s.colDot} style={statusTone(kind, st)} />{stLabel(kind, st)}</div></div>)}
+          <div className={s.stat}><div className={`${s.statNum} ${overdue ? s.accentNum : ""}`}>{overdue}</div><div className={s.statLabel} style={{ display: "flex", alignItems: "center", gap: 6 }}><Icon n="alert" size={12} />Overdue</div></div>
         </div>
+        {mine.length > 0 && (
+          <div className={`${s.shareBar} ${s.statusBar}`}>
+            {k.statuses.map((st) => (by(st).length ? <i key={st} title={`${stLabel(kind, st)}: ${by(st).length}`} style={{ width: `${(by(st).length / mine.length) * 100}%`, ...statusTone(kind, st) }} /> : null))}
+          </div>
+        )}
       </section>
       <div className={s.board}>
         {k.statuses.map((st) => (
           <section key={st} className={s.col}>
-            <div className={s.colHead}><span>{stLabel(kind, st)}</span><span className={s.count}>{by(st).length}</span></div>
+            <div className={s.colHead}><span><span className={s.colDot} style={statusTone(kind, st)} />{stLabel(kind, st)}</span><span className={s.count}>{by(st).length}</span></div>
             {by(st).map((x) => {
               const i = k.statuses.indexOf(st);
               const next = k.statuses[i + 1];
@@ -959,7 +951,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
                     {x.due && st !== doneWord && <span className={x.due < today ? s.overdue : ""}>{x.due < today ? "Overdue " : "Due "}{dShort(x.due)}</span>}
                     {x.doneAt && st === doneWord && <span>{cap(doneWord)} {dShort(x.doneAt)}</span>}
                     {x.owner && <span>· {x.owner}</span>}
-                    {x.link && <a href={x.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "#5536e6", display: "inline-flex" }} aria-label="Open link"><Icon n="link" size={13} /></a>}
+                    {x.link && <a href={x.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "var(--ink)", display: "inline-flex" }} aria-label="Open link"><Icon n="link" size={13} /></a>}
                     {x.src && st !== "done" && (
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} style={{ marginLeft: "auto", padding: "4px 9px" }}
                         onClick={(e) => { e.stopPropagation(); if (x.src === "clickup" && st === "next") onExt("clickup", x.rid, "status", "in progress", x.title); else onExt(x.src, x.rid, "done", null, x.title); }}>
@@ -1020,16 +1012,20 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
     <div className={s.fade}>
       <section className={s.card} style={{ marginBottom: 14 }}>
         <div className={s.cardHead}>
-          <h2 className={s.cardTitle}>Ecom x Marketing, {DAYS_LONG[d0(nextThu).getUTCDay()]} {dLong(nextThu)}</h2>
+          <Title icon="calendar">Ecom x Marketing, {DAYS_LONG[d0(nextThu).getUTCDay()]} {dLong(nextThu)}</Title>
           <Range>{`${dShort(addDays(today, -7))} to ${dShort(addDays(today, -1))}`}</Range>
         </div>
+        <div className={s.miniHead}><Icon n="funnel" size={13} />Last 7 days, visit to sale</div>
         <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(v[0])}</div><div className={s.statLabel}>Visits <Delta now={v[0]} before={v[1]} /></div></div>
-          {!lead && <div className={s.stat}><div className={s.statNum}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
-          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, addDays(today, -7), addDays(today, -1))}><div className={s.statNum}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
-          {site === "all" && <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents("worthy", addDays(today, -7), addDays(today, -1))}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
+          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, addDays(today, -7), addDays(today, -1))}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
+          {!lead && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
+        </div>
+        <div className={s.miniHead} style={{ marginTop: 20 }}><Icon n="globe" size={13} />Search, enquiries and live</div>
+        <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
+          {site === "all" && <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents("worthy", addDays(today, -7), addDays(today, -1))}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
           <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>Live now</div></div>
         </div>
         <TodaySoFar todayNow={todayNow} site={site} />
@@ -1040,14 +1036,14 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
       <div style={{ marginTop: 14 }}>
         <section className={s.card}>
           <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Done this week</h2>
+            <Title icon="check">Done this week</Title>
             <Range>{`Since ${dShort(lastThu)}`}</Range>
           </div>
           {doneSince.length === 0 && <div className={s.empty}>Nothing yet</div>}
           {doneSince.map((x) => (
             <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => (x.kind === "asana" ? window.open(x.url, "_blank", "noopener") : onEdit(x))}>
               <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{x.kind === "asana" ? `Asana${x.owner ? ` · ${x.owner}` : ""}` : KINDS[x.kind].label}{x.site ? ` · ${siteName(x.site)}` : ""} · {dShort(x.doneAt)}</div></div>
-              <span className={`${s.pill} ${s.pillGreen}`}><Icon n="check" size={11} stroke={2.4} /></span>
+              <span className={`${s.pill} ${s.pillDark} ${s.pillPlain}`}><Icon n="check" size={11} stroke={2.4} /></span>
             </div>
           ))}
         </section>
@@ -1056,7 +1052,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
       <div className={s.grid2} style={{ marginTop: 14 }}>
         <section className={s.card}>
           <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Spend and return</h2>
+            <Title icon="wallet">Spend and return</Title>
             <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("spend", { month: today.slice(0, 7) })}><Icon n="plus" size={13} />Add spend</button>
           </div>
           {months.length === 0 && <div className={s.empty}>Nothing yet</div>}
@@ -1069,7 +1065,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
                     const sp = spend.filter((x) => x.month === ym).reduce((a, x) => a + (Number(x.amount) || 0), 0);
                     if (lead) { const ld = leadsByMonth(ym); return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{n0(ld)}</td><td className={s.num}>{ld ? money(sp / ld) : "-"}</td></tr>; }
                     const rv = revByMonth(ym);
-                    return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{money(rv)}</td><td className={s.num}>{sp ? `${(rv / sp).toFixed(1)}x` : "-"}</td></tr>;
+                    return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{money(rv)}</td><td className={`${s.num} ${ym === months[0] ? s.accentNum : ""}`}>{sp ? `${(rv / sp).toFixed(1)}x` : "-"}</td></tr>;
                   })}
                 </tbody>
               </table>
@@ -1078,14 +1074,14 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
           {spend.length > 0 && <div style={{ marginTop: 12 }}>{spend.slice(0, 6).map((x) => (
             <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
               <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{siteName(x.site) || "All of Worthy"}{x.month ? ` · ${monthLabel(x.month)}` : ""}</div></div>
-              <div>{money(Number(x.amount) || 0)}</div>
+              <div className={s.rowNum} style={{ fontSize: 17 }}>{money(Number(x.amount) || 0)}</div>
             </div>
           ))}</div>}
         </section>
 
         <section className={s.card}>
           <div className={s.cardHead}>
-            <h2 className={s.cardTitle}>Where visits come from</h2>
+            <Title icon="compass">Where visits come from</Title>
             <Range>30 days</Range>
           </div>
           {channels.length === 0 && <div className={s.empty}>{site === "worthyproducts" ? "No data" : data ? "No data" : ""}</div>}
@@ -1093,7 +1089,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
             {channels.map((ch, i) => (
               <div key={ch.name} className={s.barRow}>
                 <span style={{ overflowWrap: "anywhere" }}>{ch.name}</span>
-                <div className={s.barTrack}><div className={`${s.barFill} ${i % 2 ? s.barFillV : ""}`} style={{ width: `${(ch.sessions / chMax) * 100}%` }} /></div>
+                <div className={s.barTrack}><div className={`${s.barInk} ${i === 0 ? s.barAccent : ""}`} style={{ width: `${(ch.sessions / chMax) * 100}%` }} /></div>
                 <span className={s.num}>{n0(ch.sessions)}</span>
               </div>
             ))}
@@ -1126,10 +1122,10 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
   return (
     <section className={s.card}>
       <div className={s.cardHead}>
-        <h2 className={s.cardTitle}>Meeting tasks</h2>
+        <Title icon="users">Meeting tasks</Title>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {ok && <span className={`${s.pill} ${asana.stale ? s.pillAmber : s.pillGreen}`}>{asana.stale ? "Delayed" : "Live from Asana"}</span>}
-          {asana && !ok && <span className={`${s.pill} ${s.pillRed}`}>{asana.status === "not_connected" ? "Asana not connected" : "Asana offline"}</span>}
+          {ok && <span className={`${s.pill} ${asana.stale ? s.pillAccent : s.pillInk}`}>{asana.stale ? "Delayed" : "Live from Asana"}</span>}
+          {asana && !ok && <span className={`${s.pill} ${s.pillAccent}`}>{asana.status === "not_connected" ? "Asana not connected" : "Asana offline"}</span>}
           <a className={`${s.btn} ${s.btnSmall}`} href={`https://app.asana.com/0/${ASANA_PROJECT}/list`} target="_blank" rel="noreferrer"><Icon n="out" size={13} />Asana</a>
         </div>
       </div>
@@ -1147,6 +1143,14 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
               </button>
             ))}
           </div>
+          {open.length + doneWk.length > 0 && (
+            <div className={s.shareBar} style={{ marginTop: 14 }} role="img" aria-label="Overdue, open and done this week">
+
+              {late.length > 0 && <i style={{ width: `${(late.length / (open.length + doneWk.length)) * 100}%`, background: "var(--orange)" }} />}
+              {open.length - late.length > 0 && <i style={{ width: `${((open.length - late.length) / (open.length + doneWk.length)) * 100}%`, background: "var(--ink)", opacity: 0.35 }} />}
+              {doneWk.length > 0 && <i style={{ width: `${(doneWk.length / (open.length + doneWk.length)) * 100}%`, background: "var(--ink)", opacity: 0.85 }} />}
+            </div>
+          )}
           <div className={s.seg} style={{ margin: "14px 0 6px" }}>
             {[["open", `Open ${open.length}`], ["late", `Overdue ${late.length}`], ["done", `Done this week ${doneWk.length}`], ["all", "All"]].map(([id, l]) => <button key={id} type="button" className={view === id ? s.segOn : ""} onClick={() => setView(id)}>{l}</button>)}
           </div>
@@ -1180,7 +1184,7 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
                 )}
                 {t.subtaskCount > 0 && (
                   <button type="button" className={s.subToggle} onClick={() => setOpenIds({ ...openIds, [t.id]: !isOpen })}>
-                    <span className={s.barTrack} style={{ width: 80, display: "inline-block" }}><span className={s.barFill} style={{ display: "block", width: `${t.subtasks.length ? (subDone / t.subtasks.length) * 100 : 0}%` }} /></span>
+                    <span className={s.barTrack} style={{ width: 80, display: "inline-block" }}><span className={s.barInk} style={{ display: "block", width: `${t.subtasks.length ? (subDone / t.subtasks.length) * 100 : 0}%` }} /></span>
                     {t.subtasks.length ? `${subDone} of ${t.subtasks.length} subtasks` : `${t.subtaskCount} subtasks`}
                     <Icon n={isOpen ? "up" : "down"} size={12} />
                   </button>
@@ -1218,20 +1222,33 @@ function EventsModal({ ev, onClose }) {
     <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`${s.modal} ${s.modalWide} ${s.fade}`}>
         <div className={s.cardHead}>
-          <h3 className={s.modalTitle} style={{ margin: 0 }}>{ev.site === "worthy" ? "Enquiries" : "Conversions"} · {siteName(ev.site)}</h3>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Range>{`${dShort(ev.start)} to ${dLong(ev.end)}`}</Range><button type="button" className={s.iconBtn} onClick={onClose} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="plus" size={16} className={s.rot45} /></button></div>
+          <Title as="h3" className={s.modalTitle} style={{ margin: 0 }} icon={ev.site === "worthy" ? "mail" : "target"}>{ev.site === "worthy" ? "Enquiries" : "Conversions"} · {siteName(ev.site)}</Title>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Range>{`${dShort(ev.start)} to ${dLong(ev.end)}`}</Range><button type="button" className={s.iconBtn} onClick={onClose} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="close" size={16} /></button></div>
         </div>
         {ev.loading && <div className={s.skeleton} style={{ height: 160 }} />}
         {!ev.loading && (
           <>
-            <div className={s.statLine} style={{ marginBottom: 14 }}>
-              <div className={s.stat}><div className={s.statNum}>{n0(rows.reduce((a, r) => a + r.count, 0))}</div><div className={s.statLabel}>Total</div></div>
-              {pages.map(([pg, n]) => <div key={pg} className={s.stat}><div className={s.statNum}>{n}</div><div className={s.statLabel}>{pg}</div></div>)}
+            <div className={s.grid2} style={{ marginBottom: 18, alignItems: "start" }}>
+              <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`} style={{ fontSize: 40 }}>{n0(rows.reduce((a, r) => a + r.count, 0))}</div><div className={s.statLabel}>Total</div></div>
+              {pages.length > 0 && (
+                <div>
+                  <div className={s.miniHead}><Icon n="star" size={13} />Top pages</div>
+                  <div className={s.bars}>
+                    {pages.map(([pg, n], i) => (
+                      <div key={pg} className={s.barRow}>
+                        <span style={{ overflowWrap: "anywhere" }}>{pg}</span>
+                        <div className={s.barTrack}><div className={`${s.barInk} ${i === 0 ? s.barAccent : ""}`} style={{ width: `${(n / pages[0][1]) * 100}%` }} /></div>
+                        <span className={s.num}>{n}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             {(ev.site === "worthy" || ev.site === "all") && (
               <div style={{ marginBottom: 18 }}>
                 <div className={s.cardHead} style={{ marginBottom: 8 }}>
-                  <h3 className={s.cardTitle}>Who filled in the worthy.nz forms</h3>
+                  <Title as="h3" icon="users">Who filled in the worthy.nz forms</Title>
                   {ev.forms?.status !== "ok" && <span className={`${s.pill} ${s.pillGrey}`}>{ev.forms?.status === "not_connected" ? "Not connected yet" : "worthy.nz offline"}</span>}
                 </div>
                 {ev.forms?.status === "ok" && entries.length === 0 && <div className={s.empty}>None in this period</div>}
@@ -1245,7 +1262,8 @@ function EventsModal({ ev, onClose }) {
                           <td>{e.form}</td>
                           <td>{e.name || "-"}</td>
                           <td className={s.hideSm}>{e.business || "-"}</td>
-                          <td style={{ overflowWrap: "anywhere" }}>{e.email ? <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ color: "#5536e6" }}>{e.email}</a> : "-"}</td>
+                          <td style={{ overflowWrap: "anywhere" }}>{e.email ? <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ color: "var(--ink)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3 }}>
+{e.email}</a> : "-"}</td>
                           <td className={s.hideSm} style={{ fontSize: 12, color: "#4a4f4b" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
                         </tr>
                       ))}</tbody>
@@ -1291,10 +1309,10 @@ const engCell = (r) => {
   if (!r || r.status === "no_key") return { cls: s.pillGrey, t: "Add key" };
   if (r.status === "error") return { cls: s.pillGrey, t: "Failed" };
   if (r.status === "refused") return { cls: s.pillGrey, t: "No answer" };
-  if (r.mentioned && r.cited) return { cls: s.pillGreen, t: "Named, linked" };
-  if (r.mentioned) return { cls: s.pillAmber, t: "Named" };
-  if (r.cited) return { cls: s.pillAmber, t: "Linked" };
-  return { cls: s.pillRed, t: "Not shown" };
+  if (r.mentioned && r.cited) return { cls: s.pillDark, t: "Named, linked" };
+  if (r.mentioned) return { cls: s.pillInk, t: "Named" };
+  if (r.cited) return { cls: s.pillInk, t: "Linked" };
+  return { cls: s.pillAccent, t: "Not shown" };
 };
 
 function AiSearch({ site, start, end, onAdd, data }) {
@@ -1368,7 +1386,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
     <div className={s.fade}>
       <div className={s.engineGrid}>
         <section className={s.card}>
-          <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>Google AI</h2><span className={`${s.pill} ${gai.length ? s.pillGreen : s.pillGrey}`}>{gai.length ? "Search Console" : "No figures yet"}</span></div>
+          <div className={s.cardHead} style={{ marginBottom: 8 }}><Title icon="search">Google AI</Title><span className={`${s.pill} ${gai.length ? s.pillInk : s.pillGrey}`}>{gai.length ? "Search Console" : "No figures yet"}</span></div>
           <div className={`${s.statLine} ${s.statTight}`}>
             <div className={s.stat}><div className={s.statNum}>{gai.length ? (gai.length === 1 ? gai[0].shown : n0(gaiTotal)) : "-"}</div><div className={s.statLabel}>Times shown in AI Overviews and AI Mode</div></div>
             {gai[0] && <div className={s.stat}><div className={s.statNum} style={{ fontSize: 14, fontWeight: 400 }}>{dShort(gai[0].start)} to {dShort(gai[0].end)}</div><div className={s.statLabel}>Period</div></div>}
@@ -1376,12 +1394,12 @@ function AiSearch({ site, start, end, onAdd, data }) {
         </section>
         {engines.map((e) => (
           <section key={e.id} className={s.card}>
-            <div className={s.cardHead} style={{ marginBottom: 8 }}><h2 className={s.cardTitle}>{e.name}</h2>
-              {e.id === "copilot" ? <span className={`${s.pill} ${s.pillGrey}`}>Visits only</span> : e.connected ? <span className={`${s.pill} ${s.pillGreen}`}>Asked</span> : <span className={`${s.pill} ${s.pillGrey}`}>Add key</span>}
+            <div className={s.cardHead} style={{ marginBottom: 8 }}><Title icon="sparkle">{e.name}</Title>
+              {e.id === "copilot" ? <span className={`${s.pill} ${s.pillGrey}`}>Visits only</span> : e.connected ? <span className={`${s.pill} ${s.pillInk}`}>Asked</span> : <span className={`${s.pill} ${s.pillGrey}`}>Add key</span>}
             </div>
             <div className={`${s.statLine} ${s.statTight}`}>
-              <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.named}/${e.asked}` : "-"}</div><div className={s.statLabel}>Answers name us</div></div>
-              <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.linked}/${e.asked}` : "-"}</div><div className={s.statLabel}>Link our site</div></div>
+              <div className={s.stat}><div className={`${s.statNum} ${e.asked ? s.accentNum : ""}`}>{e.asked ? `${e.named}/${e.asked}` : "-"}</div><div className={s.statLabel}>Answers name us</div>{e.asked > 0 && <Meter value={e.named} max={e.asked} accent />}</div>
+              <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.linked}/${e.asked}` : "-"}</div><div className={s.statLabel}>Link our site</div>{e.asked > 0 && <Meter value={e.linked} max={e.asked} />}</div>
               <div className={s.stat}><div className={s.statNum}>{ai ? n0(e.visits) : "-"}</div><div className={s.statLabel}>Visits{e.conversions ? `, ${n0(e.conversions)} converted` : ""}</div></div>
               {e.id === "chatgpt" && showChannel && <div className={s.stat}><div className={s.statNum}>{shop ? n0(cgOrders) : "-"}</div><div className={s.statLabel}>Shopify ChatGPT orders{cgSales ? `, ${money(cgSales)}` : ""}</div></div>}
             </div>
@@ -1393,7 +1411,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
         <div className={s.stack}>
           <section className={s.card}>
             <div className={s.cardHead}>
-              <h2 className={s.cardTitle}>What each AI tells customers</h2>
+              <Title icon="sparkle">What each AI tells customers</Title>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 {doneAt && <Range>{`Checked ${dShort(new Date(doneAt).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" }))}, ${nzTime(doneAt)}`}</Range>}
                 <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => check(true)} disabled={checking}><Icon n="refresh" size={13} className={checking ? s.spin : ""} />{checking ? "Checking" : "Check now"}</button>
@@ -1411,7 +1429,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
                       {site === "all" && <td className={s.hideSm}><span className={s.siteTag}>{siteName(x.site)}</span></td>}
                       {AI_ENGINES.filter(([id]) => id !== "copilot").map(([id, n]) => {
                         const r = x.engines?.[id]; const c = engCell(r);
-                        return <td key={id}><button type="button" className={`${s.pill} ${c.cls}`} style={{ border: 0, cursor: r?.status === "ok" ? "pointer" : "default", font: "inherit", fontSize: 11 }} onClick={() => r?.status === "ok" && setOpen({ q: x.q, site: x.site, engine: n, ...r })}>{c.t}</button>{r?.staleNelson && <span className={`${s.pill} ${s.pillAmber}`} style={{ marginLeft: 4 }}>Nelson</span>}</td>;
+                        return <td key={id}><button type="button" className={`${s.pill} ${c.cls}`} style={{ border: 0, cursor: r?.status === "ok" ? "pointer" : "default", font: "inherit", fontSize: 11 }} onClick={() => r?.status === "ok" && setOpen({ q: x.q, site: x.site, engine: n, ...r })}>{c.t}</button>{r?.staleNelson && <span className={`${s.pill} ${s.pillAccent}`} style={{ marginLeft: 4 }}>Nelson</span>}</td>;
                       })}
                     </tr>
                   ))}</tbody>
@@ -1420,7 +1438,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
             )}
           </section>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>What to work on</h2></div>
+            <div className={s.cardHead}><Title icon="target">What to work on</Title></div>
             {actions.length === 0 && <div className={s.empty}>{results.length ? "Nothing stands out" : "Shows once the first check is in"}</div>}
             {actions.slice(0, 14).map((a) => (
               <div key={a.key} className={s.row}>
@@ -1433,32 +1451,35 @@ function AiSearch({ site, start, end, onAdd, data }) {
         <div className={s.stack}>
           {gaiPages.length > 0 && (
             <section className={s.card}>
-              <div className={s.cardHead}><h2 className={s.cardTitle}>Pages Google&rsquo;s AI shows</h2><Range>{`${dShort(gai[0].start)} to ${dShort(gai[0].end)}`}</Range></div>
-              {gaiPages.map((p) => (
+              <div className={s.cardHead}><Title icon="eye">Pages Google&rsquo;s AI shows</Title><Range>{`${dShort(gai[0].start)} to ${dShort(gai[0].end)}`}</Range></div>
+              {gaiPages.map((p, i) => (
                 <div key={p.url} className={s.row}>
                   <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.url.replace(/^https?:\/\/(www\.)?/, "")}</div><div className={s.rowMeta}>{siteName(p.site)}</div></div>
-                  <div className={s.statNum} style={{ fontSize: 20 }}>{n0(p.impressions)}</div>
+                  <div className={`${s.rowNum} ${i === 0 ? s.rowNumAccent : ""}`}>{n0(p.impressions)}</div>
+                  <RowBar value={p.impressions} max={gaiPages[0]?.impressions} accent={i === 0} />
                 </div>
               ))}
             </section>
           )}
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Pages AI sends people to</h2><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
+            <div className={s.cardHead}><Title icon="link">Pages AI sends people to</Title><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
             {ai && pages.length === 0 && <div className={s.empty}>None in this period</div>}
             {pages.map((p, i) => (
               <div key={i} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{p.page}</div><div className={s.rowMeta}>{siteName(p.site)} · {p.assistant}{p.conversions ? ` · ${n0(p.conversions)} converted` : ""}</div></div>
-                <div className={s.statNum} style={{ fontSize: 20 }}>{n0(p.sessions)}</div>
+                <div className={`${s.rowNum} ${i === 0 ? s.rowNumAccent : ""}`}>{n0(p.sessions)}</div>
+                <RowBar value={p.sessions} max={pages[0]?.sessions} accent={i === 0} />
               </div>
             ))}
           </section>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Questions people ask Google</h2></div>
+            <div className={s.cardHead}><Title icon="search">Questions people ask Google</Title></div>
             {questions.length === 0 && <div className={s.empty}>None in this period</div>}
             {questions.map((q) => (
               <div key={`${q.site}-${q.query}`} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{q.query}</div><div className={s.rowMeta}>{siteName(q.site)} · {n0(q.impressions)} searches · {n0(q.clicks)} clicks</div></div>
-                <span className={`${s.posBadge} ${q.position <= 3 ? s.pos1 : q.position <= 10 ? s.pos2 : q.position <= 20 ? s.pos3 : s.pos4}`}>{n1(q.position)}</span>
+                <span className={`${s.posBadge} ${posClass(q.position)}`}>
+{n1(q.position)}</span>
               </div>
             ))}
           </section>
@@ -1468,13 +1489,13 @@ function AiSearch({ site, start, end, onAdd, data }) {
         <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(null); }}>
           <div className={`${s.modal} ${s.modalWide} ${s.fade}`}>
             <div className={s.cardHead}>
-              <h3 className={s.modalTitle} style={{ margin: 0 }}>{open.engine}: {open.q}</h3>
-              <button type="button" className={s.iconBtn} onClick={() => setOpen(null)} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="plus" size={16} className={s.rot45} /></button>
+              <Title as="h3" className={s.modalTitle} style={{ margin: 0 }} icon="sparkle">{open.engine}: {open.q}</Title>
+              <button type="button" className={s.iconBtn} onClick={() => setOpen(null)} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="close" size={16} /></button>
             </div>
             <div className={s.itemMeta} style={{ marginBottom: 12 }}>
               <span className={s.siteTag}>{siteName(open.site)}</span>
-              <span className={`${s.pill} ${open.mentioned ? s.pillGreen : s.pillRed}`}>{open.mentioned ? "Names us" : "Does not name us"}</span>
-              <span className={`${s.pill} ${open.cited ? s.pillGreen : s.pillGrey}`}>{open.cited ? "Links our site" : "No link to us"}</span>
+              <span className={`${s.pill} ${open.mentioned ? s.pillDark : s.pillAccent}`}>{open.mentioned ? "Names us" : "Does not name us"}</span>
+              <span className={`${s.pill} ${open.cited ? s.pillDark : s.pillGrey}`}>{open.cited ? "Links our site" : "No link to us"}</span>
             </div>
             <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6, color: "#2a2d2a" }}>{open.answer || "No answer"}</div>
             {open.ourCited?.length > 0 && <div className={s.rowMeta} style={{ marginTop: 14 }}>Our pages cited: {open.ourCited.map((c) => c.url).join(", ")}</div>}
@@ -1509,15 +1530,15 @@ function ShoppingSearch({ site, start, end, today }) {
   return (
     <div className={s.fade}>
       <section className={s.kpis}>
-        <div className={s.kpi}><div className={s.kpiNum}>{d ? n0(G("Free listings", "sessions")) : "-"}</div><div className={s.kpiLabel}>Visits from free listings</div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{d ? moneyShort(G("Free listings", "revenue")) : "-"}</div><div className={s.kpiLabel}>Sales from free listings, {n0(G("Free listings", "orders"))} orders</div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{d ? n0(G("Shopping ads", "sessions")) : "-"}</div><div className={s.kpiLabel}>Visits from Shopping ads</div></div>
-        <div className={s.kpi}><div className={s.kpiNum}>{d ? moneyShort(G("Shopping ads", "revenue")) : "-"}</div><div className={s.kpiLabel}>Sales from Shopping ads, {n0(G("Shopping ads", "orders"))} orders</div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{d ? n0(G("Free listings", "sessions")) : "-"}</div><div className={s.chip}><Icon n="store" size={15} /></div></div><div className={s.kpiLabel}>Visits from free listings</div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{d ? moneyShort(G("Free listings", "revenue")) : "-"}</div><div className={`${s.chip} ${s.chipOrange}`}><Icon n="bag" size={15} /></div></div><div className={s.kpiLabel}>Sales from free listings, {n0(G("Free listings", "orders"))} orders</div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{d ? n0(G("Shopping ads", "sessions")) : "-"}</div><div className={s.chip}><Icon n="megaphone" size={15} /></div></div><div className={s.kpiLabel}>Visits from Shopping ads</div></div>
+        <div className={s.kpi}><div className={s.kpiTop}><div className={s.kpiNum}>{d ? moneyShort(G("Shopping ads", "revenue")) : "-"}</div><div className={s.chip}><Icon n="dollar" size={15} /></div></div><div className={s.kpiLabel}>Sales from Shopping ads, {n0(G("Shopping ads", "orders"))} orders</div></div>
       </section>
       <div className={s.grid}>
         <div className={s.stack}>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Products people land on from Google Shopping</h2><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
+            <div className={s.cardHead}><Title icon="bag">Products people land on from Google Shopping</Title><Range>{`${dShort(start)} to ${dShort(end)}`}</Range></div>
             {!d && <div className={s.skeleton} style={{ height: 160 }} />}
             {d && pages.length === 0 && <div className={s.empty}>None in this period</div>}
             {pages.length > 0 && (
@@ -1532,23 +1553,25 @@ function ShoppingSearch({ site, start, end, today }) {
             )}
           </section>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>Searches that show our products</h2><Range>{`${dShort(gscStart)} to ${dShort(gscEnd)}`}</Range></div>
+            <div className={s.cardHead}><Title icon="search">Searches that show our products</Title><Range>{`${dShort(gscStart)} to ${dShort(gscEnd)}`}</Range></div>
             {d && shopQueries.length === 0 && <div className={s.empty}>None in this period</div>}
             {shopQueries.map((q, i) => (
               <div key={i} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{q.query}</div><div className={s.rowMeta}>{siteName(q.site)} · {label(q.appearance)} · {n0(q.impressions)} shown · {n0(q.clicks)} clicks</div></div>
-                <span className={`${s.posBadge} ${q.position <= 3 ? s.pos1 : q.position <= 10 ? s.pos2 : q.position <= 20 ? s.pos3 : s.pos4}`}>{n1(q.position)}</span>
+                <span className={`${s.posBadge} ${posClass(q.position)}`}>
+{n1(q.position)}</span>
               </div>
             ))}
           </section>
         </div>
         <div className={s.stack}>
           <section className={s.card}>
-            <div className={s.cardHead}><h2 className={s.cardTitle}>How we show in Google</h2></div>
+            <div className={s.cardHead}><Title icon="pie">How we show in Google</Title><span className={s.tag}><Icon n="eye" size={11} />Shown</span></div>
             {d && appearances.length === 0 && <div className={s.empty}>None in this period</div>}
-            {appearances.map((a) => (
+            {appearances.map((a, i) => (
               <div key={a.name} className={s.row}>
                 <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{label(a.name)}</div><div className={s.rowMeta}>{n0(a.impressions)} shown · {n0(a.clicks)} clicks</div></div>
+                <RowBar value={a.impressions} max={appearances[0]?.impressions} accent={i === 0} />
               </div>
             ))}
           </section>
@@ -1931,7 +1954,7 @@ function TodaySoFar({ todayNow, site, bar }) {
     return (
       <div className={s.todayBar}>
         <div className={s.todayHead}><span className={s.liveDot} />Today so far <span className={s.todayTime}>{nzTime(todayNow.at)}</span></div>
-        {items.map(([v, l]) => <span key={l}><span className={s.tNum}>{v}</span><span className={s.tLab}>{l}</span></span>)}
+        {items.map(([v, l]) => <span key={l}><span className={`${s.tNum} ${l === "online sales" ? s.accentNum : ""}`}>{v}</span><span className={s.tLab}>{l}</span></span>)}
       </div>
     );
   }
@@ -1941,7 +1964,7 @@ function TodaySoFar({ todayNow, site, bar }) {
       <div className={s.statLine}>
         <div className={s.stat}><div className={s.statNum}>{n0(sum("sessions"))}</div><div className={s.statLabel}>Visits</div></div>
         {site !== "worthy" && <div className={s.stat}><div className={s.statNum}>{n0(sum("conversions", shops))}</div><div className={s.statLabel}>Orders</div></div>}
-        {site !== "worthy" && <div className={s.stat}><div className={s.statNum}>{money(sum("revenue", shops))}</div><div className={s.statLabel}>Online sales</div></div>}
+        {site !== "worthy" && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(sum("revenue", shops))}</div><div className={s.statLabel}>Online sales</div></div>}
         {(site === "all" || site === "worthy") && <div className={s.stat}><div className={s.statNum}>{n0(sum("conversions", ["worthy"]))}</div><div className={s.statLabel}>worthy.nz enquiries</div></div>}
       </div>
     </div>
@@ -1965,7 +1988,9 @@ function Freshness({ data, liveAt, todayNow, asana, clickup, meeting, now }) {
   const stale = (t) => now - Date.parse(t) > (meeting ? 5 : 30) * 60000;
   return (
     <div className={s.fresh}>
-      {meeting && <span className={`${s.pill} ${s.pillViolet}`}>Meeting day: refreshing every minute</span>}
+      <span className={s.freshIcon}><Icon n="cloud" size={13} /></span>
+      {meeting && <span className={`${s.pill} ${s.pillDark}`}>Meeting day: refreshing every minute</span>}
+
       {items.map(([label, t]) => <span key={label} className={`${s.freshItem} ${stale(t) ? s.tagStale : ""}`}>{label} <b>{nzTime(t)}</b></span>)}
     </div>
   );

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Icon } from '@/app/design/icons';
+import css from './login.module.css';
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('');
@@ -37,103 +39,64 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', width: '100%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#ffffff', padding: 24,
-      fontFamily: "'DM Sans', system-ui, sans-serif", color: '#111827',
-    }}>
-      <div style={{
-        width: '100%', maxWidth: 440,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32,
-      }}>
+    <div className={css.page}>
+      <div className={css.box}>
         {/* Worthy logo */}
-        <img src="/logo-black.png" alt="Worthy"
-             style={{ height: 80, width: 'auto', objectFit: 'contain' }} />
+        <img src="/logo-black.png" alt="Worthy" className={css.logo} />
 
-        {/* Title */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', letterSpacing: '0.01em' }}>
-            Worthy Accounts Dashboard
-          </div>
-          <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6, lineHeight: 1.5 }}>
+        <div className={css.card}>
+          {/* Title */}
+          <h1 className={css.title}><span className={css.chip}><Icon n="grid" size={16} /></span>Worthy Accounts Dashboard</h1>
+          <p className={css.sub}>
             Restricted Access. Don&apos;t try to login if you are not authorized to use this dashboard.
-          </div>
-        </div>
+          </p>
 
-        {/* Form */}
-        <form onSubmit={submit} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Work email
-          </label>
-          <input
-            type="email"
-            autoFocus
-            autoComplete="username"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@worthy.nz"
-            style={{
-              width: '100%', padding: '13px 16px', fontSize: 15,
-              borderRadius: 10, border: '1.5px solid #d1d5db',
-              outline: 'none', background: '#fafafa', color: '#111827',
-              fontFamily: 'inherit', boxSizing: 'border-box',
-            }}
-          />
-          <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Department password
-          </label>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Enter password"
-            style={{
-              width: '100%', padding: '13px 16px', fontSize: 15,
-              borderRadius: 10, border: error ? '1.5px solid #dc2626' : '1.5px solid #d1d5db',
-              outline: 'none', background: '#fafafa', color: '#111827',
-              fontFamily: 'inherit',
-              transition: 'border-color 0.15s, background 0.15s',
-              boxSizing: 'border-box',
-            }}
-            onFocus={e => { e.target.style.borderColor = '#66270F'; e.target.style.background = '#ffffff'; }}
-            onBlur={e => { e.target.style.borderColor = error ? '#dc2626' : '#d1d5db'; e.target.style.background = '#fafafa'; }}
-          />
-          {error && (
-            <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}>
-              {error}
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading || !password || !email.trim()}
-            style={{
-              padding: '13px 16px', fontSize: 14, fontWeight: 700, letterSpacing: '0.04em',
-              borderRadius: 10, border: 'none', cursor: (loading || !password || !email.trim()) ? 'not-allowed' : 'pointer',
-              background: (loading || !password || !email.trim()) ? '#b78b6a' : '#66270F',
-              color: '#ffffff', fontFamily: 'inherit',
-              transition: 'background 0.15s, transform 0.05s',
-            }}
-            onMouseDown={e => { if (!loading && password && email.trim()) e.currentTarget.style.transform = 'translateY(1px)'; }}
-            onMouseUp={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+          {/* Form */}
+          <form onSubmit={submit} className={css.form}>
+            <label htmlFor="login-email" className={css.label}><Icon n="mail" size={13} />Work email</label>
+            <input
+              id="login-email"
+              type="email"
+              autoFocus
+              autoComplete="username"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@worthy.nz"
+              className={css.input}
+            />
+            <label htmlFor="login-password" className={css.label}><Icon n="users" size={13} />Department password</label>
+            <input
+              id="login-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Enter password"
+              className={`${css.input} ${error ? css.inputErr : ''}`}
+            />
+            {error && (
+              <div className={css.err} role="alert"><Icon n="alert" size={14} />{error}</div>
+            )}
+            <button
+              type="submit"
+              disabled={loading || !password || !email.trim()}
+              className={css.btn}
+            >
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
+        </div>
 
         {/* Help text */}
-        <div style={{
-          marginTop: 8, padding: 18,
-          background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 12,
-          fontSize: 12, color: '#4b5563', lineHeight: 1.6, textAlign: 'center', width: '100%',
-          boxSizing: 'border-box',
-        }}>
-          <div style={{ fontWeight: 700, color: '#111827', marginBottom: 4 }}>Need access?</div>
-          If you don&apos;t have a password yet, please contact Worthy&apos;s Digital Commerce Lead to get help logging in.
+        <div className={css.help}>
+          <span className={css.chip}><Icon n="user" size={15} /></span>
+          <div>
+            <div className={css.helpTitle}>Need access?</div>
+            If you don&apos;t have a password yet, please contact Worthy&apos;s Digital Commerce Lead to get help logging in.
+          </div>
         </div>
 
-        <div style={{ fontSize: 10, color: '#9ca3af', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <div className={css.foot}>
           Worthy · Internal Use Only
         </div>
       </div>

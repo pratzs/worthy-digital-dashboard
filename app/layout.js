@@ -1,3 +1,8 @@
+import { Outfit } from "next/font/google";
+import "./globals.css";
+
+const outfit = Outfit({ subsets: ["latin"], weight: ["200", "300", "400", "500", "600"], display: "swap", variable: "--font-outfit" });
+
 export const metadata = {
   title: "Worthy - Accounting Dashboard",
   description: "Internal accounting dashboard for Worthy - restricted access.",
@@ -12,7 +17,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" style={{ colorScheme: "light" }}>
+    <html lang="en" className={outfit.variable} style={{ colorScheme: "light" }}>
       <head>
         <meta name="color-scheme" content="light" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

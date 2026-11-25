@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Icon } from "@/app/design/icons";
+import css from "./chat.module.css";
 
 const LS_PROVIDER = "worthy_chat_provider";
 const LS_KEY_PREFIX = "worthy_chat_key_";
@@ -284,27 +286,22 @@ function downloadCsv(table) {
 
 function Table({ table }) {
   return (
-    <div style={{ marginTop: 10, border: "1px solid #e4e0da", borderRadius: 10, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 14px", background: "#faf8f5", borderBottom: "1px solid #e4e0da" }}>
-        <span style={{ fontWeight: 700, fontSize: 13 }}>{table.title}</span>
-        <button onClick={() => downloadCsv(table)} style={{
-          fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 7,
-          border: "1px solid #b13924", background: "#fff", color: "#b13924", cursor: "pointer",
-        }}>Export CSV</button>
+    <div className={css.tbl}>
+      <div className={css.tblHead}>
+        <span className={css.tblTitle}><Icon n="bars" size={14} />{table.title}</span>
+        <button onClick={() => downloadCsv(table)} className={css.btn}><Icon n="download" size={13} />Export CSV</button>
       </div>
-      <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+      <div className={css.tblScroll}>
+        <table>
           <thead>
             <tr>{table.columns.map((c, i) => (
-              <th key={i} style={{ textAlign: "left", padding: "8px 14px", position: "sticky", top: 0,
-                background: "#fff", borderBottom: "1.5px solid #e4e0da", whiteSpace: "nowrap" }}>{c}</th>
+              <th key={i}>{c}</th>
             ))}</tr>
           </thead>
           <tbody>
             {table.rows.map((row, ri) => (
-              <tr key={ri} style={{ borderBottom: "1px solid #f0ece6" }}>
-                {row.map((cell, ci) => <td key={ci} style={{ padding: "7px 14px", whiteSpace: "nowrap" }}>{cell}</td>)}
+              <tr key={ri}>
+                {row.map((cell, ci) => <td key={ci}>{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -361,25 +358,21 @@ function KeySetup({ onSaved }) {
 
   const info = KEY_HELP[provider];
   return (
-    <div style={{ maxWidth: 520 }}>
-      <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Connect your AI, right here</h1>
-      <p style={{ fontSize: 12.5, color: "#8a8178", marginBottom: 18, lineHeight: 1.5 }}>
-        Your own API key, billed to you — a few cents per question, not a subscription. Chat happens
+    <div className={css.setup}>
+      <h1 className={css.setupTitle}><span className={css.chip}><Icon n="link" size={15} /></span>Connect your AI, right here</h1>
+      <p className={css.setupText}>
+        Your own API key, billed to you, a few cents per question, not a subscription. Chat happens
         on this page; nothing is billed to Worthy and your key is only ever stored in your own browser.
       </p>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+      <div className={css.seg}>
         {[["claude", "Claude"], ["chatgpt", "ChatGPT"]].map(([id, label]) => (
-          <button key={id} onClick={() => { setProvider(id); setError(null); setKey(""); }} style={{
-            flex: 1, padding: "12px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13,
-            border: provider === id ? "1.5px solid #b13924" : "1px solid #e4e0da",
-            background: provider === id ? "#fdf1ee" : "#fff", color: provider === id ? "#b13924" : "#2a241f",
-          }}>{label}</button>
+          <button key={id} onClick={() => { setProvider(id); setError(null); setKey(""); }} className={provider === id ? css.segOn : ""}>{label}</button>
         ))}
       </div>
 
-      <p style={{ fontSize: 12, color: "#5a524a", marginBottom: 8 }}>
-        Get a key from <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ color: "#b13924", fontWeight: 700 }}>{info.host}</a> (sign up, add a small amount of credit, create a key), then paste it below.
+      <p className={css.setupHelp}>
+        Get a key from <a href={info.url} target="_blank" rel="noopener noreferrer">{info.host}</a> (sign up, add a small amount of credit, create a key), then paste it below.
       </p>
 
       <input
@@ -387,20 +380,16 @@ function KeySetup({ onSaved }) {
         value={key}
         onChange={(e) => setKey(e.target.value)}
         placeholder={provider === "claude" ? "sk-ant-..." : "sk-..."}
-        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px solid #e4e0da",
-          fontSize: 13, fontFamily: "monospace", boxSizing: "border-box", marginBottom: 10 }}
+        className={css.keyInput}
       />
       {error && (
-        <div style={{ fontSize: 12, color: "#b13924", marginBottom: 10 }}>{error}</div>
+        <div className={css.error} style={{ marginBottom: 10 }}><Icon n="alert" size={14} />{error}</div>
       )}
-      <button onClick={save} disabled={checking || !key.trim()} style={{
-        width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "#b13924", color: "#fff",
-        fontWeight: 700, fontSize: 13, cursor: checking ? "default" : "pointer", opacity: checking ? 0.6 : 1,
-      }}>{checking ? "Checking…" : "Save and start chatting"}</button>
+      <button onClick={save} disabled={checking || !key.trim()} className={`${css.btnDark} ${css.setupBtn}`}>{checking ? "Checking..." : "Save and start chatting"}</button>
 
-      <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #e4e0da" }}>
-        <Link href="/chat/connector" style={{ fontSize: 11.5, color: "#8a8178" }}>
-          Prefer not to get an API key? Use your Claude or ChatGPT app directly instead →
+      <div className={css.setupFoot}>
+        <Link href="/chat/connector">
+          <Icon n="out" size={13} />Prefer not to get an API key? Use your Claude or ChatGPT app directly instead
         </Link>
       </div>
     </div>
@@ -504,104 +493,93 @@ export default function ChatPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "'DM Sans',sans-serif",
-      display: "flex", flexDirection: "column" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&display=swap');`}</style>
-
-      <div style={{ borderBottom: "1px solid #e4e0da", padding: "16px 24px",
-        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <img src="/logo-black.png" alt="Worthy" style={{ height: 32 }} />
+    <div className={css.page}>
+      <header className={css.top}>
+        <div className={css.brand}>
+          <img src="/logo-black.png" alt="Worthy" className={css.logo} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Ask a Question</div>
-            <div style={{ fontSize: 11.5, color: "#8a8178" }}>Live from Odoo and Ostendo</div>
+            <h1 className={css.title}><span className={css.chip}><Icon n="sparkle" size={15} /></span>Ask a Question</h1>
+            <div className={css.sub}><Icon n="refresh" size={12} />Live from Odoo and Ostendo</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div className={css.tools}>
           {apiKey && messages.length > 0 && (
-            <button onClick={clearConversation} style={{ fontSize: 11, color: "#8a8178", background: "none",
-              border: "1px solid #e4e0da", borderRadius: 7, padding: "5px 10px", cursor: "pointer" }}>
-              New conversation
+            <button onClick={clearConversation} className={css.btn}>
+              <Icon n="plus" size={13} />New conversation
             </button>
           )}
           {apiKey && provider !== "worthy" && (
-            <button onClick={forgetKey} style={{ fontSize: 11, color: "#8a8178", background: "none",
-              border: "1px solid #e4e0da", borderRadius: 7, padding: "5px 10px", cursor: "pointer" }}>
-              Forget {KEY_HELP[provider]?.label} key
+            <button onClick={forgetKey} className={css.btn}>
+              <Icon n="trash" size={13} />Forget {KEY_HELP[provider]?.label} key
             </button>
           )}
-          <Link href="/" style={{ fontSize: 12, fontWeight: 700, color: "#8a8178", textDecoration: "none" }}>← Back to dashboard</Link>
-          {me && <span style={{ fontSize: 11, color: "#b7afa4" }}>{me.name ? `${me.name}, ` : ""}{me.label}</span>}
+          <Link href="/" className={css.btn}><Icon n="home" size={13} />Back to dashboard</Link>
+          {me && <span className={css.who}><Icon n="user" size={12} />{me.name ? `${me.name}, ` : ""}{me.label}</span>}
         </div>
-      </div>
+      </header>
 
       {!ready ? null : !apiKey ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div className={css.setupWrap}>
           <KeySetup onSaved={(p, k) => { setProvider(p); setApiKey(k); }} />
         </div>
       ) : (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "24px", maxWidth: 820, width: "100%", margin: "0 auto" }}>
+          <div className={css.body}>
             {messages.length === 0 && (
-              <div>
-                <p style={{ fontSize: 13, color: "#8a8178", marginBottom: 14 }}>
+              <div className={css.intro}>
+                <h2 className={css.introHead}><span className={css.chip}><Icon n={me?.role === "purch" ? "bag" : "chart"} size={15} /></span>{me?.role === "purch" ? "Products and movers" : "Sales, margin and debtors"}</h2>
+                <p className={css.introText}>
                   {me?.role === "purch" ? "Ask about products, categories, fast and slow movers across North, South or Oceania. Try:" : "Ask about sales, margin, debtors or reps across North, South or Oceania. Try:"}
                 </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div className={css.starters}>
                   {(me?.role === "purch" ? STARTERS_PURCH : STARTERS).map((s) => (
-                    <button key={s} onClick={() => send(s)} style={{
-                      textAlign: "left", padding: "10px 14px", borderRadius: 9, border: "1px solid #e4e0da",
-                      background: "#faf8f5", fontSize: 13, cursor: "pointer", color: "#2a241f",
-                    }}>{s}</button>
+                    <button key={s} onClick={() => send(s)} className={css.starter}><Icon n="search" size={14} />{s}</button>
                   ))}
                 </div>
               </div>
             )}
 
             {messages.map((m, i) => (
-              <div key={i} style={{ marginBottom: 18, display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "88%" }}>
-                  <div style={{
-                    padding: "10px 14px", borderRadius: 12, fontSize: 13.5, lineHeight: 1.5,
-                    background: m.role === "user" ? "#b13924" : "#f4f1ec",
-                    color: m.role === "user" ? "#fff" : "#2a241f", whiteSpace: "pre-wrap",
-                  }}>{m.text}</div>
+              <div key={i} className={`${css.msg} ${m.role === "user" ? css.msgUser : ""}`}>
+                <div className={css.msgCol}>
+                  {m.role !== "user" && <div className={css.who2}><Icon n="sparkle" size={11} />Worthy assistant</div>}
+                  <div className={`${css.bubble} ${m.role === "user" ? css.bubbleUser : css.bubbleBot}`}>{m.text}</div>
                   {m.table && <Table table={m.table} />}
                 </div>
               </div>
             ))}
 
-            {busy && <div style={{ fontSize: 13, color: "#8a8178", padding: "10px 14px" }}>Pulling the figures…</div>}
+            {busy && <div className={css.busy}><span>Pulling the figures...</span><span className={css.busyTrack}><i /></span></div>}
             {error && (
-              <div style={{ fontSize: 13, color: "#b13924", padding: "10px 14px", background: "#fdf1ee",
-                borderRadius: 9, border: "1px solid #f3c9bd" }}>{error}</div>
+              <div className={css.error}><Icon n="alert" size={14} />{error}</div>
             )}
             <div ref={bottomRef} />
           </div>
 
-          <div style={{ borderTop: "1px solid #e4e0da", padding: 16 }}>
-            <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: 10 }}>
+          <div className={css.foot}>
+            <div className={css.footIn}>
+            <div className={css.ask}>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-                placeholder={me?.role === "purch" ? "Ask about products, categories, movers…" : "Ask about sales, margin, debtors, reps…"}
+                placeholder={me?.role === "purch" ? "Ask about products, categories, movers..." : "Ask about sales, margin, debtors, reps..."}
                 disabled={busy || (quota && quota.remaining <= 0)}
-                style={{ flex: 1, padding: "12px 16px", borderRadius: 10, border: "1px solid #e4e0da",
-                  fontSize: 13.5, fontFamily: "inherit" }}
+                className={css.input}
               />
-              <button onClick={() => send()} disabled={busy || !input.trim()} style={{
-                padding: "0 22px", borderRadius: 10, border: "none", background: "#b13924", color: "#fff",
-                fontWeight: 700, fontSize: 13, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
-              }}>Ask</button>
+              <button onClick={() => send()} disabled={busy || !input.trim()} className={css.btnDark}>Ask</button>
             </div>
             {quota && (
-              <div style={{ maxWidth: 820, margin: "6px auto 0", fontSize: 12, color: quota.remaining <= 0 ? "#b13924" : quota.remaining <= 5 ? "#B26A00" : "#8a8178" }}>
+              <div className={`${css.quota} ${quota.remaining <= 5 ? css.quotaWarn : ""}`}>
+                {!quota.carried && quota.limit > 0 && <span className={css.quotaBar} aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(1, quota.remaining / quota.limit)) * 100}%` }} /></span>}
+                <span>
                 {quota.remaining <= 0
                   ? `You have used all of your questions for now. You earn ${quota.limit} more tomorrow.`
                   : `Questions left: ${quota.remaining}${quota.carried ? ` (${quota.limit} a day, plus ${quota.carried} saved from earlier days)` : ` of ${quota.limit} today`}. Unused questions roll over until ${quota.resets ? new Date(quota.resets + "T00:00:00").toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "the end of your 30 days"}.`}
+                </span>
               </div>
             )}
+            </div>
           </div>
         </>
       )}

@@ -6,22 +6,24 @@ import Link from "next/link";
 import {
   Area, BarChart, Bar, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ComposedChart, ReferenceLine
+  ComposedChart, ReferenceLine, Cell
 } from "recharts";
 import { bankTargetFor } from "@/lib/bankTargets";
 import { weekOfMonth } from "@/lib/weekOfMonth";
+import { Card, CardHead, Mini, Pill, StatLine, MonthBars, BarList, Ring, Chain, ShareBar, COLORS, ui, moneyShort } from "@/app/design/ui";
+import { Icon } from "@/app/design/icons";
+import st from "./page.module.css";
 
-// Brand palettes
-const BRAND = {
-  products: { primary: "#2256c2", mid: "#3f7bdd", light: "#7daffe" },   // Worthy Products North & South
-  oceania:  { primary: "#b13924", mid: "#f48120", light: "#fcb614",      // Worthy Oceania / Fabrics
-              dark: "#66270f" },
-};
+/* Worthy design (26 Nov 2026): three colours. Page off-white, ink for text, bars and lines, and the orange accent only
+   for the one figure that matters most, the latest period, or a fall / overdue / below-target. No per-company colours. */
+const INK = COLORS.ink;
+const ORANGE = COLORS.accent;
+const inkA = (a) => `rgba(20,22,20,${a})`;
 
 const STORES = [
-  { id: "worthy", name: "Worthy Products North", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD", odooCompanyId: 4 },
-  { id: "luxe",   name: "Worthy Products South", color: BRAND.products.mid,  accent2: BRAND.products.light, dark: BRAND.products.primary, logo: "products", currency: "NZD" },
-  { id: "nova",   name: "Worthy Oceania",         color: BRAND.oceania.mid,   accent2: BRAND.oceania.light,  dark: BRAND.oceania.primary,  logo: "oceania",  currency: "NZD", odooCompanyId: 1 },
+  { id: "worthy", name: "Worthy Products North", logo: "products", currency: "NZD", odooCompanyId: 4 },
+  { id: "luxe",   name: "Worthy Products South", logo: "products", currency: "NZD" },
+  { id: "nova",   name: "Worthy Oceania",        logo: "oceania",  currency: "NZD", odooCompanyId: 1 },
 ];
 
 const ALL_YEARS = [2022, 2023, 2024, 2025, 2026];
@@ -65,48 +67,6 @@ const round2 = (n) => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
 const marginPct1 = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : null);
 const fmtPct = (n) => (n === null || n === undefined) ? "-" : `${n > 0 ? "+" : ""}${n}%`;
 
-/* Line icons, one consistent set (24px grid, 1.6 stroke, rounded caps). They take
-   the colour of the text around them, so they follow light and dark mode. */
-const ICON_PATHS = {
-  target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" /></>,
-  trophy: <><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></>,
-  alert: <><path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9.5v4M12 17h.01" /></>,
-  userMinus: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M17 11h6" /></>,
-  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
-  award: <><circle cx="12" cy="9" r="6" /><path d="M8.5 14.5 7 22l5-3 5 3-1.5-7.5" /></>,
-  zap: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
-  hourglass: <path d="M6 2h12M6 22h12M7 2v4a5 5 0 0 0 2 4l3 2-3 2a5 5 0 0 0-2 4v4M17 2v4a5 5 0 0 1-2 4l-3 2 3 2a5 5 0 0 1 2 4v4" />,
-  user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
-  chart: <path d="M3 3v18h18M8 17v-5M13 17V7M18 17v-8" />,
-  gem: <><path d="M6 3h12l4 6-10 12L2 9z" /><path d="M2 9h20M9 3 8 9l4 12M15 3l1 6-4 12" /></>,
-  cloud: <path d="M17.5 19H7a5 5 0 1 1 1-9.9 6 6 0 0 1 11.5 2.4A3.8 3.8 0 0 1 17.5 19z" />,
-  globe: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" /></>,
-  store: <><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M9 20v-6h6v6" /><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" /></>,
-  sparkle: <path d="M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6-5.6-1.9 5.6-1.9z" />,
-  close: <path d="M18 6 6 18M6 6l12 12" />,
-  download: <path d="M12 3v12M7 10l5 5 5-5M4 20h16" />,
-  refresh: <path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4" />,
-  receipt: <><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" /><path d="M9 8h6M9 12h6" /></>,
-  building: <><path d="M4 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M14 9h5a1 1 0 0 1 1 1v11M2 21h20" /><path d="M8 7h2M8 11h2M8 15h2" /></>,
-  forecast: <path d="M3 17l6-6 4 4 8-9M15 6h6v6" />,
-  calendar: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><path d="M3 10h18M8 2.5v4M16 2.5v4" /></>,
-  trending: <path d="M22 7l-8.5 8.5-5-5L2 17M16 7h6v6" />,
-  dollar: <path d="M12 2v20M17 6.5C16 5 14.3 4.5 12 4.5c-3 0-5 1.3-5 3.3 0 4.7 10 2.3 10 7 0 2-2 3.5-5 3.5-2.5 0-4.3-.7-5.5-2.3" />,
-  bag: <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" />,
-  percent: <><path d="M19 5 5 19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></>,
-  wallet: <><path d="M20 12V8a2 2 0 0 0-2-2H5a2 2 0 0 1 0-4h13M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></>,
-};
-const Icon = ({ name, size = 16, style }) => {
-  const filled = name === "up" || name === "down";
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false"
-      fill={filled ? "currentColor" : "none"} stroke={filled ? "none" : "currentColor"}
-      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-      style={{ flexShrink: 0, display: "inline-block", verticalAlign: "-0.15em", ...style }}>
-      {name === "up" ? <path d="M12 6l7 12H5z" /> : name === "down" ? <path d="M12 18 5 6h14z" /> : ICON_PATHS[name] || null}
-    </svg>
-  );
-};
 /* "2026-04-01" -> "1 Apr 2026". Read from the text, never through Date, so a
    timezone can never move a day. */
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -114,46 +74,53 @@ const fmtDay = (iso) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
   return m ? `${Number(m[3])} ${SHORT_MONTHS[Number(m[2]) - 1]} ${m[1]}` : "";
 };
-const RangeTag = ({ text, theme, style }) => !text ? null : (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, letterSpacing: "0.02em",
-                 padding: "3px 9px", borderRadius: 999, color: theme?.textSub || "#6b7280",
-                 border: `1px solid ${theme?.border || "rgba(128,128,128,0.25)"}`, whiteSpace: "nowrap", ...style }}>
-    <Icon name="calendar" size={11} />{text}
-  </span>
+// Date range tag for every card or table that covers a period (the design kit's Range).
+const RangeTag = ({ text, style }) => !text ? null : (
+  <span className={ui.tag} style={style}><Icon n="calendar" size={11} />{text}</span>
 );
-const Trend = ({ up, size = 9 }) => <Icon name={up ? "up" : "down"} size={size} style={{ marginRight: 3, verticalAlign: "0" }} />;
 
-const GrowthBadge = ({ value }) => {
-  if (value === null || value === undefined) return <span style={{ color: "#888" }}>-</span>;
-  const pos = value >= 0;
-  // Round at the point of display - a percentage that arrives as binary noise
-  // must never reach the screen as "0.5999999999999996%".
-  return <span style={{ color: pos ? "#4ade80" : "#f87171", fontWeight: 700 }}><Trend up={pos} />{Math.round(Math.abs(value) * 10) / 10}%</span>;
+/* A change already worked out as a number (12.3 = +12.3%). Up is ink with a drawn triangle, down is the accent.
+   `unit` is "%" for growth or " pts" for a change in a margin. Rounded at the point of display, so binary noise such
+   as 0.5999999999999996 never reaches the screen. */
+const Delta = ({ value, unit = "%" }) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return (
+    <span className={`${ui.trend} ${value < 0 ? ui.trendDown : ""}`}>
+      <Icon n={value < 0 ? "tri-down" : "tri-up"} size={8} />{Math.round(Math.abs(value) * 10) / 10}{unit}
+    </span>
+  );
 };
 
-const MarginBar = ({ value, accent = "#3f7bdd" }) => {
-  if (value === null || value === undefined) return <span style={{ color: "#888" }}>-</span>;
-  const color = value > 40 ? "#4ade80" : value > 20 ? accent : "#f87171";
+const GrowthBadge = ({ value }) => {
+  if (value === null || value === undefined) return <span style={{ color: COLORS.mute }}>-</span>;
+  return <Delta value={value} />;
+};
+
+// Margin with a small bar. Below the 20% margin target it is the accent.
+const MarginBar = ({ value }) => {
+  if (value === null || value === undefined) return <span style={{ color: COLORS.mute }}>-</span>;
+  const low = value < 20;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <div style={{ width: 30, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.07)" }}>
-        <div style={{ width: `${Math.min(Math.max(value, 0), 100)}%`, height: "100%", background: color, borderRadius: 2 }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ width: 34, height: 5, borderRadius: 999, background: inkA(0.08), overflow: "hidden" }}>
+        <div style={{ width: `${Math.min(Math.max(value, 0), 100)}%`, height: "100%", background: low ? ORANGE : INK, opacity: low ? 1 : 0.78, borderRadius: 999 }} />
       </div>
-      <span style={{ color, fontWeight: 700, fontSize: 11 }}>{value}%</span>
+      <span style={{ color: low ? ORANGE : INK, fontWeight: 500, fontSize: 11.5 }}>{value}%</span>
     </div>
   );
 };
 
-const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f7bdd" }) => {
+// Chart tooltip: light, on white.
+const CustomTooltip = ({ active, payload, label, currency = "NZD" }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "#1e293b", border: `1px solid ${accent}60`, borderRadius: 12, padding: "12px 16px", fontSize: 12, color: "#e2e8f0", boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", color: accent, marginBottom: 8, fontSize: 13, fontWeight: 700 }}>{label}</div>
+    <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: "10px 14px", fontSize: 12, color: INK, boxShadow: "0 12px 30px -18px rgba(40,32,20,0.45)" }}>
+      <div style={{ marginBottom: 6, fontSize: 12.5, fontWeight: 500 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, display: "inline-block" }} />
-          <span style={{ color: "#94a3b8" }}>{p.name}:</span>
-          <span style={{ color: "#f8fafc", fontWeight: 600 }}>
+        <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color, display: "inline-block" }} />
+          <span style={{ color: COLORS.mute }}>{p.name}:</span>
+          <span style={{ color: INK, fontWeight: 500 }}>
             {["Revenue","AOV","Gross Profit"].includes(p.name) ? fmt(p.value, currency) : p.name === "Growth" ? fmtPct(p.value) : String(p.value?.toLocaleString?.() ?? p.value)}
           </span>
         </div>
@@ -162,13 +129,9 @@ const CustomTooltip = ({ active, payload, label, currency = "NZD", accent = "#3f
   );
 };
 
-const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency = "NZD", darkMode = true, exact = false, compareText = null }) => {
+/* One cell of the headline strip (the design kit's KpiStrip look), with the count-up kept. */
+const KPICard = ({ label, value, growth, icon, sub, animated, currency = "NZD", exact = false, compareText = null, growthUnit = "%" }) => {
   const [display, setDisplay] = useState(0);
-  const isPos = !growth || growth >= 0;
-  const textHead = darkMode ? "#f0e8d8" : "#0f172a";
-  const textMuted = darkMode ? "#6b6050" : "#6b7280";
-  const cardBg = darkMode ? "linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))" : "#ffffff";
-  const cardBorder = darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,30,100,0.12)";
   useEffect(() => {
     const t = value || 0;
     /* Never animate into a tab nobody is looking at. Browsers throttle
@@ -176,6 +139,7 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
        became a 40s one and the headline figure sat visibly wrong long after the
        page had finished loading. Hidden: show the real number at once. If the
        reader leaves mid-count, snap to it and stop. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!animated || t === 0 || (typeof document !== 'undefined' && document.hidden)) { setDisplay(t); return; }
     let cur = 0; const step = t / 40;
     const timer = setInterval(() => { cur += step; if (cur >= t) { setDisplay(t); clearInterval(timer); } else setDisplay(Math.round(cur)); }, 20);
@@ -184,30 +148,38 @@ const KPICard = ({ label, value, growth, icon, accent, sub, animated, currency =
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', settle); };
   }, [value, animated]);
   return (
-    <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 16, padding: "22px 24px", position: "relative", overflow: "hidden", transition: "transform 0.2s,box-shadow 0.2s", cursor: "default" }}>
-      <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, background: `radial-gradient(circle,${accent}20 0%,transparent 70%)`, borderRadius: "50%" }} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", color: accent, background: `${accent}1f` }}><Icon name={icon} size={20} /></div>
-        <div style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: growth === null ? textMuted : isPos ? "#4ade80" : "#f87171", background: growth === null ? (darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)") : isPos ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)" }}>
-          {growth === null ? "No prior yr" : <><Trend up={isPos} />{Math.round(Math.abs(growth) * 10) / 10}%</>}
+    <div className={ui.kpi}>
+      <div className={ui.kpiTop}>
+        <div className={ui.kpiNum} style={{ fontSize: "clamp(24px, 2.3vw, 34px)", overflowWrap: "anywhere" }}>
+          {value === null ? "-" : sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
         </div>
+        <div className={ui.chip}><Icon n={icon} size={15} /></div>
       </div>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: textHead, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 4 }}>
-        {value === null ? "-" : sub === "currency" ? (exact ? fmtExact(display, currency) : fmtK(display, currency)) : sub === "pct" ? `${Number(display).toFixed(1)}%` : display.toLocaleString()}
-      </div>
-      <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
-      {compareText && <div style={{ fontSize: 10, color: textMuted, marginTop: 4, opacity: 0.8 }}>{compareText}</div>}
+      <div className={ui.kpiLabel}>{label} {growth === null ? <span className={ui.was}>No prior yr</span> : <Delta value={growth} unit={growthUnit} />}</div>
+      {compareText && <div className={ui.statLabel} style={{ marginTop: 8 }}>{compareText}</div>}
     </div>
   );
 };
 
+// Company switcher button (inside a segmented control). No per-company colours: the name is enough.
 const StorePill = ({ store, active, onClick }) => (
-  <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 40, border: active ? `1px solid ${store.color}` : "1px solid rgba(255,255,255,0.1)", background: active ? `${store.color}18` : "transparent", color: active ? store.color : "#6b6050", cursor: "pointer", fontSize: 12, fontWeight: 600, letterSpacing: "0.05em", transition: "all 0.2s", whiteSpace: "nowrap" }}>
-    <span style={{ width: 8, height: 8, borderRadius: "50%", background: store.color, display: "inline-block", flexShrink: 0 }} />
-    {store.name}
-    {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: store.color, opacity: 0.6 }} />}
-  </button>
+  <button type="button" onClick={onClick} className={active ? ui.segOn : ""} aria-pressed={active}>{store.name}</button>
 );
+
+// A plain notice: "warn" for figures that did not load or are missing, otherwise neutral.
+const Notice = ({ tone = "info", icon = "alert", role, children, style }) => (
+  <div role={role} className={`${st.notice} ${tone === "warn" ? st.noticeWarn : ""}`} style={style}>
+    <span className={st.noticeIcon}><Icon n={icon} size={15} /></span>
+    <div style={{ minWidth: 0, flex: 1 }}>{children}</div>
+  </div>
+);
+
+// Shared table look: uppercase muted headers, hairline rows, tabular numbers.
+const thStyle = (align = "right") => ({ padding: "8px 10px", textAlign: align, color: COLORS.mute, fontSize: 11, fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", borderBottom: `1px solid ${COLORS.line}` });
+const tdStyle = { padding: "10px 10px", fontSize: 12.5, color: INK, borderBottom: `1px solid ${COLORS.line}`, fontVariantNumeric: "tabular-nums" };
+const footStyle = (align = "right") => ({ ...tdStyle, textAlign: align, fontWeight: 500, borderBottom: 0, borderTop: `1px solid ${inkA(0.18)}` });
+// Inputs and selects in the filter rows.
+const SELECT_STYLE = { font: "inherit", fontSize: 13, padding: "9px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.95)", background: "rgba(255,255,255,0.75)", color: INK, maxWidth: "100%" };
 
 const WORTHY_CONTEXT = `
 You are a senior business analyst embedded at Worthy Products NZ, a wholesale confectionery and beverages distributor based in Auckland.
@@ -264,7 +236,7 @@ When analysing data, always:
 `;
 
 // ── AI Insights Panel ─────────────────────────────────────────────────────────
-const AIInsights = ({ data, context, currency, extraContext, accent = "#3f7bdd" }) => {
+const AIInsights = ({ data, context, currency, extraContext }) => {
   const [insight, setInsight]   = useState(null);
   const [loading, setLoading]   = useState(false);
   const [open,    setOpen]      = useState(false);
@@ -300,18 +272,18 @@ No generic advice. Every point must reference something specific in the data.`;
   };
 
   return (
-    <div style={{ marginTop: 12 }}>
-      <button onClick={getInsights} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${accent}50`, background: `${accent}10`, color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}>
-        <Icon name="sparkle" size={13} />{loading ? "Analysing…" : open ? "Hide AI Insights" : "AI Insights"}
+    <div style={{ marginTop: 14 }}>
+      <button type="button" onClick={getInsights} className={`${ui.btn} ${ui.btnSmall}`}>
+        <Icon n="sparkle" size={13} />{loading ? "Analysing…" : open ? "Hide AI Insights" : "AI Insights"}
       </button>
       {open && !loading && insight && (
-        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#c0a870", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,0.75)", border: `1px solid ${COLORS.line}`, fontSize: 12.5, color: COLORS.ink2, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
           {insight}
         </div>
       )}
       {open && loading && (
-        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 10, background: `${accent}08`, border: `1px solid ${accent}30`, fontSize: 11, color: "#8a9aaa" }}>
-          <Icon name="sparkle" size={13} style={{ marginRight: 6 }} />Analysing Worthy Products data…
+        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 16, background: "rgba(255,255,255,0.75)", border: `1px solid ${COLORS.line}`, fontSize: 12, color: COLORS.mute, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon n="sparkle" size={13} />Analysing Worthy Products data…
         </div>
       )}
     </div>
@@ -319,33 +291,34 @@ No generic advice. Every point must reference something specific in the data.`;
 };
 
 // ── Category Drill-Down Modal ─────────────────────────────────────────────────
-const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bdd" }) => {
+const CategoryModal = ({ category, products, currency, onClose }) => {
   if (!category) return null;
   const top      = (products || []).filter(p => p.revenue > 0).slice(0, 10);
   const declining = (products || []).filter(p => p.yoyChange !== null && p.yoyChange < -10).slice(0, 10);
   const rising    = (products || []).filter(p => p.yoyChange !== null && p.yoyChange > 10 && p.revenue > 0).slice(0, 5);
+  const row = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: `1px solid ${COLORS.line}`, flexWrap: "wrap" };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div style={{ background: "#0d0f18", border: `1px solid ${accent}50`, borderRadius: 20, padding: 28, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(20,22,20,0.35)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div style={{ background: COLORS.card, border: "1px solid rgba(40,32,20,0.06)", borderRadius: 26, padding: 24, maxWidth: 800, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 30px 80px -30px rgba(40,32,20,0.45)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
           <div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 16, color: accent, fontWeight: 700 }}>{category}</div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{(products||[]).length} products · click outside to close</div>
+            <h2 className={ui.cardTitle}><span className={ui.titleIcon}><Icon n="folder" size={15} /></span>{category}</h2>
+            <div style={{ fontSize: 12, color: COLORS.mute, marginTop: 6 }}>{(products||[]).length} products · click outside to close</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 20, cursor: "pointer", display: "flex" }} aria-label="Close"><Icon name="close" size={20} /></button>
+          <button type="button" onClick={onClose} className={ui.chip} style={{ border: 0, cursor: "pointer" }} aria-label="Close"><Icon n="close" size={16} /></button>
         </div>
 
         {top.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}><Trend up /> Top Performers</div>
+            <Mini icon="award">Top Performers</Mini>
             {top.map((p, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: "#e8e4dc", flex: 1 }}>{p.name}</div>
-                <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
-                  <span style={{ color: accent }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "-"}</span>
-                  <span style={{ color: "#7C9EC9" }}>{p.qtySold} units</span>
-                  {p.yoyChange !== null && <span style={{ color: p.yoyChange >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}><Trend up={p.yoyChange >= 0} />{Math.abs(p.yoyChange)}% YoY</span>}
+              <div key={i} style={row}>
+                <div style={{ fontSize: 13, color: INK, flex: 1, minWidth: 160 }}>{p.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 12, alignItems: "center" }}>
+                  <span style={{ color: INK, fontWeight: 500 }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "-"}</span>
+                  <span style={{ color: COLORS.mute }}>{p.qtySold} units</span>
+                  {p.yoyChange !== null && <span><Delta value={p.yoyChange} /> <span className={ui.was}>YoY</span></span>}
                 </div>
               </div>
             ))}
@@ -354,11 +327,11 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
 
         {rising.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}><Icon name="trending" size={14} style={{ marginRight: 6 }} />Growing Fast</div>
+            <Mini icon="trending">Growing Fast</Mini>
             {rising.map((p, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: "#e8e4dc" }}>{p.name}</div>
-                <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 11 }}><Trend up />{p.yoyChange}% YoY</span>
+              <div key={i} style={row}>
+                <div style={{ fontSize: 13, color: INK }}>{p.name}</div>
+                <span><Delta value={p.yoyChange} /> <span className={ui.was}>YoY</span></span>
               </div>
             ))}
           </div>
@@ -366,13 +339,13 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
 
         {declining.length > 0 && (
           <div>
-            <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}><Trend up={false} /> Declining in This Category</div>
+            <Mini icon="alert">Declining in This Category</Mini>
             {declining.map((p, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 12, color: "#e8e4dc", flex: 1 }}>{p.name}</div>
-                <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
-                  <span style={{ color: "#8a7860" }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
-                  <span style={{ color: "#f87171", fontWeight: 700 }}><Trend up={false} />{Math.abs(p.yoyChange)}% YoY</span>
+              <div key={i} style={row}>
+                <div style={{ fontSize: 13, color: INK, flex: 1, minWidth: 160 }}>{p.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 12, alignItems: "center" }}>
+                  <span style={{ color: COLORS.ink2 }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
+                  <span><Delta value={-Math.abs(p.yoyChange)} /> <span className={ui.was}>YoY</span></span>
                 </div>
               </div>
             ))}
@@ -380,7 +353,7 @@ const CategoryModal = ({ category, products, currency, onClose, accent = "#3f7bd
         )}
 
         {top.length === 0 && declining.length === 0 && (
-          <div style={{ textAlign: "center", color: T.textMuted, padding: 20 }}>No product data for this category in the selected period.</div>
+          <div style={{ textAlign: "center", color: COLORS.mute, padding: 20 }}>No product data for this category in the selected period.</div>
         )}
 
         <AIInsights data={products} context={`${category} category products`} currency={currency} />
@@ -407,7 +380,7 @@ const downloadCsv = (fileName, headers, rows) => {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   } catch (e) { console.error("CSV export failed", e); }
 };
-const ExportButton = ({ title, range, columns, data, theme }) => {
+const ExportButton = ({ title, range, columns, data }) => {
   if (!data || data.length === 0) return null;
   const run = () => downloadCsv(
     `${slugOf(title)}${range ? "_" + slugOf(range) : ""}.csv`,
@@ -415,81 +388,79 @@ const ExportButton = ({ title, range, columns, data, theme }) => {
     data.map(row => columns.map(c => row[c.key])),
   );
   return (
-    <button onClick={run} title="Download as CSV" aria-label={`Download ${title} as CSV`}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.03em",
-               borderRadius: 8, cursor: "pointer", background: "transparent", color: theme?.textSub || "#6b7280",
-               border: `1px solid ${theme?.border || "rgba(128,128,128,0.3)"}` }}>
-      <Icon name="download" size={12} />CSV
+    <button type="button" onClick={run} title="Download as CSV" aria-label={`Download ${title} as CSV`} className={`${ui.btn} ${ui.btnSmall}`}>
+      <Icon n="download" size={13} />CSV
     </button>
   );
 };
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, theme, icon, range }) => {
-  const T = theme || {
-    bgCard: "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
-    border: "rgba(255,255,255,0.07)", bgTableHead: "#0a0c12",
-    borderFaint: "rgba(255,255,255,0.05)", textHead: "#f0e8d8",
-    textMuted: "#5a4030", textSub: "#5a4030", textRow: "#8a7860", textLabel: "#3a3020",
-    accent: "#3f7bdd",
-  };
-  return (
-  <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", height: "100%" }}>
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
-          {icon && <Icon name={icon} size={15} style={{ marginRight: 8, color: T.accent || "#3f7bdd" }} />}{title} {loading && <span style={{ fontSize: 10, color: T.accent || "#3f7bdd", marginLeft: 8 }}>Loading...</span>}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{headerExtra}<ExportButton title={title} range={range} columns={columns} data={data} theme={T} /></div>
-      </div>
-      {subtitle && <div style={{ fontSize: 10, color: T.textSub, marginTop: 4 }}>{subtitle}</div>}
-      {range && <div style={{ marginTop: 8 }}><RangeTag text={range} theme={T} /></div>}
-    </div>
+/* Old per-column colours from before the three-colour design map onto ink, or the accent for a figure that is bad news
+   (capital tied up, a fall). Columns may also pass INK / ORANGE / COLORS values directly. */
+const WARN_COLOURS = ["#f87171", "#dc2626", "#b91c1c", "#c2410c", "#b45309"];
+const tone = (c) => (!c ? INK : WARN_COLOURS.includes(c) ? ORANGE : c.startsWith("#") && c !== INK && c !== ORANGE && c !== COLORS.ink2 && c !== COLORS.mute ? COLORS.ink2 : c);
+
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, icon, range, visual }) => (
+  <Card style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <CardHead icon={icon || "grid"} title={<>{title}{loading && <span style={{ marginLeft: 10, verticalAlign: "middle" }}><Pill>Loading</Pill></span>}</>}>
+      {headerExtra}<RangeTag text={range} /><ExportButton title={title} range={range} columns={columns} data={data} />
+    </CardHead>
+    {subtitle && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{subtitle}</div>}
+    {visual && !loading && data?.length > 0 && <div style={{ marginBottom: 18 }}>{visual}</div>}
     <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+        <thead style={{ position: "sticky", top: 0, background: COLORS.card, zIndex: 1 }}>
           <tr>
             {columns.map((col, i) => (
-              <th key={i} style={{ textAlign: col.align || "left", padding: "8px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{col.label}</th>
+              <th key={i} style={thStyle(col.align || "left")}>{col.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {!loading && data?.map((row, i) => (
             <tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined}
-              style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
-              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = `${T.accent || "#3f7bdd"}15`; }}
+              style={{ cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
+              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = inkA(0.04); }}
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
               {columns.map((col, j) => (
-                <td key={j} style={{ padding: "8px", textAlign: col.align || "left", color: col.color || T.textRow }}>
+                <td key={j} style={{ ...tdStyle, textAlign: col.align || "left", color: tone(col.color), fontWeight: j === 0 ? 500 : 400 }}>
                   {col.format ? col.format(row[col.key], currency, row) : row[col.key]}
                 </td>
               ))}
             </tr>
           ))}
           {!loading && (!data || data.length === 0) && (
-            <tr><td colSpan={columns.length} style={{ padding: "20px", textAlign: "center", color: T.textMuted }}>No data available</td></tr>
+            <tr><td colSpan={columns.length} style={{ padding: "20px", textAlign: "center", color: COLORS.mute }}>No data available</td></tr>
           )}
         </tbody>
       </table>
     </div>
     {aiContext && !loading && data?.length > 0 && (
-      <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} accent={theme?.accent || "#3f7bdd"} />
+      <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} />
     )}
-  </div>
-  );
-};
+  </Card>
+);
 
 /* Debtors: what customers owe and how overdue it is, as at today. The figure is
    Odoo's own receivable balance (checked against the ledger to the cent). */
-const SectionTitle = ({ icon, accent, children }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>
-    <Icon name={icon} size={17} style={{ color: accent }} />{children}
+const SectionTitle = ({ icon, children }) => (
+  <h2 className={ui.cardTitle} style={{ fontSize: 20, display: "flex", alignItems: "center" }}>
+    <span className={ui.titleIcon}><Icon n={icon} size={15} /></span>{children}
+  </h2>
+);
+/* A headline number tile in the three colours: the accent only when `hot` (overdue, a fall, the key figure). */
+const Tile = ({ label, value, note, hot, icon }) => (
+  <div className={ui.kpi} style={{ background: "transparent" }}>
+    <div className={ui.kpiNum} style={{ fontSize: "clamp(21px, 1.7vw, 26px)", whiteSpace: "nowrap", color: hot ? ORANGE : INK }}>{value}</div>
+    <div className={ui.kpiLabel}>{icon && <Icon n={icon} size={14} />}{label}</div>
+    {note && <div className={ui.statLabel} style={{ marginTop: 6, lineHeight: 1.45 }}>{note}</div>}
   </div>
 );
+// A run of Tiles in one strip, wrapping on small screens.
+const TileStrip = ({ children }) => <section className={`${ui.kpis} ${st.tileStrip}`}>{children}</section>;
 /* Debtors for the Odoo companies, built for whoever chases payment: what is owed and how
    late, who to chase first, whose customers they are, every customer (not just the worst
    forty) with search and filters, and each customer's open invoices one click away. */
-const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
+const DebtorsOdoo = ({ d, currency = "NZD" }) => {
   const [q, setQ] = useState("");
   const [show, setShow] = useState("all");
   const [rep, setRep] = useState("All");
@@ -498,28 +469,22 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
   const [open, setOpen] = useState(null);
   const [limit, setLimit] = useState(100);
   const money = (v) => fmtExact(v, currency);
-  const red = "#dc2626";
+  const red = ORANGE;
   const t = d.totals;
-  const dash = (v, bold, color) => (!v ? <span style={{ color: T.textLabel }}>-</span> : <span style={{ fontWeight: bold ? 700 : 400, color }}>{money(v)}</span>);
-  const cell = { padding: "9px 12px", fontSize: 12, color: T.textRow };
-  const head = (align = "right") => ({ padding: "9px 12px", textAlign: align, color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` });
-  const card = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 20 };
-  const title = (icon, text, sub) => (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}><Icon name={icon} size={15} style={{ marginRight: 8, color: accent }} />{text}</div>
-      {sub && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{sub}</div>}
-    </div>);
-  const tile = (label, value, note, color) => (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: color || T.textHead, marginTop: 6 }}>{value}</div>
-      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, lineHeight: 1.45 }}>{note}</div>}
-    </div>);
-  const sel = { padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgCard, color: T.textHead, fontSize: 12 };
+  const dash = (v, bold, color) => (!v ? <span style={{ color: COLORS.mute }}>-</span> : <span style={{ fontWeight: bold ? 500 : 400, color }}>{money(v)}</span>);
+  const cell = tdStyle;
+  const head = thStyle;
+  const card = { marginBottom: 14 };
+  const title = (icon, text, sub, extra) => (
+    <>
+      <CardHead icon={icon} title={text}>{extra}</CardHead>
+      {sub && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{sub}</div>}
+    </>);
+  const sel = SELECT_STYLE;
 
   const bands = [
-    ["current", "Not yet due", "#94a3b8"], ["d1to30", "1 to 30 days late", "#f59e0b"], ["d31to60", "31 to 60", "#ea580c"],
-    ["d61to90", "61 to 90", "#dc2626"], ["over90", "Over 90", "#991b1b"],
+    ["current", "Not yet due", inkA(0.12)], ["d1to30", "1 to 30 days late", inkA(0.3)], ["d31to60", "31 to 60", inkA(0.55)],
+    ["d61to90", "61 to 90", inkA(0.85)], ["over90", "Over 90", ORANGE],
   ];
   const pctOf = (v) => (t.outstanding > 0 ? (v / t.outstanding) * 100 : 0);
 
@@ -561,55 +526,65 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
 
   return (
     <div style={{ marginTop: 28 }}>
-      <div style={{ color: T.textHead, marginBottom: 14 }}>
-        <SectionTitle icon="receipt" accent={accent}>Debtors</SectionTitle>
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>What customers owe us, how late it is, who to chase and whose customers they are. Amounts include GST. Lateness is counted from the due date</div>
-      </div>
-      <div style={{ marginBottom: 14 }}><RangeTag text={`As at ${fmtDay(d.asOf)}`} theme={T} /></div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 16 }}>
-        {tile("Owed to us", money(t.outstanding), `${d.documents.toLocaleString()} open invoices from ${d.customerCount.toLocaleString()} customers${t.intercompany?.total ? `. ${money(t.intercompany.total)} of it is inter-company (${d.intercompanyLabel || "Worthy South and Oceania"})` : ""}`)}
-        {tile("Overdue", money(t.overdue), t.overduePct != null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? red : undefined)}
-        {tile("Over 60 days late", money(t.d61to90 + t.over90), "More than 60 days past the due date", t.d61to90 + t.over90 > 0 ? red : undefined)}
-        {tile("Over 90 days late", money(t.over90), `${d.customers.filter(c => c.over90 > 0).length} customers`, t.over90 > 0 ? red : undefined)}
-        {tile("Not yet due", money(t.current), "Inside payment terms")}
+      <div className={st.sectionHead}>
+        <div>
+          <SectionTitle icon="wallet">Debtors</SectionTitle>
+          <div className={st.sectionSub}>What customers owe us, how late it is, who to chase and whose customers they are. Amounts include GST. Lateness is counted from the due date</div>
+        </div>
+        <RangeTag text={`As at ${fmtDay(d.asOf)}`} />
       </div>
 
-      <div style={card}>
-        {title("chart", "How Late The Money Is", "Share of everything owed, by how far past the due date")}
-        <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", background: "rgba(128,128,128,0.15)" }}>
-          {bands.map(([k, , col]) => <div key={k} title={money(t[k])} style={{ width: `${Math.max(pctOf(t[k]), 0)}%`, background: col }} />)}
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 28px", marginTop: 12 }}>
-          {bands.map(([k, label, col]) => (
-            <div key={k} style={{ fontSize: 12, color: T.textRow }}>
-              <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: col, marginRight: 6 }} />
-              {label}: <strong style={{ color: T.textHead }}>{money(t[k])}</strong> <span style={{ color: T.textMuted }}>({pctOf(t[k]).toFixed(1)}%)</span>
-            </div>))}
-        </div>
+      <TileStrip>
+        <Tile icon="wallet" label="Owed to us" value={money(t.outstanding)} note={`${d.documents.toLocaleString()} open invoices from ${d.customerCount.toLocaleString()} customers${t.intercompany?.total ? `. ${money(t.intercompany.total)} of it is inter-company (${d.intercompanyLabel || "Worthy South and Oceania"})` : ""}`} />
+        <Tile icon="alert" label="Overdue" value={money(t.overdue)} note={t.overduePct != null ? `${t.overduePct}% of what is owed` : null} hot={t.overdue > 0} />
+        <Tile icon="hourglass" label="Over 60 days late" value={money(t.d61to90 + t.over90)} note="More than 60 days past the due date" />
+        <Tile icon="bell" label="Over 90 days late" value={money(t.over90)} note={`${d.customers.filter(c => c.over90 > 0).length} customers`} />
+        <Tile icon="check" label="Not yet due" value={money(t.current)} note="Inside payment terms" />
+      </TileStrip>
+
+      <div className={ui.grid2} style={{ marginTop: 14, marginBottom: 14 }}>
+        <Card>
+          {title("hourglass", "How Late The Money Is", "Share of everything owed, by how far past the due date", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
+          <div className={ui.shareBar} style={{ height: 16 }}>
+            {bands.map(([k, , col]) => <i key={k} title={money(t[k])} style={{ width: `${Math.max(pctOf(t[k]), 0)}%`, background: col }} />)}
+          </div>
+          <div style={{ display: "grid", gap: 8, marginTop: 16 }}>
+            {bands.map(([k, label, col]) => (
+              <div key={k} style={{ display: "grid", gridTemplateColumns: "10px minmax(0,1fr) auto auto", gap: 10, alignItems: "center", fontSize: 13 }}>
+                <i style={{ width: 10, height: 10, borderRadius: 3, background: col, display: "block" }} />
+                <span style={{ color: COLORS.ink2 }}>{label}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums", color: k === "over90" && t[k] > 0 ? ORANGE : INK }}>{money(t[k])}</span>
+                <span className={ui.was} style={{ minWidth: 44, textAlign: "right" }}>{pctOf(t[k]).toFixed(1)}%</span>
+              </div>))}
+          </div>
+        </Card>
+        <Card>
+          {title("users", "Overdue by Sales Rep", null, <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
+          <BarList rows={d.reps.filter(r => r.overdue > 0).map(r => ({ name: r.rep, value: r.overdue }))} fmt={money} limit={8} />
+        </Card>
       </div>
 
       {chase.length > 0 && (
-        <div style={card}>
-          {title("alert", "Chase First", "Customers with money more than 60 days past due, biggest first (inter-company left out)")}
+        <Card style={card}>
+          {title("alert", "Chase First", "Customers with money more than 60 days past due, biggest first (inter-company left out)", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr><th style={head("left")}>Customer</th><th style={head("left")}>Sales rep</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th><th style={head()}>Oldest (days late)</th><th style={head()}>Total owed</th></tr></thead>
               <tbody>{chase.map(c => (
-                <tr key={c.id} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                  <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{c.name}</td>
-                  <td style={{ ...cell, whiteSpace: "nowrap" }}>{c.rep}</td>
+                <tr key={c.id}>
+                  <td style={{ ...cell, fontWeight: 500 }}>{c.name}</td>
+                  <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.ink2 }}>{c.rep}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{dash(c.d61to90)}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{dash(c.over90, true, "#b91c1c")}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{dash(c.over90, true, red)}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{c.oldestDays}</td>
-                  <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(c.total)}</td>
+                  <td style={{ ...cell, textAlign: "right", fontWeight: 500 }}>{money(c.total)}</td>
                 </tr>))}</tbody>
           </table></div>
-        </div>
+        </Card>
       )}
 
-      <div style={card}>
-        {title("user", "By Sales Rep", d.system === "Ostendo" ? "Each customer sits with the salesperson assigned to them in Ostendo" : "Each customer sits with the salesperson assigned to them in Odoo. Everyone else is Direct")}
+      <Card style={card}>
+        {title("users", "By Sales Rep", d.system === "Ostendo" ? "Each customer sits with the salesperson assigned to them in Ostendo" : "Each customer sits with the salesperson assigned to them in Odoo. Everyone else is Direct", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
@@ -617,32 +592,32 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
               <th style={head()}>31 to 60</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th>
             </tr></thead>
             <tbody>{d.reps.map(r => (
-              <tr key={r.rep} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{r.rep}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{r.customers.toLocaleString()} <span style={{ color: T.textMuted }}>({r.overdueCustomers} late)</span></td>
+              <tr key={r.rep}>
+                <td style={{ ...cell, fontWeight: 500 }}>{r.rep}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{r.customers.toLocaleString()} <span style={{ color: COLORS.mute }}>({r.overdueCustomers} late)</span></td>
                 <td style={{ ...cell, textAlign: "right" }}>{money(r.total)}</td>
-                <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700 }}>{dash(r.overdue, true, red)}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{dash(r.overdue, true, red)}</td>
                 <td style={{ ...cell, textAlign: "right" }}>{dash(r.d31to60)}</td>
                 <td style={{ ...cell, textAlign: "right" }}>{dash(r.d61to90)}</td>
                 <td style={{ ...cell, textAlign: "right" }}>{dash(r.over90)}</td>
               </tr>))}</tbody>
-            <tfoot><tr style={{ borderTop: `1px solid ${T.border}` }}>
-              <td style={{ ...cell, fontSize: 10, fontWeight: 700, color: T.textMuted }}>TOTAL</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{d.customerCount.toLocaleString()}</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.outstanding)}</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: red }}>{money(t.overdue)}</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.d31to60)}</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.d61to90)}</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(t.over90)}</td>
+            <tfoot><tr>
+              <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+              <td style={footStyle()}>{d.customerCount.toLocaleString()}</td>
+              <td style={footStyle()}>{money(t.outstanding)}</td>
+              <td style={{ ...footStyle(), color: red }}>{money(t.overdue)}</td>
+              <td style={footStyle()}>{money(t.d31to60)}</td>
+              <td style={footStyle()}>{money(t.d61to90)}</td>
+              <td style={footStyle()}>{money(t.over90)}</td>
             </tr></tfoot>
           </table>
         </div>
-      </div>
+      </Card>
 
-      <div style={card}>
-        {title("receipt", "Every Customer Who Owes Us", "Open invoices less credit notes, aged by days past the due date. Click a customer to see their open invoices")}
+      <Card style={card}>
+        {title("receipt", "Every Customer Who Owes Us", "Open invoices less credit notes, aged by days past the due date. Click a customer to see their open invoices", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-          <input value={q} onChange={e => { setQ(e.target.value); setLimit(100); }} placeholder="Search customer" style={{ ...sel, minWidth: 220, flex: "1 1 220px" }} />
+          <input value={q} onChange={e => { setQ(e.target.value); setLimit(100); }} placeholder="Search customer" style={{ ...sel, minWidth: 0, flex: "1 1 220px" }} />
           <select value={show} onChange={e => { setShow(e.target.value); setLimit(100); }} style={sel}>
             <option value="all">Everyone who owes</option><option value="overdue">Overdue only</option>
             <option value="31">More than 30 days late</option><option value="61">More than 60 days late</option><option value="90">More than 90 days late</option>
@@ -654,53 +629,53 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
             <option value="overdue">Sort: most overdue</option><option value="total">Sort: largest balance</option>
             <option value="oldest">Sort: oldest late</option><option value="name">Sort: name</option>
           </select>
-          <label style={{ fontSize: 12, color: T.textRow, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-            <input type="checkbox" checked={hideIC} onChange={e => setHideIC(e.target.checked)} /> Hide inter-company
+          <label style={{ fontSize: 12.5, color: COLORS.ink2, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={hideIC} onChange={e => setHideIC(e.target.checked)} style={{ accentColor: INK }} /> Hide inter-company
           </label>
           <span style={{ flex: 1 }} />
-          <button onClick={csvCustomers} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Download customers CSV</button>
-          <button onClick={csvInvoices} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Download all open invoices CSV</button>
+          <button type="button" onClick={csvCustomers} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download customers CSV</button>
+          <button type="button" onClick={csvInvoices} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download all open invoices CSV</button>
         </div>
-        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: COLORS.mute, marginBottom: 10 }}>
           Showing {shownRows.length.toLocaleString()} of {rows.length.toLocaleString()} customers{filtered ? ` (filtered from ${d.customerCount.toLocaleString()})` : ""}.
         </div>
         <div style={{ overflow: "auto", maxHeight: 640 }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}><tr>
+            <thead style={{ position: "sticky", top: 0, background: COLORS.card, zIndex: 1 }}><tr>
               <th style={head("left")}>Customer</th><th style={head("left")}>Sales rep</th><th style={head()}>Not yet due</th>
               <th style={head()}>1 to 30</th><th style={head()}>31 to 60</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th>
               <th style={head()}>Oldest</th><th style={head()}>Total owed</th>
             </tr></thead>
             <tbody>
-              {shownRows.length === 0 && <tr><td colSpan={9} style={{ ...cell, textAlign: "center", padding: 24, color: T.textMuted }}>No customers match</td></tr>}
+              {shownRows.length === 0 && <tr><td colSpan={9} style={{ ...cell, textAlign: "center", padding: 24, color: COLORS.mute }}>No customers match</td></tr>}
               {shownRows.map(c => {
                 const isOpen = open === c.id;
                 const inv = isOpen ? d.invoices.filter(i => i.c === c.id).sort((a, b) => b.days - a.days) : [];
                 return (
                   <React.Fragment key={c.id}>
-                    <tr onClick={() => setOpen(isOpen ? null : c.id)} style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: "pointer", background: isOpen ? `${accent}0d` : "transparent" }}>
-                      <td style={{ ...cell, color: T.text, minWidth: 200 }}>
-                        <span style={{ color: T.textMuted, marginRight: 6 }}>{isOpen ? "▾" : "▸"}</span>{c.name}
-                        {c.intercompany && <span style={{ marginLeft: 8, fontSize: 10, color: "#b45309", border: "1px solid #b4530955", borderRadius: 6, padding: "1px 6px" }}>inter-company</span>}
+                    <tr onClick={() => setOpen(isOpen ? null : c.id)} style={{ cursor: "pointer", background: isOpen ? inkA(0.04) : "transparent" }}>
+                      <td style={{ ...cell, minWidth: 200 }}>
+                        <span style={{ color: COLORS.mute, marginRight: 6, display: "inline-flex", verticalAlign: "-2px" }}><Icon n={isOpen ? "down" : "move"} size={12} /></span>{c.name}
+                        {c.intercompany && <span style={{ marginLeft: 8 }}><Pill>inter-company</Pill></span>}
                       </td>
-                      <td style={{ ...cell, whiteSpace: "nowrap" }}>{c.rep}</td>
+                      <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.ink2 }}>{c.rep}</td>
                       <td style={{ ...cell, textAlign: "right" }}>{dash(c.current)}</td>
                       <td style={{ ...cell, textAlign: "right" }}>{dash(c.d1to30)}</td>
-                      <td style={{ ...cell, textAlign: "right", color: "#b45309" }}>{dash(c.d31to60)}</td>
-                      <td style={{ ...cell, textAlign: "right", color: "#c2410c" }}>{dash(c.d61to90)}</td>
-                      <td style={{ ...cell, textAlign: "right", color: "#b91c1c" }}>{dash(c.over90)}</td>
-                      <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>{c.oldestDays > 0 ? `${c.oldestDays} days` : <span style={{ color: T.textLabel }}>-</span>}</td>
-                      <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(c.total)}</td>
+                      <td style={{ ...cell, textAlign: "right" }}>{dash(c.d31to60)}</td>
+                      <td style={{ ...cell, textAlign: "right" }}>{dash(c.d61to90)}</td>
+                      <td style={{ ...cell, textAlign: "right" }}>{dash(c.over90, false, red)}</td>
+                      <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>{c.oldestDays > 0 ? `${c.oldestDays} days` : <span style={{ color: COLORS.mute }}>-</span>}</td>
+                      <td style={{ ...cell, textAlign: "right", fontWeight: 500 }}>{money(c.total)}</td>
                     </tr>
                     {isOpen && (
-                      <tr><td colSpan={9} style={{ padding: "4px 12px 16px 36px", background: `${accent}0d` }}>
+                      <tr><td colSpan={9} style={{ padding: "4px 12px 16px 36px", background: inkA(0.04) }}>
                         <table style={{ width: "100%", borderCollapse: "collapse" }}>
                           <thead><tr><th style={head("left")}>Document</th><th style={head("left")}>Type</th><th style={head("left")}>Invoice date</th><th style={head("left")}>Due date</th><th style={head()}>Days late</th><th style={head()}>Outstanding</th></tr></thead>
                           <tbody>{inv.map(i => (
-                            <tr key={i.doc} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+                            <tr key={i.doc}>
                               <td style={cell}>{i.doc}</td><td style={cell}>{i.kind}</td><td style={cell}>{i.inv ? fmtDay(i.inv) : "-"}</td><td style={cell}>{i.due ? fmtDay(i.due) : "-"}</td>
-                              <td style={{ ...cell, textAlign: "right", color: i.days > 0 ? red : T.textLabel }}>{i.days > 0 ? i.days : "not due"}</td>
-                              <td style={{ ...cell, textAlign: "right", fontWeight: 600, color: i.amt < 0 ? "#16a34a" : T.textHead }}>{money(i.amt)}</td>
+                              <td style={{ ...cell, textAlign: "right", color: i.days > 0 ? red : COLORS.mute }}>{i.days > 0 ? i.days : "not due"}</td>
+                              <td style={{ ...cell, textAlign: "right", fontWeight: 500, color: i.amt < 0 ? COLORS.ink2 : INK }}>{money(i.amt)}</td>
                             </tr>))}</tbody>
                         </table>
                       </td></tr>
@@ -708,28 +683,29 @@ const DebtorsOdoo = ({ d, theme: T, accent, currency = "NZD" }) => {
                   </React.Fragment>);
               })}
             </tbody>
-            <tfoot><tr style={{ borderTop: `1px solid ${T.border}` }}>
-              <td style={{ ...cell, fontSize: 10, fontWeight: 700, color: T.textMuted }} colSpan={2}>{filtered ? "TOTAL OF THESE CUSTOMERS" : "TOTAL"}</td>
-              {["current", "d1to30", "d31to60", "d61to90", "over90"].map(k => <td key={k} style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(sum(k))}</td>)}
-              <td style={cell} />
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(sum("total"))}</td>
+            <tfoot><tr>
+              <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }} colSpan={2}>{filtered ? "TOTAL OF THESE CUSTOMERS" : "TOTAL"}</td>
+              {["current", "d1to30", "d31to60", "d61to90", "over90"].map(k => <td key={k} style={footStyle()}>{money(sum(k))}</td>)}
+              <td style={footStyle()} />
+              <td style={footStyle()}>{money(sum("total"))}</td>
             </tr></tfoot>
           </table>
         </div>
         {rows.length > limit && (
           <div style={{ marginTop: 12, textAlign: "center" }}>
-            <button onClick={() => setLimit(limit + 200)} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Show 200 more ({(rows.length - limit).toLocaleString()} not shown)</button>
+            <button type="button" onClick={() => setLimit(limit + 200)} className={`${ui.btn} ${ui.btnSmall}`}>Show 200 more ({(rows.length - limit).toLocaleString()} not shown)</button>
           </div>)}
-      </div>
+      </Card>
     </div>
   );
 };
 
-const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
+const DebtorsPanel = ({ source, currency = "NZD" }) => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
     let live = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setD(null); setErr(null);
     fetch(source, { cache: "no-store" })
       .then(r => r.json())
@@ -737,49 +713,60 @@ const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
       .catch(e => live && setErr(e.message));
     return () => { live = false; };
   }, [source]);
-  const T = theme;
-  const tile = (label, value, note, color) => (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: color || T.textHead, marginTop: 6 }}>{value}</div>
-      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
-    </div>
-  );
-  if (d?.version === 2) return <DebtorsOdoo d={d} theme={T} accent={accent} currency={currency} />;
+  if (d?.version === 2) return <DebtorsOdoo d={d} currency={currency} />;
   const t = d?.totals;
   const asAt = d ? `As at ${fmtDay(d.asOf)}` : null;
   /* A nil bucket is a dash, so the buckets that hold money stand out. */
-  const owed = (v, bold) => (!v ? <span style={{ color: T.textLabel }}>-</span> : <span style={bold ? { fontWeight: 700 } : undefined}>{fmtExact(v, currency)}</span>);
+  const owed = (v, bold, hot) => (!v ? <span style={{ color: COLORS.mute }}>-</span> : <span style={{ fontWeight: bold ? 500 : 400, color: hot ? ORANGE : undefined }}>{fmtExact(v, currency)}</span>);
+  const bands = [["current", "Not yet due", inkA(0.12)], ["d1to30", "1 to 30", inkA(0.3)], ["d31to60", "31 to 60", inkA(0.55)], ["d61to90", "61 to 90", inkA(0.85)], ["over90", "Over 90", ORANGE]];
   return (
     <div style={{ marginTop: 28 }}>
-      <div style={{ color: T.textHead, marginBottom: 14 }}>
-        <SectionTitle icon="receipt" accent={accent}>Debtors</SectionTitle>
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>What customers owe us, and how late it is. Amounts include GST. Lateness is counted from the due date</div>
+      <div className={st.sectionHead}>
+        <div>
+          <SectionTitle icon="wallet">Debtors</SectionTitle>
+          <div className={st.sectionSub}>What customers owe us, and how late it is. Amounts include GST. Lateness is counted from the due date</div>
+        </div>
+        <RangeTag text={asAt} />
       </div>
       {t && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 16 }}>
-          {tile("Owed to us", fmtExact(t.outstanding, currency), `${d.documents.toLocaleString()} open invoices${d.unappliedPayments ? `, after ${fmtExact(d.unappliedPayments, currency)} received and not yet applied` : ""}`)}
-          {tile("Overdue", fmtExact(t.overdue, currency), t.overduePct !== null ? `${t.overduePct}% of what is owed` : null, t.overdue > 0 ? "#dc2626" : undefined)}
-          {tile("Over 60 days late", fmtExact(t.d61to90 + t.over90, currency), "More than 60 days past the due date", t.d61to90 + t.over90 > 0 ? "#dc2626" : undefined)}
-          {tile("Over 90 days late", fmtExact(t.over90, currency), "More than 90 days past the due date", t.over90 > 0 ? "#dc2626" : undefined)}
-          {tile("Not yet due", fmtExact(t.current, currency), "Inside payment terms")}
-        </div>
+        <>
+          <TileStrip>
+            <Tile icon="wallet" label="Owed to us" value={fmtExact(t.outstanding, currency)} note={`${d.documents.toLocaleString()} open invoices${d.unappliedPayments ? `, after ${fmtExact(d.unappliedPayments, currency)} received and not yet applied` : ""}`} />
+            <Tile icon="alert" label="Overdue" value={fmtExact(t.overdue, currency)} note={t.overduePct !== null ? `${t.overduePct}% of what is owed` : null} hot={t.overdue > 0} />
+            <Tile icon="hourglass" label="Over 60 days late" value={fmtExact(t.d61to90 + t.over90, currency)} note="More than 60 days past the due date" />
+            <Tile icon="bell" label="Over 90 days late" value={fmtExact(t.over90, currency)} note="More than 90 days past the due date" />
+            <Tile icon="check" label="Not yet due" value={fmtExact(t.current, currency)} note="Inside payment terms" />
+          </TileStrip>
+          {t.outstanding > 0 && (
+            <Card style={{ marginTop: 14 }}>
+              <CardHead icon="hourglass" title="How Late The Money Is"><RangeTag text={asAt} /></CardHead>
+              <div className={ui.shareBar} style={{ height: 16 }}>
+                {bands.map(([k, , col]) => <i key={k} title={fmtExact(t[k], currency)} style={{ width: `${Math.max((t[k] / t.outstanding) * 100, 0)}%`, background: col }} />)}
+              </div>
+              <div className={ui.shareLegend}>
+                {bands.map(([k, label, col]) => <span key={k}><i style={{ background: col }} />{label} {((t[k] / t.outstanding) * 100).toFixed(1)}% · {fmtExact(t[k], currency)}</span>)}
+              </div>
+            </Card>
+          )}
+        </>
       )}
-      <AdvancedTable theme={T} icon="receipt" title="Overdue by Customer" range={asAt}
-        subtitle={err ? `Could not load: ${err}` : "Open invoices less credit notes, aged by days past the due date. Largest overdue first"}
-        loading={!d && !err} currency={currency} data={d?.customers || []}
-        columns={[
-          { key: "name", label: "Customer", color: T.text },
-          { key: "current", label: "Not Yet Due", align: "right", color: T.textSub, format: v => owed(v) },
-          { key: "d1to30", label: "1 to 30", align: "right", color: T.textSub, format: v => owed(v) },
-          { key: "d31to60", label: "31 to 60", align: "right", color: "#b45309", format: v => owed(v) },
-          { key: "d61to90", label: "61 to 90", align: "right", color: "#c2410c", format: v => owed(v) },
-          { key: "over90", label: "Over 90 Late", align: "right", color: "#b91c1c", format: v => owed(v) },
-          { key: "total", label: "Total Owed", align: "right", color: T.textHead, format: v => owed(v, true) },
-        ]}
-      />
+      <div style={{ marginTop: 14 }}>
+        <AdvancedTable icon="receipt" title="Overdue by Customer" range={asAt}
+          subtitle={err ? `Could not load: ${err}` : "Open invoices less credit notes, aged by days past the due date. Largest overdue first"}
+          loading={!d && !err} currency={currency} data={d?.customers || []}
+          columns={[
+            { key: "name", label: "Customer", color: INK },
+            { key: "current", label: "Not Yet Due", align: "right", color: INK, format: v => owed(v) },
+            { key: "d1to30", label: "1 to 30", align: "right", color: INK, format: v => owed(v) },
+            { key: "d31to60", label: "31 to 60", align: "right", color: INK, format: v => owed(v) },
+            { key: "d61to90", label: "61 to 90", align: "right", color: INK, format: v => owed(v) },
+            { key: "over90", label: "Over 90 Late", align: "right", color: INK, format: v => owed(v, false, true) },
+            { key: "total", label: "Total Owed", align: "right", color: INK, format: v => owed(v, true) },
+          ]}
+        />
+      </div>
       {d && d.customerCount > d.customers.length && (
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: COLORS.mute, marginTop: 10, lineHeight: 1.5 }}>
           Showing the {d.customers.length} customers with the most overdue, of {d.customerCount.toLocaleString()} who owe us money. The tiles above cover all of them.
         </div>
       )}
@@ -795,7 +782,7 @@ const DebtorsPanel = ({ source, theme, accent, currency = "NZD" }) => {
    sits under, and the reason the team logged in Odoo. The same two totals as the
    Overview: credits against product sales, and discounts / rebates / adjustments that
    carry no product, which together are the full value of the notes. */
-const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null }) => {
+const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
   const [q, setQ] = useState("");
   const [kind, setKind] = useState("All");
   const [rep, setRep] = useState("All");
@@ -815,25 +802,17 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
   const shown = rows.reduce((s, n) => s + n.amount, 0);
   const filtered = rows.length !== d.notes.length;
 
-  const cell = { padding: "9px 12px", fontSize: 12, color: T.textRow };
-  const head = (align = "right") => ({ padding: "9px 12px", textAlign: align, color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` });
-  const card = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 };
-  const title = (icon, text) => (
-    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 14 }}>
-      <Icon name={icon} size={15} style={{ marginRight: 8, color: accent }} />{text}
-    </div>);
-  const tile = (label, value, note, color) => (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: color || T.textHead, marginTop: 6 }}>{value}</div>
-      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, lineHeight: 1.45 }}>{note}</div>}
-    </div>);
-  const red = "#dc2626";
-  // One small summary table: first column text, then count, product, other, total.
-  const summary = (label, list, keyOf, labelOf) => (
-    <div style={{ ...card, overflowX: "auto" }}>
-      {title(label[0], label[1])}
-      {label[3] && <div style={{ fontSize: 11, color: T.textMuted, margin: "-8px 0 10px" }}>{label[3]}</div>}
+  const cell = tdStyle;
+  const head = thStyle;
+  const card = {};
+  const title = (icon, text, extra) => <CardHead icon={icon} title={text}>{extra}</CardHead>;
+  const red = ORANGE;
+  // One small summary table: first column text, then count, product, other, total. `visual` sits above the table.
+  const summary = (label, list, keyOf, labelOf, visual) => (
+    <Card style={{ ...card, overflowX: "auto" }}>
+      {title(label[0], label[1], <RangeTag text={rangeLabel} />)}
+      {label[3] && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{label[3]}</div>}
+      {visual && list.length > 0 && <div style={{ marginBottom: 18 }}>{visual}</div>}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr>
           <th style={head("left")}>{label[2]}</th><th style={head()}>Credit notes</th>
@@ -841,23 +820,23 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
         </tr></thead>
         <tbody>
           {list.map(r => (
-            <tr key={keyOf(r)} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-              <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{labelOf(r)}</td>
+            <tr key={keyOf(r)}>
+              <td style={{ ...cell, fontWeight: 500, whiteSpace: "nowrap" }}>{labelOf(r)}</td>
               <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
               <td style={{ ...cell, textAlign: "right" }}>{money(r.product)}</td>
               <td style={{ ...cell, textAlign: "right" }}>{money(r.other)}</td>
-              <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700 }}>{money(r.value)}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 500 }}>{money(r.value)}</td>
             </tr>))}
         </tbody>
-        <tfoot><tr style={{ borderTop: `1px solid ${T.border}` }}>
-          <td style={{ ...cell, fontSize: 10, fontWeight: 700, color: T.textMuted }}>TOTAL</td>
-          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{d.totals.count.toLocaleString()}</td>
-          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(d.totals.productValue)}</td>
-          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: T.textHead }}>{money(d.totals.otherValue)}</td>
-          <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: red }}>{money(d.totals.value)}</td>
+        <tfoot><tr>
+          <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+          <td style={footStyle()}>{d.totals.count.toLocaleString()}</td>
+          <td style={footStyle()}>{money(d.totals.productValue)}</td>
+          <td style={footStyle()}>{money(d.totals.otherValue)}</td>
+          <td style={{ ...footStyle(), color: red }}>{money(d.totals.value)}</td>
         </tr></tfoot>
       </table>
-    </div>);
+    </Card>);
 
   const csv = () => {
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -867,108 +846,122 @@ const CreditsOdoo = ({ d, theme: T, accent, currency = "NZD", rangeLabel = null 
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `credit-notes-${d.range.start}-to-${d.range.end}.csv`; a.click(); URL.revokeObjectURL(a.href);
   };
-  const sel = { padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgCard, color: T.textHead, fontSize: 12 };
+  const sel = SELECT_STYLE;
   const opts = (all, list) => [<option key="all" value="All">{all}</option>, ...list.map(v => <option key={v} value={v}>{v}</option>)];
 
   return (
     <div style={{ marginTop: 28 }}>
-      <div style={{ color: T.textHead, marginBottom: 14 }}>
-        <SectionTitle icon="receipt" accent={accent}>Credit Notes</SectionTitle>
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>Every credit note this financial year: what it was for, who raised it and which sales rep it sits under</div>
-      </div>
-      {rangeLabel && <div style={{ marginBottom: 14 }}><RangeTag text={rangeLabel} theme={T} /></div>}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 20 }}>
-        {tile("Credit notes", d.totals.count.toLocaleString(), `${d.totals.withReason.toLocaleString()} have a reason: ${reasonWhere}`)}
-        {tile("Returns & product credits", money(d.totals.productValue),
-          `Credits against product sales${d.totals.productPctOfSales != null ? `, ${d.totals.productPctOfSales}% of sales` : ""}. This is the figure on the Overview.`, red)}
-        {tile(d.otherLabel || "Discounts, rebates & adjustments", money(d.totals.otherValue), d.otherNote || "Credits with no product on them: volume discounts, rebates, rent and sales adjustments", red)}
-        {tile("Total credited", money(d.totals.value), "The two above together: the full value of every credit note", red)}
-      </div>
-
-      <div style={{ display: "grid", gap: 20, marginBottom: 20 }}>
-        {summary(["calendar", "By Month", "Month"], d.months, r => r.month, r => monthLabel(r.month))}
-        {summary(["user", "By Sales Rep", "Sales rep"], d.reps, r => r.rep, r => r.rep)}
-        {summary(["receipt", "What The Credits Were For", "Type", "Product credits are returns and corrections to product sales. The rest carry no product. Each credit note is counted once, under its main type."], d.kinds, r => r.kind, r => r.kind)}
-        {summary(["user", "Raised By", "Person", `The person who created the credit note in ${sys}`], d.raisers, r => r.person, r => r.person)}
-        <div style={{ ...card, overflowX: "auto" }}>
-          {title("trophy", "Customers With The Most Credits")}
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th style={head("left")}>Customer</th><th style={head()}>Credit notes</th><th style={head()}>Product credits</th><th style={head()}>{otherHead}</th><th style={head()}>Total</th></tr></thead>
-            <tbody>{d.customers.map(r => (
-              <tr key={r.customer} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                <td style={{ ...cell, color: T.textHead, fontWeight: 700 }}>{r.customer}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{money(r.product)}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{money(r.other)}</td>
-                <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700 }}>{money(r.value)}</td>
-              </tr>))}</tbody>
-          </table>
+      <div className={st.sectionHead}>
+        <div>
+          <SectionTitle icon="receipt">Credit Notes</SectionTitle>
+          <div className={st.sectionSub}>Every credit note this financial year: what it was for, who raised it and which sales rep it sits under</div>
         </div>
+        <RangeTag text={rangeLabel} />
       </div>
 
-      <div style={card}>
-        {title("receipt", "Every Credit Note")}
+      <TileStrip>
+        <Tile icon="receipt" label="Credit notes" value={d.totals.count.toLocaleString()} note={`${d.totals.withReason.toLocaleString()} have a reason: ${reasonWhere}`} />
+        <Tile icon="bag" label="Returns & product credits" value={money(d.totals.productValue)}
+          note={`Credits against product sales${d.totals.productPctOfSales != null ? `, ${d.totals.productPctOfSales}% of sales` : ""}. This is the figure on the Overview.`} />
+        <Tile icon="percent" label={d.otherLabel || "Discounts, rebates & adjustments"} value={money(d.totals.otherValue)} note={d.otherNote || "Credits with no product on them: volume discounts, rebates, rent and sales adjustments"} />
+        <Tile icon="wallet" label="Total credited" value={money(d.totals.value)} note="The two above together: the full value of every credit note" hot />
+      </TileStrip>
+
+      {d.totals.value > 0 && (
+        <Card style={{ marginTop: 14 }}>
+          <CardHead icon="pie" title="Product Credits and Other Credits"><RangeTag text={rangeLabel} /></CardHead>
+          <ShareBar parts={[{ name: "Returns & product credits", value: d.totals.productValue }, { name: d.otherLabel || "Discounts, rebates & adjustments", value: d.totals.otherValue }]} fmt={money} />
+        </Card>
+      )}
+
+      <div className={ui.grid2} style={{ margin: "14px 0" }}>
+        {summary(["calendar", "By Month", "Month"], d.months, r => r.month, r => monthLabel(r.month),
+          <MonthBars rows={d.months.map(m => ({ month: m.month, value: m.value }))} fmt={moneyShort} />)}
+        {summary(["receipt", "What The Credits Were For", "Type", "Product credits are returns and corrections to product sales. The rest carry no product. Each credit note is counted once, under its main type."], d.kinds, r => r.kind, r => r.kind,
+          <Ring rows={d.kinds.map(k => ({ name: k.kind, value: k.value }))} fmt={money} />)}
+        {summary(["users", "By Sales Rep", "Sales rep"], d.reps, r => r.rep, r => r.rep,
+          <BarList rows={d.reps.map(r => ({ name: r.rep, value: r.value }))} fmt={money} limit={6} />)}
+        {summary(["user", "Raised By", "Person", `The person who created the credit note in ${sys}`], d.raisers, r => r.person, r => r.person)}
+      </div>
+      <Card style={{ ...card, overflowX: "auto", marginBottom: 14 }}>
+        {title("trophy", "Customers With The Most Credits", <RangeTag text={rangeLabel} />)}
+        {d.customers.length > 0 && <div style={{ marginBottom: 18 }}><BarList rows={d.customers.map(r => ({ name: r.customer, value: r.value }))} fmt={money} limit={5} share={false} /></div>}
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr><th style={head("left")}>Customer</th><th style={head()}>Credit notes</th><th style={head()}>Product credits</th><th style={head()}>{otherHead}</th><th style={head()}>Total</th></tr></thead>
+          <tbody>{d.customers.map(r => (
+            <tr key={r.customer}>
+              <td style={{ ...cell, fontWeight: 500 }}>{r.customer}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{money(r.product)}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{money(r.other)}</td>
+              <td style={{ ...cell, textAlign: "right", fontWeight: 500 }}>{money(r.value)}</td>
+            </tr>))}</tbody>
+        </table>
+      </Card>
+
+      <Card style={card}>
+        {title("receipt", "Every Credit Note", <RangeTag text={rangeLabel} />)}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search customer, credit note number or reason"
-            style={{ ...sel, minWidth: 280, flex: "1 1 280px" }} />
+            style={{ ...sel, minWidth: 0, flex: "1 1 280px" }} />
           <select value={month} onChange={e => setMonth(e.target.value)} style={sel}>{[<option key="all" value="All">All months</option>, ...d.months.map(m => <option key={m.month} value={m.month}>{monthLabel(m.month)}</option>)]}</select>
           <select value={kind} onChange={e => setKind(e.target.value)} style={sel}>{opts("All types", d.kinds.map(k => k.kind))}</select>
           <select value={rep} onChange={e => setRep(e.target.value)} style={sel}>{opts("All sales reps", d.reps.map(r => r.rep))}</select>
           <select value={by} onChange={e => setBy(e.target.value)} style={sel}>{opts("Raised by anyone", d.raisers.map(r => r.person))}</select>
           {(q || kind !== "All" || rep !== "All" || month !== "All" || by !== "All") && (
-            <button onClick={() => { setQ(""); setKind("All"); setRep("All"); setMonth("All"); setBy("All"); }}
-              style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Clear filters</button>)}
+            <button type="button" onClick={() => { setQ(""); setKind("All"); setRep("All"); setMonth("All"); setBy("All"); }}
+              className={`${ui.btn} ${ui.btnSmall}`}><Icon n="close" size={13} />Clear filters</button>)}
           <span style={{ flex: 1 }} />
-          <button onClick={csv} style={{ ...sel, cursor: "pointer", fontWeight: 600 }}>Download CSV</button>
+          <button type="button" onClick={csv} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download CSV</button>
         </div>
-        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: COLORS.mute, marginBottom: 10 }}>
           Showing {rows.length.toLocaleString()} of {d.notes.length.toLocaleString()} credit notes{filtered ? ` · ${money(shown)} of ${money(d.totals.value)}` : ""}. Click a row to read the whole reason.
         </div>
         <div style={{ overflow: "auto", maxHeight: 620 }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ position: "sticky", top: 0, background: T.bgTableHead, zIndex: 1 }}><tr>
+            <thead style={{ position: "sticky", top: 0, background: COLORS.card, zIndex: 1 }}><tr>
               <th style={head("left")}>Date</th><th style={head("left")}>Credit note</th><th style={head("left")}>Customer</th>
               <th style={head("left")}>Sales rep</th><th style={head("left")}>Raised by</th><th style={head("left")}>Type</th>
               <th style={head("left")}>Reason</th><th style={head()}>Amount</th>
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={8} style={{ ...cell, textAlign: "center", padding: 24, color: T.textMuted }}>No credit notes match</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={8} style={{ ...cell, textAlign: "center", padding: 24, color: COLORS.mute }}>No credit notes match</td></tr>}
               {rows.map(n => {
                 const isOpen = open === n.docNumber;
                 const text = n.reason || n.note || (n.about ? `(${n.about})` : "No reason logged");
                 return (
                   <tr key={n.docNumber} onClick={() => setOpen(isOpen ? null : n.docNumber)}
-                    style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: "pointer", verticalAlign: "top" }}>
+                    style={{ cursor: "pointer", verticalAlign: "top" }}>
                     <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.date}</td>
-                    <td style={{ ...cell, whiteSpace: "nowrap", color: T.textMuted }}>{n.docNumber}</td>
-                    <td style={{ ...cell, color: T.text, minWidth: 170 }}>{n.customer}</td>
-                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.rep}</td>
-                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.raisedBy}</td>
-                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{n.kind}</td>
-                    <td style={{ ...cell, minWidth: 260, maxWidth: 420, color: n.reason ? T.textRow : T.textLabel, lineHeight: 1.45 }}>
+                    <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.mute }}>{n.docNumber}</td>
+                    <td style={{ ...cell, minWidth: 170, fontWeight: 500 }}>{n.customer}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.ink2 }}>{n.rep}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.ink2 }}>{n.raisedBy}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.ink2 }}>{n.kind}</td>
+                    <td style={{ ...cell, minWidth: 260, maxWidth: 420, color: n.reason ? COLORS.ink2 : COLORS.mute, lineHeight: 1.45 }}>
                       {isOpen ? text : (text.length > 120 ? `${text.slice(0, 120)}…` : text)}
-                      {isOpen && n.reasonBy && <div style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>Logged by {n.reasonBy}{n.about ? ` · ${n.about}` : ""}{n.creditedInvoice ? ` · against ${n.creditedInvoice}` : ""}</div>}
+                      {isOpen && n.reasonBy && <div style={{ fontSize: 11, color: COLORS.mute, marginTop: 4 }}>Logged by {n.reasonBy}{n.about ? ` · ${n.about}` : ""}{n.creditedInvoice ? ` · against ${n.creditedInvoice}` : ""}</div>}
                     </td>
-                    <td style={{ ...cell, textAlign: "right", color: red, fontWeight: 700, whiteSpace: "nowrap" }}>{money(n.amount)}</td>
+                    <td style={{ ...cell, textAlign: "right", fontWeight: 500, whiteSpace: "nowrap" }}>{money(n.amount)}</td>
                   </tr>);
               })}
             </tbody>
           </table>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, paddingRight: 8, fontSize: 12, color: T.textHead, fontWeight: 700 }}>
-          {filtered ? "SHOWN" : "TOTAL"}&nbsp;CREDITED:&nbsp;<span style={{ color: red, marginLeft: 4 }}>{money(shown)}</span>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>
+          {filtered ? "SHOWN" : "TOTAL"}&nbsp;CREDITED<span style={{ color: red, fontSize: 18, fontWeight: 400, letterSpacing: 0 }}>{money(shown)}</span>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };
 
-const CreditsPanel = ({ source, theme, accent, currency = "NZD", rangeLabel = null }) => {
+const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
     let live = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setD(null); setErr(null);
     fetch(source, { cache: "no-store" })
       .then(r => r.json())
@@ -976,158 +969,85 @@ const CreditsPanel = ({ source, theme, accent, currency = "NZD", rangeLabel = nu
       .catch(e => live && setErr(e.message));
     return () => { live = false; };
   }, [source]);
-  const T = theme;
-  const headStyle = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
-  const tile = (label, value, note) => (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: T.textHead, marginTop: 6 }}>{value}</div>
-      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
-    </div>
-  );
+  const headStyle = thStyle;
   const loading = !d && !err;
-  if (d?.version === 2) return <CreditsOdoo d={d} theme={T} accent={accent} currency={currency} rangeLabel={rangeLabel} />;
+  if (d?.version === 2) return <CreditsOdoo d={d} currency={currency} rangeLabel={rangeLabel} />;
 
   return (
     <div style={{ marginTop: 28 }}>
-      <div style={{ color: T.textHead, marginBottom: 14 }}>
-        <SectionTitle icon="receipt" accent={accent}>Credit Notes</SectionTitle>
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, paddingLeft: 25 }}>Every credit note raised this period, who it went to, and the rep it sits under</div>
+      <div className={st.sectionHead}>
+        <div>
+          <SectionTitle icon="receipt">Credit Notes</SectionTitle>
+          <div className={st.sectionSub}>Every credit note raised this period, who it went to, and the rep it sits under</div>
+        </div>
+        <RangeTag text={rangeLabel} />
       </div>
-      {rangeLabel && <div style={{ marginBottom: 14 }}><RangeTag text={rangeLabel} theme={T} /></div>}
-      {err && <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 14 }}>Could not load: {err}</div>}
+      {err && <Notice tone="warn" style={{ marginBottom: 14 }}>Could not load: {err}</Notice>}
 
       {d?.totals && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
-          {tile("Credit Notes", d.totals.count.toLocaleString(), "Raised this period")}
-          {tile("Total Credited", fmtExact(d.totals.value, currency), "Across every rep and customer")}
+        <div style={{ marginBottom: 14 }}>
+          <TileStrip>
+            <Tile icon="receipt" label="Credit Notes" value={d.totals.count.toLocaleString()} note="Raised this period" />
+            <Tile icon="wallet" label="Total Credited" value={fmtExact(d.totals.value, currency)} note="Across every rep and customer" hot />
+          </TileStrip>
         </div>
       )}
 
       {/* By rep - same shape as the Sales by Rep table, with a TOTAL row */}
-      <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 14 }}>
-          <Icon name="user" size={15} style={{ marginRight: 8, color: accent }} />By Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
-        </div>
+      <Card style={{ marginBottom: 14 }}>
+        <CardHead icon="users" title={<>By Rep{loading && <span style={{ marginLeft: 10, verticalAlign: "middle" }}><Pill>Loading</Pill></span>}</>}><RangeTag text={rangeLabel} /></CardHead>
+        {d?.reps?.length > 0 && <div style={{ marginBottom: 18 }}><BarList rows={d.reps.map(r => ({ name: r.rep, value: r.value }))} fmt={(v) => fmtExact(v, currency)} limit={6} /></div>}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr>
-                <th style={{ ...headStyle, textAlign: "left" }}>Sales Rep</th>
-                <th style={headStyle}>Credit Notes</th>
-                <th style={headStyle}>Total Amount</th>
+                <th style={headStyle("left")}>Sales Rep</th>
+                <th style={headStyle()}>Credit Notes</th>
+                <th style={headStyle()}>Total Amount</th>
               </tr>
             </thead>
             <tbody>
               {!d?.reps?.length ? (
-                <tr><td colSpan={3} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
+                <tr><td colSpan={3} style={{ padding: "20px 10px", textAlign: "center", color: COLORS.mute }}>
                   {loading ? "Loading…" : "No credit notes in this period"}
                 </td></tr>
               ) : d.reps.map((r, i) => (
-                <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                  <td style={{ padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700 }}>{r.rep}</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: T.textSub }}>{r.count.toLocaleString()}</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#dc2626", fontWeight: 700 }}>{fmtExact(r.value, currency)}</td>
+                <tr key={i}>
+                  <td style={{ ...tdStyle, fontWeight: 500 }}>{r.rep}</td>
+                  <td style={{ ...tdStyle, textAlign: "right", color: COLORS.ink2 }}>{r.count.toLocaleString()}</td>
+                  <td style={{ ...tdStyle, textAlign: "right", fontWeight: 500 }}>{fmtExact(r.value, currency)}</td>
                 </tr>
               ))}
             </tbody>
             {d?.reps?.length > 0 && (
               <tfoot>
-                <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                  <td style={{ padding: "10px 12px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: T.textHead, fontWeight: 700 }}>{d.totals.count.toLocaleString()}</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#dc2626", fontWeight: 700 }}>{fmtExact(d.totals.value, currency)}</td>
+                <tr>
+                  <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+                  <td style={footStyle()}>{d.totals.count.toLocaleString()}</td>
+                  <td style={{ ...footStyle(), color: ORANGE }}>{fmtExact(d.totals.value, currency)}</td>
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* Every note - who it went to */}
-      <AdvancedTable theme={T} icon="receipt" title="Every Credit Note" range={rangeLabel}
+      <AdvancedTable icon="receipt" title="Every Credit Note" range={rangeLabel}
         subtitle="Most recent first" loading={loading} currency={currency} data={d?.notes || []}
         columns={[
-          { key: "date",      label: "Date",     color: T.textSub },
-          { key: "docNumber", label: "Doc #",    color: T.textMuted },
-          { key: "customer",  label: "Customer", color: T.text },
-          { key: "rep",       label: "Rep",      color: T.textSub },
-          { key: "amount",    label: "Amount",   align: "right", color: "#dc2626", format: (v, c) => fmtExact(v, c) },
+          { key: "date",      label: "Date",     color: COLORS.ink2 },
+          { key: "docNumber", label: "Doc #",    color: COLORS.mute },
+          { key: "customer",  label: "Customer", color: INK },
+          { key: "rep",       label: "Rep",      color: COLORS.ink2 },
+          { key: "amount",    label: "Amount",   align: "right", color: INK, format: (v, c) => fmtExact(v, c) },
         ]}
       />
       {d?.notes?.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, paddingRight: 8, fontSize: 12, color: T.textHead, fontWeight: 700 }}>
-          TOTAL&nbsp;CREDITED:&nbsp;<span style={{ color: "#dc2626", marginLeft: 4 }}>{fmtExact(d.totals.value, currency)}</span>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>
+          TOTAL&nbsp;CREDITED<span style={{ color: ORANGE, fontSize: 18, letterSpacing: 0 }}>{fmtExact(d.totals.value, currency)}</span>
         </div>
       )}
-    </div>
-  );
-};
-
-/* The three companies side by side, with when each was last read and whether
-   anything went wrong reading it. Shown next to each other and NOT added up:
-   North sells to South and Oceania, so a group total would count that twice. */
-const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
-  const T = theme;
-  const stamp = (iso) => {
-    try {
-      return new Date(iso).toLocaleString("en-NZ", { timeZone: "Pacific/Auckland", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-    } catch { return ""; }
-  };
-  return (
-    <div style={{ padding: "24px 32px 22px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ color: T.textHead }}>
-          <SectionTitle icon="building">All companies, {fyLabel}</SectionTitle>
-        </div>
-        <button onClick={() => window.location.reload()} title="Read everything again" aria-label="Refresh all data"
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, fontWeight: 600, borderRadius: 8,
-                   cursor: "pointer", background: "transparent", color: T.textSub, border: `1px solid ${T.border}` }}>
-          <Icon name="refresh" size={12} />Refresh
-        </button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14 }}>
-        {items.map(({ store, d, loading, failed }) => {
-          const t = d?.totals;
-          const notes = d?.problems || [];
-          const status = failed ? { c: "#dc2626", text: "Could not be read", tip: failed }
-            : loading || !d ? { c: "#9ca3af", text: "Reading now", tip: "" }
-            : notes.length ? { c: "#f59e0b", text: `${notes.length} ${notes.length === 1 ? "note" : "notes"}`, tip: notes.join("\n") }
-            : { c: "#16a34a", text: "All read", tip: "Every source answered" };
-          const active = store.id === activeId;
-          return (
-            <div key={store.id} onClick={() => onSelect(store.id)} role="button" tabIndex={0}
-              onKeyDown={e => { if (e.key === "Enter") onSelect(store.id); }}
-              style={{ background: T.bgCard, border: `1px solid ${active ? store.color : T.border}`, borderRadius: 16, padding: "16px 18px", cursor: "pointer" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.textHead }}>
-                  <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: store.color, marginRight: 8 }} />{store.name}
-                </div>
-                {t && t.priorComparable && t.growthPct !== null && t.growthPct !== undefined && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: t.growthPct >= 0 ? "#16a34a" : "#dc2626" }}>
-                    <Trend up={t.growthPct >= 0} />{Math.abs(t.growthPct)}%
-                  </span>
-                )}
-              </div>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: T.textHead, marginTop: 8 }}>
-                {t ? fmtExact(t.revenue, store.currency).replace(/\.\d\d$/, "") : "-"}
-              </div>
-              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
-                {t ? `Sales${t.marginPct !== null && t.marginPct !== undefined ? ` at ${t.marginPct}% margin` : ", margin not available"}` : "Sales"}
-                {d?.range ? ` · ${fmtDay(d.range.start)} to ${fmtDay(d.range.end)}` : ""}
-              </div>
-              <div title={status.tip} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.borderFaint}`, fontSize: 10, color: T.textMuted }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: status.c, flexShrink: 0 }} />
-                <span style={{ fontWeight: 600 }}>{status.text}</span>
-                {d?.generatedAt && <span>· read {stamp(d.generatedAt)}</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ fontSize: 11, color: T.textMuted, marginTop: 14, lineHeight: 1.5 }}>
-        Shown side by side, not added together: North sells to South and Oceania, so a group total would count that trade twice. Growth is against the same days last year.
-      </div>
     </div>
   );
 };
@@ -1137,8 +1057,7 @@ const CompanySummary = ({ items, activeId, onSelect, theme, fyLabel }) => {
    projection from last year's shape, not a budget. */
 /* Worthy Products only: sales to the sister companies (Dutch Rusk, Worthy Oceania), kept out of every figure above and
    reconciled back to everything invoiced. Same basis as the Sunday email and the chat (docs/SALES-BASIS.md). */
-const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent, companyName = "Worthy Products" }) => {
-  const T = theme;
+const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Products" }) => {
   // Margin to two decimals from the figures themselves, so it reads exactly like the Sunday email.
   const m2 = (costed, cost) => (costed > 0 && cost != null ? Math.round(((costed - cost) / costed) * 10000) / 100 : null);
   if (!cur?.sisterSales) return null;
@@ -1150,9 +1069,9 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent, companyNa
   ].filter(Boolean);
   const money = (v) => (v == null ? "-" : fmtExact(v, currency));
   const pctTxt = (v) => (v == null ? "-" : `${Number(v).toFixed(2)}%`);
-  const th = { textAlign: "right", padding: "8px 10px", fontSize: 11, color: T.textLabel, fontWeight: 600, whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` };
-  const td = { textAlign: "right", padding: "9px 10px", fontSize: 13, color: T.text, whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` };
-  const name = { ...td, textAlign: "left", fontWeight: 600, color: T.textHead };
+  const th = { ...thStyle("right") };
+  const td = { ...tdStyle, textAlign: "right", fontSize: 13, whiteSpace: "nowrap" };
+  const name = { ...td, textAlign: "left", fontWeight: 500 };
   // Whichever sister companies this business has (lib/salesBasis.js SISTER_SETS), in that order.
   const sisterKeys = Object.keys(cur.sisterSales).filter((k) => cur.sisterSales[k] && cur.sisterSales[k].name);
   const rows = [
@@ -1164,45 +1083,49 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, theme, accent, companyNa
       return c.wp.costed != null && costed > 0 ? Math.round(((costed - cost) / costed) * 10000) / 100 : null;
     }, true],
   ];
+  // The share of all product sales, financial year to date (the last column): this company first, then each sister.
+  const fy = cols[cols.length - 1];
+  const parts = [{ name: companyName, value: fy.wp.sales ?? 0 }, ...sisterKeys.map((k) => ({ name: cur.sisterSales[k].name, value: fy.s[k]?.sales ?? 0 }))];
   return (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 28, overflowX: "auto" }}>
-      <div style={{ color: T.textHead, marginBottom: 12 }}>
-        <SectionTitle icon="building" accent={accent}>Sister company sales</SectionTitle>
-      </div>
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 640 }}>
-        <thead>
-          <tr>
-            <th style={{ ...th, textAlign: "left" }}>Company</th>
-            {cols.map((c) => (
-              <th key={c.label} colSpan={2} style={th}>
-                <div>{c.label}</div>
-                <div style={{ marginTop: 4 }}><RangeTag text={c.range} theme={T} /></div>
-              </th>
-            ))}
-          </tr>
-          <tr>
-            <th style={th} />
-            {cols.map((c) => [<th key={c.label + "s"} style={th}>Sales</th>, <th key={c.label + "m"} style={th}>Margin</th>])}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([label, sales, margin, strong]) => (
-            <tr key={label} style={strong ? { background: `${accent}10` } : undefined}>
-              <td style={name}>{label}</td>
-              {cols.map((c) => [
-                <td key={c.label + "s"} style={{ ...td, fontWeight: strong ? 700 : 400 }}>{money(sales(c))}</td>,
-                <td key={c.label + "m"} style={td}>{pctTxt(margin(c))}</td>,
-              ])}
+    <Card style={{ marginBottom: 14 }}>
+      <CardHead icon="building" title="Sister company sales"><RangeTag text={fy.range} /></CardHead>
+      <Mini icon="pie">Share of all product sales, financial year to date</Mini>
+      <ShareBar parts={parts} fmt={moneyShort} />
+      <div style={{ overflowX: "auto", marginTop: 20 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 640 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "left", borderBottom: 0 }}>Company</th>
+              {cols.map((c) => (
+                <th key={c.label} colSpan={2} style={{ ...th, borderBottom: 0, verticalAlign: "bottom" }}>
+                  <div>{c.label}</div>
+                  <div style={{ marginTop: 6 }}><RangeTag text={c.range} /></div>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            <tr>
+              <th style={th} />
+              {cols.map((c) => [<th key={c.label + "s"} style={th}>Sales</th>, <th key={c.label + "m"} style={th}>Margin</th>])}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, sales, margin, strong]) => (
+              <tr key={label} style={strong ? { background: inkA(0.035) } : undefined}>
+                <td style={name}>{label}</td>
+                {cols.map((c) => [
+                  <td key={c.label + "s"} style={{ ...td, fontWeight: strong ? 500 : 400 }}>{money(sales(c))}</td>,
+                  <td key={c.label + "m"} style={{ ...td, color: COLORS.ink2 }}>{pctTxt(margin(c))}</td>,
+                ])}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 };
 
-const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
-  const T = theme;
+const ForecastCard = ({ cur, prior, currency, fyLabel }) => {
   const t = cur?.totals;
   if (!cur || !t || cur.range?.complete || !t.priorComparable) return null;
   const lastYear = prior?.totals;
@@ -1215,35 +1138,39 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
   const projected = ready ? done + rest * pace : null;
   const flat = ready ? done + rest : null;
   const money = (v) => fmtExact(v, currency).replace(/\.\d\d$/, "");
-  const tile = (label, value, note, strong) => (
-    <div style={{ background: strong ? `${accent}12` : "transparent", border: `1px solid ${strong ? accent + "55" : T.border}`, borderRadius: 14, padding: "14px 16px" }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textLabel }}>{label}</div>
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 21, fontWeight: 700, color: T.textHead, marginTop: 6 }}>{value}</div>
-      {note && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{note}</div>}
-    </div>
-  );
+  // "Up 3.2%" / "Down 3.2%" on last year, rounded exactly as before, drawn as a triangle.
+  const onLast = (ratio) => { const v = Math.abs(Math.round((ratio - 1) * 1000) / 10); return <><Delta value={ratio >= 1 ? v : -v} /> <span className={ui.was}>on last year</span></>; };
   return (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 28 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <div style={{ color: T.textHead }}>
-          <SectionTitle icon="forecast" accent={accent}>Year-end forecast, {fyLabel}</SectionTitle>
-        </div>
-        <RangeTag text={`${fmtDay(cur.range.start)} to ${fmtDay(cur.range.lastDay)}`} theme={T} />
-      </div>
+    <Card style={{ marginBottom: 14 }}>
+      <CardHead icon="forecast" title={`Year-end forecast, ${fyLabel}`}>
+        <RangeTag text={`${fmtDay(cur.range.start)} to ${fmtDay(cur.range.lastDay)}`} />
+      </CardHead>
       {!ready ? (
-        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>Reading last year's figures. This can take up to a minute the first time.</div>
+        <div style={{ fontSize: 13, color: COLORS.mute, lineHeight: 1.6 }}>Reading last year&apos;s figures. This can take up to a minute the first time.</div>
       ) : (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
-            {tile("Sales to date", money(done), `${fmtDay(cur.range.start)} to ${fmtDay(cur.range.end)}`)}
-            {tile("Same days last year", money(sameSpan), `${pace >= 1 ? "Up" : "Down"} ${Math.abs(Math.round((pace - 1) * 1000) / 10)}% on last year`)}
-            {tile("Last year, full year", money(full), "Actual, finished")}
-            {tile("If the rest matches last year", money(flat), `${flat >= full ? "Up" : "Down"} ${Math.abs(Math.round((flat / full - 1) * 1000) / 10)}% on last year`)}
-            {tile("At this year's pace", money(projected), `${projected >= full ? "Up" : "Down"} ${Math.abs(Math.round((projected / full - 1) * 1000) / 10)}% on last year`, true)}
+        <div className={st.forecast}>
+          <div>
+            <div className={ui.statNum} style={{ color: ORANGE, fontSize: "clamp(26px, 3vw, 36px)" }}>{money(projected)}</div>
+            <div className={ui.statLabel}>At this year&apos;s pace</div>
+            <div style={{ marginTop: 4 }}>{onLast(projected / full)}</div>
+            <div style={{ marginTop: 18 }}>
+              <BarList share={false} fmt={money} rows={[
+                { name: "At this year's pace", value: projected },
+                { name: "If the rest matches last year", value: flat },
+                { name: "Last year, full year", value: full },
+                { name: "Sales to date", value: done },
+              ]} />
+            </div>
           </div>
-        </>
+          <StatLine>
+            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(done)}</div><div className={ui.statLabel}>Sales to date</div><div className={ui.was} style={{ marginTop: 4 }}>{fmtDay(cur.range.start)} to {fmtDay(cur.range.end)}</div></div>
+            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(sameSpan)}</div><div className={ui.statLabel}>Same days last year</div><div style={{ marginTop: 4 }}>{onLast(pace)}</div></div>
+            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(full)}</div><div className={ui.statLabel}>Last year, full year</div><div className={ui.was} style={{ marginTop: 4 }}>Actual, finished</div></div>
+            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(flat)}</div><div className={ui.statLabel}>If the rest matches last year</div><div style={{ marginTop: 4 }}>{onLast(flat / full)}</div></div>
+          </StatLine>
+        </div>
       )}
-    </div>
+    </Card>
   );
 };
 
@@ -1254,9 +1181,12 @@ const ForecastCard = ({ cur, prior, currency, theme, accent, fyLabel }) => {
 /* Whole money to the cent, as the finance sheet prints it: $2,568,000.00 */
 const KPI_CENTS = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const KPI_DOLLAR = (v) => (v === null || v === undefined ? "-" : `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString("en-NZ")}`);
-/* A plain heading for each group on the Analytics page. */
+/* A plain heading for each group on the Analytics page, with an icon that fits it. */
+const GROUP_ICONS = { "Categories & Products": "award", "Fast & Slow Movers": "zap", "Customers": "users" };
 const GroupTitle = ({ text }) => (
-  <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#475569", margin: "30px 0 12px", paddingBottom: 8, borderBottom: "2px solid rgba(100,116,139,0.25)" }}>{text}</div>
+  <div className={st.groupTitle}>
+    <span className={ui.titleIcon}><Icon n={GROUP_ICONS[text] || "grid"} size={15} /></span>{text}
+  </div>
 );
 
 /* Sales vs Target, financial year (April to March), ex GST. The targets are the
@@ -1265,13 +1195,12 @@ const GroupTitle = ({ text }) => (
    always agree. "vs pace" compares sales with what the budget says should have been
    sold by now: every finished month in full, plus the part of the current month
    that has passed. */
-const SalesVsTargetTable = ({ theme, payload, company = "north" }) => {
+const SalesVsTargetTable = ({ payload, company = "north" }) => {
   const year = payload?.fy;
   // Targets are private: loaded from the dashboard-login-only /api/targets, never built into the page's JavaScript.
   const [allTargets, setAllTargets] = useState([]);
   useEffect(() => { fetch("/api/targets", { cache: "no-store" }).then(r => (r.ok ? r.json() : { targets: [] })).then(j => setAllTargets(Array.isArray(j.targets) ? j.targets : [])).catch(() => setAllTargets([])); }, []);
   const targets = allTargets.filter(t => t.fy === year && (t.company || "north") === company);
-  const barColor = (p) => (p >= 100 ? "#16a34a" : p >= 90 ? "#65a30d" : p >= 75 ? "#f59e0b" : "#dc2626");
   const rows = !payload ? [] : targets.map(t => {
     const rep = (payload.reps || []).find(r => r.name === t.rep);
     const fyTarget = fyTargetOf(t);
@@ -1296,37 +1225,57 @@ const SalesVsTargetTable = ({ theme, payload, company = "north" }) => {
     };
   });
   const range = payload?.range ? `${fmtDay(payload.range.start)} to ${fmtDay(payload.range.end)}` : null;
-  return (
-    <AdvancedTable theme={theme} icon="target" title="Sales vs Target"
-      subtitle="Financial year targets (April to March), ex GST. Sales are the same figures as Sales by Rep." range={range}
-      loading={!payload} currency="NZD" data={rows}
-      columns={[
-        { key: "rep", label: "Rep", color: theme.text },
-        { key: "fyTarget", label: "FY Target", align: "right", color: theme.textSub, format: KPI_CENTS },
-        { key: "ytd", label: "FY Sales to Date", align: "right", color: theme.textHead, format: v => <span style={{ fontWeight: 700 }}>{KPI_CENTS(v)}</span> },
-        { key: "pct", label: "% of FY Target", align: "left", format: v => (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
-            <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(128,128,128,0.2)", overflow: "hidden" }}>
-              <div style={{ width: `${Math.min(100, Math.max(0, v))}%`, height: "100%", background: barColor(v) }} />
+  // Progress to each rep's FY target. The fill is ink, or the accent when the rep is behind budget to date; the thin
+  // mark is where the budget says they should be by now (sales less "vs budget to date").
+  const visual = (
+    <div className={st.targets}>
+      {rows.map(r => {
+        const behind = r.vsPace < 0;
+        const mark = r.fyTarget ? ((r.ytd - r.vsPace) / r.fyTarget) * 100 : null;
+        return (
+          <div key={r.rep} className={st.targetRow}>
+            <span className={st.targetName}>{r.rep}</span>
+            <div className={st.targetTrack}>
+              <div style={{ width: `${Math.min(100, Math.max(0, r.pct))}%`, background: behind ? ORANGE : INK, opacity: behind ? 1 : 0.82 }} />
+              {mark !== null && mark > 0 && mark <= 100 && <b style={{ left: `${mark}%` }} title="Budget to date" />}
             </div>
-            <span style={{ color: barColor(v), fontWeight: 600, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
+            <span className={st.targetPct} style={{ color: behind ? ORANGE : INK }}>{r.pct.toFixed(1)}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+  return (
+    <AdvancedTable icon="target" title="Sales vs Target"
+      subtitle="Financial year targets (April to March), ex GST. Sales are the same figures as Sales by Rep." range={range}
+      loading={!payload} currency="NZD" data={rows} visual={visual}
+      columns={[
+        { key: "rep", label: "Rep", color: INK },
+        { key: "fyTarget", label: "FY Target", align: "right", color: COLORS.ink2, format: KPI_CENTS },
+        { key: "ytd", label: "FY Sales to Date", align: "right", color: INK, format: v => <span style={{ fontWeight: 500 }}>{KPI_CENTS(v)}</span> },
+        { key: "pct", label: "% of FY Target", align: "left", format: (v, _cur, row) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
+            <div style={{ flex: 1, height: 6, borderRadius: 999, background: inkA(0.07), overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, Math.max(0, v))}%`, height: "100%", borderRadius: 999, background: row.vsPace < 0 ? ORANGE : INK, opacity: row.vsPace < 0 ? 1 : 0.8 }} />
+            </div>
+            <span style={{ color: row.vsPace < 0 ? ORANGE : INK, fontWeight: 500, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
           </div>) },
-        { key: "remaining", label: "Remaining", align: "right", color: theme.textSub, format: v => (v <= 0 ? "Target met" : KPI_CENTS(v)) },
+        { key: "remaining", label: "Remaining", align: "right", color: COLORS.ink2, format: v => (v <= 0 ? "Target met" : KPI_CENTS(v)) },
         { key: "vsPace", label: "vs Budget to Date", align: "right", format: v => (
-          <span style={{ color: v >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v >= 0 ? "+" : "-"}{KPI_CENTS(Math.abs(v))}</span>) },
-        { key: "monthSales", label: "This Month", align: "right", color: theme.textRow, format: (v, _cur, row) => row.monthLabel
-          ? <span>{KPI_CENTS(v)} <span style={{ color: theme.textSub }}>of {KPI_CENTS(row.monthTarget)}</span></span> : "-" },
-        { key: "gpPct", label: "GP % (target)", align: "right", color: theme.textRow, format: (v, _cur, row) => v == null ? "-"
-          : <span><span style={{ fontWeight: 600, color: v >= row.targetGpPct ? "#16a34a" : "#dc2626" }}>{v.toFixed(1)}%</span> <span style={{ color: theme.textSub }}>({row.targetGpPct.toFixed(1)}%)</span></span> },
-        { key: "gpYtd", label: "GP $ to Date (FY target)", align: "right", color: theme.textRow, format: (v, _cur, row) => v == null ? "-"
-          : <span>{KPI_CENTS(v)} <span style={{ color: theme.textSub }}>({KPI_CENTS(row.gpTarget)})</span></span> },
+          <span className={`${ui.trend} ${v < 0 ? ui.trendDown : ""}`} style={{ fontSize: 12.5 }}><Icon n={v >= 0 ? "tri-up" : "tri-down"} size={8} />{v >= 0 ? "+" : "-"}{KPI_CENTS(Math.abs(v))}</span>) },
+        { key: "monthSales", label: "This Month", align: "right", color: INK, format: (v, _cur, row) => row.monthLabel
+          ? <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>of {KPI_CENTS(row.monthTarget)}</span></span> : "-" },
+        { key: "gpPct", label: "GP % (target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
+          : <span><span style={{ fontWeight: 500, color: v >= row.targetGpPct ? INK : ORANGE }}>{v.toFixed(1)}%</span> <span style={{ color: COLORS.mute }}>({row.targetGpPct.toFixed(1)}%)</span></span> },
+        { key: "gpYtd", label: "GP $ to Date (FY target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
+          : <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>({KPI_CENTS(row.gpTarget)})</span></span> },
       ]}
     />
   );
 };
 
 // ── Sales Rep Breakdown - ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, accent, exact = false }) => {
+const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, exact = false }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
   const marginByName = {};
   for (const m of (repMargins || [])) marginByName[m.name] = m;
@@ -1349,10 +1298,12 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
   const money = exact ? fmtExact : fmtK;
   const keep  = (n) => exact ? n : Math.round(n);
 
-  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev > 0 ? "#16a34a" : rev < 0 ? "#dc2626" : T.textSub, fontSize: 12, whiteSpace: "nowrap", fontWeight: rev !== 0 ? 600 : 400 });
-  const repCellStyle = { padding: "10px 12px", color: T.textHead, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" };
-  const headStyle    = { padding: "10px 12px", textAlign: "right", color: T.textLabel, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}`, background: T.bgTableHead };
-  const numStyle     = (v) => ({ padding: "10px 12px", textAlign: "right", color: T.textSub, fontSize: 12, whiteSpace: "nowrap" });
+  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev < 0 ? ORANGE : rev > 0 ? INK : COLORS.mute, fontSize: 12.5, whiteSpace: "nowrap", fontWeight: 400, fontVariantNumeric: "tabular-nums" });
+  // Margin colour: below the 20% margin target is the accent, otherwise quiet ink.
+  const mCol = (v) => (v == null ? COLORS.mute : v >= 20 ? COLORS.ink2 : ORANGE);
+  const repCellStyle = { padding: "10px 12px", color: INK, fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap" };
+  const headStyle    = { ...thStyle(), padding: "10px 12px", background: COLORS.card };
+  const numStyle     = () => ({ padding: "10px 12px", textAlign: "right", color: COLORS.ink2, fontSize: 12.5, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
 
   // Annual rows (summary) - merged with cost/margin when available
   const annualRows = (salespeople || []).map(s => {
@@ -1373,7 +1324,6 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
   const hasMargin = annualRows.some(r => r.marginPct !== null && r.marginPct !== undefined);
   // Reps whose margin was withheld because the source holds no cost for what they sold.
   const withheld  = (repMargins || []).filter(m => m.marginWithheld);
-  const darkish   = T.bgTableHead;
 
   const monthlyPivot = salespeopleMonthly || [];
 
@@ -1388,33 +1338,40 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
     monthTotal: rep.weekly.filter(x => x.month === weeklyMonth).reduce((s, x) => s + x.revenue, 0),
   })).filter(rep => rep.monthTotal !== 0 || (salespeopleWeekly || []).length <= 3);
 
-  const pillBtn = (active) => ({
-    padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
-    border: active ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
-    background: active ? `${accent}18` : "transparent",
-    color: active ? accent : T.textMuted, transition: "all 0.15s",
-  });
+  // Revenue by month across every rep (the same sums as the TOTAL row of the monthly view), months not yet traded left off the end.
+  const monthBarRows = (() => {
+    const list = displayMonths.map((mn, fi) => ({ label: mn, value: monthlyPivot.reduce((s, rep) => s + (monthAt(rep.months, fi)?.revenue || 0), 0) }));
+    while (list.length && !list[list.length - 1].value) list.pop();
+    return list;
+  })();
 
   return (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginTop: 28 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: T.textHead, fontWeight: 700 }}>
-            <Icon name="user" size={15} style={{ marginRight: 8, color: accent }} />Sales by Rep {loading && <span style={{ fontSize: 10, color: accent, marginLeft: 8 }}>Loading…</span>}
-          </div>
-          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>
-            {repView === "annual"  ? `${fyMonths ? "FY totals" : "Annual totals"} · ${currency}` :
-             repView === "monthly" ? `${fyMonths ? "FY monthly" : "Monthly"} breakdown by rep · ${currency}` :
-                                     `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} · ${currency}`}
-          </div>
-          {(repView === "weekly" ? monthRangeLabel : rangeLabel) && <div style={{ marginTop: 8 }}><RangeTag text={repView === "weekly" ? monthRangeLabel : rangeLabel} theme={T} /></div>}
+    <Card style={{ marginTop: 14 }}>
+      <CardHead icon="users" title={<>Sales by Rep{loading && <span style={{ marginLeft: 10, verticalAlign: "middle" }}><Pill>Loading</Pill></span>}</>}>
+        <RangeTag text={repView === "weekly" ? monthRangeLabel : rangeLabel} />
+        <div className={ui.seg}>
+          <button type="button" onClick={() => setRepView("annual")}  className={repView === "annual" ? ui.segOn : ""}>Annual</button>
+          <button type="button" onClick={() => setRepView("monthly")} className={repView === "monthly" ? ui.segOn : ""}>Monthly</button>
+          <button type="button" onClick={() => setRepView("weekly")}  className={repView === "weekly" ? ui.segOn : ""}>Weekly</button>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => setRepView("annual")}  style={pillBtn(repView === "annual")}>Annual</button>
-          <button onClick={() => setRepView("monthly")} style={pillBtn(repView === "monthly")}>Monthly</button>
-          <button onClick={() => setRepView("weekly")}  style={pillBtn(repView === "weekly")}>Weekly</button>
-        </div>
+      </CardHead>
+      <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>
+        {repView === "annual"  ? `${fyMonths ? "FY totals" : "Annual totals"} · ${currency}` :
+         repView === "monthly" ? `${fyMonths ? "FY monthly" : "Monthly"} breakdown by rep · ${currency}` :
+                                 `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} · ${currency}`}
       </div>
+      {repView === "annual" && annualRows.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <Mini icon="bars">Revenue by rep</Mini>
+          <BarList rows={annualRows.map(r => ({ name: r.name, value: r.revenue }))} fmt={(v) => money(v, currency)} limit={8} />
+        </div>
+      )}
+      {repView === "monthly" && monthBarRows.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <Mini icon="bars">Revenue by month, all reps</Mini>
+          <MonthBars rows={monthBarRows} fmt={moneyShort} />
+        </div>
+      )}
 
       {/* Annual view */}
       {repView === "annual" && (
@@ -1439,15 +1396,15 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                   <td style={repCellStyle}>{r.name}</td>
                   <td style={numStyle()}>{r.orders.toLocaleString()}</td>
-                  <td style={{ ...cellStyle(r.revenue), color: accent, fontWeight: 700 }}>{money(r.revenue, currency)}</td>
+                  <td style={{ ...cellStyle(r.revenue), color: INK, fontWeight: 500 }}>{money(r.revenue, currency)}</td>
                   <td style={cellStyle(r.aov)}>{money(r.aov, currency)}</td>
                   {hasMargin && (
-                    <td style={{ ...cellStyle(r.grossProfit || 0), color: (r.grossProfit ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                    <td style={{ ...cellStyle(r.grossProfit || 0), color: (r.grossProfit ?? 0) >= 0 ? INK : ORANGE, fontWeight: 500 }}>
                       {r.grossProfit !== null ? money(r.grossProfit, currency) : <span style={{ color: T.textLabel }}>-</span>}
                     </td>
                   )}
                   {hasMargin && (
-                    <td style={{ ...cellStyle(0), color: (r.marginPct ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
+                    <td style={{ ...cellStyle(0), color: mCol(r.marginPct), fontWeight: 500 }}>
                       {r.marginPct !== null && r.marginPct !== undefined ? `${r.marginPct}%` : <span style={{ color: T.textLabel }}>-</span>}
                     </td>
                   )}
@@ -1471,11 +1428,11 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 <tfoot>
                   <tr style={{ borderTop: `1px solid ${T.border}` }}>
                     <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
-                    <td style={{ ...numStyle(), color: T.textHead, fontWeight: 700 }}>{orders.toLocaleString()}</td>
-                    <td style={{ ...cellStyle(revenue), color: accent, fontWeight: 700 }}>{money(keep(revenue), currency)}</td>
-                    <td style={{ ...cellStyle(1), fontWeight: 700 }}>{orders > 0 ? money(keep(revenue / orders), currency) : "-"}</td>
-                    {hasMargin && <td style={{ ...cellStyle(gp || 0), color: (gp ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{gp != null ? money(keep(gp), currency) : "-"}</td>}
-                    {hasMargin && <td style={{ ...cellStyle(0), color: (pct ?? 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{pct != null ? `${pct}%` : "-"}</td>}
+                    <td style={{ ...numStyle(), color: T.textHead, fontWeight: 500 }}>{orders.toLocaleString()}</td>
+                    <td style={{ ...cellStyle(revenue), color: INK, fontWeight: 500 }}>{money(keep(revenue), currency)}</td>
+                    <td style={{ ...cellStyle(1), fontWeight: 500 }}>{orders > 0 ? money(keep(revenue / orders), currency) : "-"}</td>
+                    {hasMargin && <td style={{ ...cellStyle(gp || 0), color: (gp ?? 0) >= 0 ? INK : ORANGE, fontWeight: 500 }}>{gp != null ? money(keep(gp), currency) : "-"}</td>}
+                    {hasMargin && <td style={{ ...cellStyle(0), color: mCol(pct), fontWeight: 500 }}>{pct != null ? `${pct}%` : "-"}</td>}
                   </tr>
                 </tfoot>
               );
@@ -1492,7 +1449,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
                 {displayMonths.map(m => <th key={m} style={headStyle}>{m}</th>)}
-                <th style={{ ...headStyle, color: accent }}>Total Rev</th>
+                <th style={{ ...headStyle, color: INK }}>Total Rev</th>
                 {hasMargin && <th style={headStyle}>Gross Profit</th>}
                 {hasMargin && <th style={headStyle}>Margin</th>}
               </tr>
@@ -1511,7 +1468,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                     {displayMonths.map((mn, fi) => {
                       const m  = monthAt(rep.months, fi) || { revenue: 0, orders: 0 };
                       const mm = monthAt(marginByName[rep.name]?.months, fi);
-                      const mColor = mm?.marginPct != null ? (mm.marginPct >= 20 ? "#4ade80" : mm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
+                      const mColor = mCol(mm?.marginPct);
                       return (
                         <td key={mn} style={{ ...cellStyle(m.revenue), verticalAlign: "top" }}>
                           {/* A month of net returns is a real, negative figure. Printing
@@ -1521,20 +1478,20 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                           {m.revenue !== 0 ? (
                             <>
                               <div>{money(m.revenue, currency)}</div>
-                              {mm?.marginPct != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{mm.marginPct}%</div>}
+                              {mm?.marginPct != null && <div style={{ fontSize: 10.5, color: mColor, fontWeight: 500, marginTop: 2 }}>{mm.marginPct}%</div>}
                             </>
                           ) : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
                       );
                     })}
-                    <td style={{ ...cellStyle(total), color: accent, fontWeight: 700, verticalAlign: "top" }}>{money(keep(total), currency)}</td>
+                    <td style={{ ...cellStyle(total), color: INK, fontWeight: 500, verticalAlign: "top" }}>{money(keep(total), currency)}</td>
                     {hasMargin && (
-                      <td style={{ ...cellStyle(marg?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
+                      <td style={{ ...cellStyle(marg?.grossProfit || 0), color: INK, fontWeight: 500 }}>
                         {marg?.grossProfit != null ? money(marg.grossProfit, currency) : <span style={{ color: T.textLabel }}>-</span>}
                       </td>
                     )}
                     {hasMargin && (
-                      <td style={{ ...cellStyle(0), color: (marg?.marginPct ?? 0) >= 20 ? "#4ade80" : (marg?.marginPct ?? 0) >= 0 ? accent : "#f87171", fontWeight: 700 }}>
+                      <td style={{ ...cellStyle(0), color: mCol(marg?.marginPct), fontWeight: 500 }}>
                         {marg?.marginPct != null ? `${marg.marginPct}%` : <span style={{ color: T.textLabel }}>-</span>}
                       </td>
                     )}
@@ -1556,13 +1513,13 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                     const colMargRv = hasMargin ? Object.values(marginByName).reduce((s, r) => s + (monthAt(r.months, fi)?.marginRevenue ?? monthAt(r.months, fi)?.revenue ?? 0), 0) : 0;
                     const colGP     = hasMargin ? colMargRv - colCost : null;
                     const colMargin = colMargRv > 0 && colGP != null ? parseFloat(((colGP / colMargRv) * 100).toFixed(1)) : null;
-                    const mColor    = colMargin != null ? (colMargin >= 20 ? "#4ade80" : colMargin >= 0 ? accent : "#f87171") : T.textLabel;
+                    const mColor    = mCol(colMargin);
                     return (
-                      <td key={mn} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
+                      <td key={mn} style={{ ...cellStyle(colTotal), color: T.textHead, fontWeight: 500, verticalAlign: "top" }}>
                         {colTotal !== 0 ? (
                           <>
                             <div>{money(keep(colTotal), currency)}</div>
-                            {colMargin != null && <div style={{ fontSize: 9, color: mColor, fontWeight: 700, marginTop: 2 }}>{colMargin}%</div>}
+                            {colMargin != null && <div style={{ fontSize: 10.5, color: mColor, fontWeight: 500, marginTop: 2 }}>{colMargin}%</div>}
                           </>
                         ) : "-"}
                       </td>
@@ -1577,9 +1534,9 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                     const totalMarginPct = totalGP != null && totalMargRv > 0 ? parseFloat(((totalGP / totalMargRv) * 100).toFixed(1)) : null;
                     return (
                       <>
-                        <td style={{ ...cellStyle(1), color: accent, fontWeight: 700 }}>{money(keep(grandTotal), currency)}</td>
-                        {hasMargin && <td style={{ ...cellStyle(totalGP || 0), color: "#C97C9E", fontWeight: 700 }}>{totalGP != null ? money(totalGP, currency) : "-"}</td>}
-                        {hasMargin && <td style={{ ...cellStyle(0), color: totalMarginPct != null ? (totalMarginPct >= 20 ? "#4ade80" : accent) : T.textLabel, fontWeight: 700 }}>{totalMarginPct != null ? `${totalMarginPct}%` : "-"}</td>}
+                        <td style={{ ...cellStyle(1), color: INK, fontWeight: 500 }}>{money(keep(grandTotal), currency)}</td>
+                        {hasMargin && <td style={{ ...cellStyle(totalGP || 0), color: INK, fontWeight: 500 }}>{totalGP != null ? money(totalGP, currency) : "-"}</td>}
+                        {hasMargin && <td style={{ ...cellStyle(0), color: mCol(totalMarginPct), fontWeight: 500 }}>{totalMarginPct != null ? `${totalMarginPct}%` : "-"}</td>}
                       </>
                     );
                   })()}
@@ -1593,14 +1550,9 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
       {/* Weekly view */}
       {repView === "weekly" && (
         <>
-          <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
+          <div className={ui.seg} style={{ marginBottom: 16 }}>
             {MONTH_NAMES.map((mn, mi) => (
-              <button key={mn} onClick={() => onWeeklyMonthChange(mi)} style={{
-                padding: "5px 11px", borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
-                background: weeklyMonth === mi ? `${accent}15` : "transparent",
-                color: weeklyMonth === mi ? accent : T.textMuted, transition: "all 0.15s",
-              }}>{mn}</button>
+              <button type="button" key={mn} onClick={() => onWeeklyMonthChange(mi)} className={weeklyMonth === mi ? ui.segOn : ""}>{mn}</button>
             ))}
           </div>
           <div style={{ overflowX: "auto" }}>
@@ -1609,7 +1561,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 <tr>
                   <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
                   {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}<div style={{ fontSize: 9, fontWeight: 500, letterSpacing: 0, textTransform: "none", color: T.textMuted, marginTop: 2 }}>{weekRangeOf(i + 1) || " "}</div></th>)}
-                  <th style={{ ...headStyle, color: accent }}>Month Total</th>
+                  <th style={{ ...headStyle, color: INK }}>Month Total</th>
                   {hasMargin && <th style={headStyle}>Gross Profit</th>}
                   {hasMargin && <th style={headStyle}>Margin</th>}
                 </tr>
@@ -1630,7 +1582,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                       <td style={repCellStyle}>{rep.name}</td>
                       {rep.weeks.map((w, wi) => {
                         const wm = repW.find(x => x.month === weeklyMonth && x.week === wi + 1);
-                        const wColor = wm?.marginPct != null ? (wm.marginPct >= 20 ? "#4ade80" : wm.marginPct >= 0 ? accent : "#f87171") : T.textLabel;
+                        const wColor = mCol(wm?.marginPct);
                         return (
                           <td key={wi} style={{ ...cellStyle(w.revenue), verticalAlign: "top" }}>
                             {/* Negative weeks are shown, not hidden, see the monthly
@@ -1638,27 +1590,27 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                             {w.revenue !== 0 ? (
                               <>
                                 <div>{money(w.revenue, currency)}</div>
-                                {wm?.marginPct != null && <div style={{ fontSize: 9, color: wColor, fontWeight: 700, marginTop: 2 }}>{wm.marginPct}%</div>}
+                                {wm?.marginPct != null && <div style={{ fontSize: 10.5, color: wColor, fontWeight: 500, marginTop: 2 }}>{wm.marginPct}%</div>}
                               </>
                             ) : <span style={{ color: T.textLabel }}>-</span>}
                           </td>
                         );
                       })}
-                      <td style={{ ...cellStyle(rep.monthTotal), color: accent, fontWeight: 700, verticalAlign: "top" }}>
+                      <td style={{ ...cellStyle(rep.monthTotal), color: INK, fontWeight: 500, verticalAlign: "top" }}>
                         {rep.monthTotal !== 0 ? (
                           <>
                             <div>{money(rep.monthTotal, currency)}</div>
-                            {mo?.marginPct != null && <div style={{ fontSize: 9, color: mo.marginPct >= 20 ? "#4ade80" : mo.marginPct >= 0 ? accent : "#f87171", fontWeight: 700, marginTop: 2 }}>{mo.marginPct}%</div>}
+                            {mo?.marginPct != null && <div style={{ fontSize: 10.5, color: mCol(mo.marginPct), fontWeight: 500, marginTop: 2 }}>{mo.marginPct}%</div>}
                           </>
                         ) : "-"}
                       </td>
                       {hasMargin && (
-                        <td style={{ ...cellStyle(mo?.grossProfit || 0), color: "#C97C9E", fontWeight: 600 }}>
+                        <td style={{ ...cellStyle(mo?.grossProfit || 0), color: INK, fontWeight: 500 }}>
                           {mo?.grossProfit != null ? money(mo.grossProfit, currency) : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
                       )}
                       {hasMargin && (
-                        <td style={{ ...cellStyle(0), color: (mo?.marginPct ?? 0) >= 20 ? "#4ade80" : (mo?.marginPct ?? 0) >= 0 ? accent : "#f87171", fontWeight: 700 }}>
+                        <td style={{ ...cellStyle(0), color: mCol(mo?.marginPct), fontWeight: 500 }}>
                           {mo?.marginPct != null ? `${mo.marginPct}%` : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
                       )}
@@ -1673,7 +1625,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 const mGP  = weeklyPivot.reduce((s, r) => s + (monthOf(r)?.grossProfit ?? 0), 0);
                 const mRv  = weeklyPivot.reduce((s, r) => s + (monthOf(r)?.grossProfit != null ? (monthOf(r)?.marginRevenue ?? monthOf(r)?.revenue ?? 0) : 0), 0);
                 const mPct = hasMargin && mRv > 0 ? parseFloat(((mGP / mRv) * 100).toFixed(1)) : null;
-                const colour = (v) => v != null ? (v >= 20 ? "#4ade80" : v >= 0 ? accent : "#f87171") : T.textLabel;
+                const colour = mCol;
                 return (
                   <tfoot>
                     <tr style={{ borderTop: `1px solid ${T.border}` }}>
@@ -1685,26 +1637,26 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                         const rv = withM.reduce((s, r) => s + (weekOf(r, wi).marginRevenue ?? weekOf(r, wi).revenue ?? 0), 0);
                         const pct = hasMargin && rv > 0 ? parseFloat(((gp / rv) * 100).toFixed(1)) : null;
                         return (
-                          <td key={wi} style={{ ...cellStyle(rev), color: T.textHead, fontWeight: 700, verticalAlign: "top" }}>
+                          <td key={wi} style={{ ...cellStyle(rev), color: T.textHead, fontWeight: 500, verticalAlign: "top" }}>
                             {rev !== 0 ? (
                               <>
                                 <div>{money(keep(rev), currency)}</div>
-                                {pct != null && <div style={{ fontSize: 9, color: colour(pct), fontWeight: 700, marginTop: 2 }}>{pct}%</div>}
+                                {pct != null && <div style={{ fontSize: 10.5, color: colour(pct), fontWeight: 500, marginTop: 2 }}>{pct}%</div>}
                               </>
                             ) : "-"}
                           </td>
                         );
                       })}
-                      <td style={{ ...cellStyle(monthRev), color: accent, fontWeight: 700, verticalAlign: "top" }}>
+                      <td style={{ ...cellStyle(monthRev), color: INK, fontWeight: 500, verticalAlign: "top" }}>
                         {monthRev !== 0 ? (
                           <>
                             <div>{money(keep(monthRev), currency)}</div>
-                            {mPct != null && <div style={{ fontSize: 9, color: colour(mPct), fontWeight: 700, marginTop: 2 }}>{mPct}%</div>}
+                            {mPct != null && <div style={{ fontSize: 10.5, color: colour(mPct), fontWeight: 500, marginTop: 2 }}>{mPct}%</div>}
                           </>
                         ) : "-"}
                       </td>
-                      {hasMargin && <td style={{ ...cellStyle(mGP), color: "#C97C9E", fontWeight: 700 }}>{mRv > 0 ? money(keep(mGP), currency) : "-"}</td>}
-                      {hasMargin && <td style={{ ...cellStyle(0), color: colour(mPct), fontWeight: 700 }}>{mPct != null ? `${mPct}%` : "-"}</td>}
+                      {hasMargin && <td style={{ ...cellStyle(mGP), color: INK, fontWeight: 500 }}>{mRv > 0 ? money(keep(mGP), currency) : "-"}</td>}
+                      {hasMargin && <td style={{ ...cellStyle(0), color: colour(mPct), fontWeight: 500 }}>{mPct != null ? `${mPct}%` : "-"}</td>}
                     </tr>
                   </tfoot>
                 );
@@ -1717,10 +1669,8 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
       {/* Say plainly why a margin is blank, and for whom. A blank cell with no
           explanation reads as a broken page; named, it reads as a known gap. */}
       {withheld.length > 0 && (
-        <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 10,
-                      background: darkish, border: `1px solid ${T.borderFaint}`,
-                      fontSize: 11, color: T.textMuted, lineHeight: 1.6 }}>
-          <strong style={{ color: T.textSub }}>Why some margins are blank.</strong>{" "}
+        <Notice icon="percent" style={{ marginTop: 14 }}>
+          <strong style={{ fontWeight: 500 }}>Why some margins are blank.</strong>{" "}
           {withheld.map(w => w.name).join(", ")}{" "}
           {withheld.length === 1 ? "invoices" : "invoice"} mostly things that were never bought:
           pallet rent, freight recharges, expense reimbursements and supplier rebate claims, raised
@@ -1731,10 +1681,10 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
           {/* Say what that does to the column, so nobody has to wonder why it is short. */}
           Because of those blanks the Gross Profit column adds up to{" "}
           {money(keep(withheld.reduce((s, w) => s + ((w.revenue || 0) - (w.cost || 0)), 0)), currency)}{" "}
-          less than the total beneath it; the total is the company's, and is right.
-        </div>
+          less than the total beneath it; the total is the company&apos;s, and is right.
+        </Notice>
       )}
-    </div>
+    </Card>
   );
 };
 
@@ -1763,7 +1713,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const advTab = section === "overview" ? "reps" : section;
   const [categoryModal,  setCategoryModal]  = useState(null);
   const [decliningMode,  setDecliningMode]  = useState("yoy");
-  const [darkMode]                          = useState(false);   // the dashboard is always light
+  // One light design only (26 Nov 2026): there is no dark mode, and an old dark=1 in the address simply shows the light page.
   const [salespeopleData, setSalespeopleData] = useState([]); // explicit state so re-renders reliably
   const [weeklyMonth,    setWeeklyMonth]    = useState(new Date().getMonth());
   const [selectedWeek,   setSelectedWeek]   = useState(weekOfMonth(new Date()));
@@ -1803,12 +1753,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
       tab:   channelTab,
       m:     String(weeklyMonth),
       w:     String(selectedWeek),
-      dark:  darkMode ? "1" : "0",
     });
     try {
       window.history.replaceState(null, "", `${window.location.pathname}#${p.toString()}`);
     } catch { /* replaceState can throw in embedded contexts; the view still works */ }
-  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, darkMode]);
+  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek]);
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
@@ -2688,54 +2637,32 @@ export default function EcommerceDashboard({ section = "overview" }) {
                  : null;
   const gpMargin = trueMargin !== null ? Math.round(trueMargin * 1000) / 10 : null;
 
-  const accent  = activeStore.color;
-  const accent2 = activeStore.accent2 || activeStore.color;
-  const accentDark = activeStore.dark || activeStore.color;
+  // Three colours only: ink does the work, the orange accent is kept for the one figure that matters most.
+  const accent  = INK;
 
   // ── Theme ────────────────────────────────────────────────────────────────
-  // Products stores use blue palette; Oceania uses warm orange/red palette
-  const isOceania = activeStore.id === "nova";
-  const T = darkMode ? {
-    bg:          "#080A10",
-    bgCard:      "linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",
-    bgHeader:    "rgba(8,10,16,0.92)",
-    bgInput:     "#0a0c12",
-    bgTableHead: "#0a0c12",
-    bgModal:     "#0d0f18",
-    border:      "rgba(255,255,255,0.07)",
-    borderFaint: "rgba(255,255,255,0.05)",
-    borderAccent:"rgba(255,255,255,0.06)",
-    text:        "#e8e0d0",
-    textHead:    "#f0f4ff",
-    textMuted:   isOceania ? "#5a3020" : "#3a4060",
-    textSub:     isOceania ? "#4a3020" : "#384060",
-    textRow:     isOceania ? "#8a6850" : "#607098",
-    textLabel:   isOceania ? "#3a2818" : "#2a3858",
-    scrollTrack: "#0d0f18",
-    scrollThumb: isOceania ? "#3a1a08" : "#1a2448",
-    shadow:      "0 4px 24px rgba(0,0,0,0.4)",
-  } : {
-    bg:          isOceania ? "#fdf7f4" : "#f6f8ff",
-    bgCard:      "#ffffff",
-    bgHeader:    "rgba(255,255,255,0.98)",
-    bgInput:     isOceania ? "#fdf0e8" : "#eef2ff",
-    bgTableHead: isOceania ? "#fdf0e8" : "#f0f4ff",
-    bgModal:     "#ffffff",
-    border:      isOceania ? "rgba(177,57,36,0.14)" : "rgba(33,86,194,0.14)",
-    borderFaint: isOceania ? "rgba(177,57,36,0.07)" : "rgba(33,86,194,0.07)",
-    borderAccent:isOceania ? "rgba(177,57,36,0.10)" : "rgba(33,86,194,0.10)",
-    text:        "#111827",
-    textHead:    "#0f172a",
-    textMuted:   "#6b7280",
-    textSub:     "#9ca3af",
-    textRow:     "#1e293b",
-    textLabel:   "#4b5563",
-    scrollTrack: isOceania ? "#fceee8" : "#e8edff",
-    scrollThumb: isOceania ? "#d97444" : "#6b8ef5",
-    shadow:      "0 2px 16px rgba(0,0,50,0.08)",
+  // One light design for every company (no per-company colours, no dark mode). Values come from the design kit.
+  const T = {
+    bg:          COLORS.page,
+    bgCard:      "var(--card)",
+    bgHeader:    "rgba(245,244,239,0.9)",
+    bgInput:     "#ffffff",
+    bgTableHead: COLORS.card,
+    bgModal:     COLORS.card,
+    border:      "rgba(40,32,20,0.06)",
+    borderFaint: COLORS.line,
+    borderAccent:COLORS.line,
+    text:        INK,
+    textHead:    INK,
+    textMuted:   COLORS.mute,
+    textSub:     COLORS.mute,
+    textRow:     INK,
+    textLabel:   COLORS.mute,
+    scrollTrack: "transparent",
+    scrollThumb: inkA(0.18),
+    shadow:      "0 10px 30px -22px rgba(40,32,20,0.25)",
+    accent,
   };
-  // Inject accent into T so sub-components can access it
-  T.accent = accent;
   const comparablePrior = activeStore.id !== "luxe"
     || fyPayload(selectedYear)?.totals?.priorComparable !== false;
   const currComparableRev = curr.reduce((s, d, i) => s + (monthComparable(i) ? (d.revenue || 0) : 0), 0);
@@ -2888,8 +2815,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
   ];
 
   const renderStatus = (s) => {
-    const c = { "New": "#9EC97C", "Active": accent, "At Risk": "#f87171" }[s] || "#8a9aaa";
-    return <span style={{ color: c, fontWeight: 600 }}>{s}</span>;
+    // At Risk is the accent; every other status is a quiet ink pill.
+    return <Pill tone={s === "At Risk" ? "accent" : s === "Active" ? "dark" : "grey"}>{s}</Pill>;
   };
 
   const displayProducts   = (advancedData.curr?.topProducts   || []).slice(0, 20);
@@ -2902,12 +2829,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const productColumns  = [
     { key: "name",    label: "Product",  color: T.text },
     { key: "qtySold", label: "Units",    align: "right" },
-    { key: "revenue", label: "Revenue",  align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+    { key: "revenue", label: "Revenue",  align: "right", color: COLORS.ink2, format: (v, c) => fmtK(v, c) },
     { key: "margin",  label: "Margin",   align: "right", format: v => v ? `${v}%` : "-" },
   ];
   const customerColumns = [
     { key: "name",       label: "Customer", color: T.text },
-    { key: "orderCount", label: "Orders",   align: "center", color: "#7C9EC9" },
+    { key: "orderCount", label: "Orders",   align: "center", color: COLORS.ink2 },
     { key: "revenue",    label: "Spend",    align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
     { key: "status",     label: "Status",   align: "center", format: v => renderStatus(v) },
   ];
@@ -2915,47 +2842,47 @@ export default function EcommerceDashboard({ section = "overview" }) {
     { key: "name",    label: "Category",   color: T.text },
     { key: "qty",     label: "Units Sold", align: "right" },
     { key: "revenue", label: "Revenue",    align: "right", color: accent,    format: (v, c) => fmtK(v, c) },
-    { key: "margin",  label: "Margin",     align: "right", color: "#C97C9E", format: v => v != null ? `${v}%` : "-" },
+    { key: "margin",  label: "Margin",     align: "right", color: COLORS.ink2, format: v => v != null ? `${v}%` : "-" },
   ];
   const slowMovingColumns = [
     { key: "name",          label: "Product",      color: T.text },
     { key: "currentStock",  label: "Stock",        align: "right", color: accent },
-    { key: "qtySold",       label: "Sold",         align: "right", color: "#9EC97C" },
-    { key: "lockedCapital", label: "Value Locked", align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
+    { key: "qtySold",       label: "Sold",         align: "right", color: COLORS.ink2 },
+    { key: "lockedCapital", label: "Value Locked", align: "right", color: ORANGE, format: (v, c) => fmtK(v, c) },
   ];
   const churnedColumns = [
     { key: "name",          label: "Customer",   color: T.text },
     { key: "lastOrderDate", label: "Last Order", align: "right", format: v => v ? new Date(v).toLocaleDateString() : "-" },
     { key: "revenue",       label: "Spend",      align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-    { key: "status",        label: "Risk",       align: "center", format: () => <span style={{ color: "#f87171", fontWeight: 700 }}>LAPSED</span> },
+    { key: "status",        label: "Risk",       align: "center", format: () => <Pill tone="accent">LAPSED</Pill> },
   ];
   const atRiskColumns = [
     { key: "name",          label: "Customer",    color: T.text },
-    { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? "#f87171" : accent, fontWeight: 700 }}>{v}d</span> },
+    { key: "daysSince",     label: "Days Silent", align: "center", format: v => <span style={{ color: v >= 75 ? ORANGE : INK, fontWeight: 500 }}>{v}d</span> },
     { key: "lastOrderDate", label: "Last Order",  align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "-" },
     { key: "revenue",       label: "Lifetime $",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-    { key: "orderCount",    label: "Orders",      align: "center", color: "#7C9EC9" },
+    { key: "orderCount",    label: "Orders",      align: "center", color: COLORS.ink2 },
   ];
   const clvColumns = [
     { key: "name",            label: "Customer",    color: T.text },
     { key: "lifetimeRevenue", label: "Lifetime $",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-    { key: "totalOrders",     label: "Orders",      align: "center", color: "#7C9EC9" },
-    { key: "avgOrderValue",   label: "Avg Order",   align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+    { key: "totalOrders",     label: "Orders",      align: "center", color: COLORS.ink2 },
+    { key: "avgOrderValue",   label: "Avg Order",   align: "right",  color: COLORS.ink2, format: (v, c) => fmtK(v, c) },
     { key: "firstOrderDate",  label: "First Order", align: "right",  format: v => v ? new Date(v).toLocaleDateString() : "-" },
   ];
   const decliningColumns = [
     { key: "name",        label: "Product",    color: T.text },
-    { key: "revenue",     label: "This Period", align: "right", color: "#f87171",  format: (v, c) => fmtK(v, c) },
-    { key: "prevRevenue", label: "Prior Year",  align: "right", color: "#8a9aaa",  format: (v, c) => fmtK(v, c) },
-    { key: "change",      label: "Change",      align: "center", format: v => v !== null ? <span style={{ color: "#f87171", fontWeight: 700 }}><Trend up={false} />{Math.abs(v)}%</span> : "-" },
-    { key: "qtySold",     label: "Units Now",   align: "right", color: "#aa8a8a" },
-    { key: "prevQtySold", label: "Units Prev",  align: "right", color: "#6a7a8a" },
+    { key: "revenue",     label: "This Period", align: "right", color: INK,  format: (v, c) => fmtK(v, c) },
+    { key: "prevRevenue", label: "Prior Year",  align: "right", color: COLORS.mute,  format: (v, c) => fmtK(v, c) },
+    { key: "change",      label: "Change",      align: "center", format: v => v !== null ? <Delta value={-Math.abs(v)} /> : "-" },
+    { key: "qtySold",     label: "Units Now",   align: "right", color: COLORS.ink2 },
+    { key: "prevQtySold", label: "Units Prev",  align: "right", color: COLORS.mute },
   ];
   const salespersonColumns = [
     { key: "name",    label: "Sales Rep",    color: T.text },
-    { key: "orders",  label: "Orders",       align: "right", color: "#7C9EC9" },
+    { key: "orders",  label: "Orders",       align: "right", color: COLORS.ink2 },
     { key: "revenue", label: "Revenue",      align: "right", color: accent, format: (v, c) => fmtK(Math.round(v), c) },
-    { key: "aov",     label: "Avg Order",    align: "right", color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+    { key: "aov",     label: "Avg Order",    align: "right", color: COLORS.ink2, format: (v, c) => fmtK(v, c) },
   ];
   const salespeople = salespeopleData.map(s => ({
     ...s,
@@ -2997,14 +2924,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
     const subs = (me?.sections || []).filter(x => ["products", "movers", "customers"].includes(x.id));
     if (!["products", "movers", "customers"].includes(section) || subs.length < 2) return null;
     return (
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 24, marginTop: 4 }}>
+      <div className={ui.seg} style={{ marginBottom: 20, marginTop: 4 }}>
         {subs.map(t => (
-          <Link key={t.id} href={t.path} style={{
-            padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, textDecoration: "none",
-            border: section === t.id ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
-            background: section === t.id ? `${accent}18` : "transparent",
-            color: section === t.id ? accent : T.textMuted,
-          }}>{t.label}</Link>
+          <Link key={t.id} href={t.path} className={st.segLink} data-on={section === t.id ? "1" : undefined}>{t.label}</Link>
         ))}
       </div>
     );
@@ -3016,82 +2938,33 @@ export default function EcommerceDashboard({ section = "overview" }) {
      tables are real for what each company sold, but cannot be added across
      companies to get a true group total - same caveat as the figures used to
      carry at the top of the page. */
-  const INTERCOMPANY_NOTE = "Doesn't include inter-company sales (e.g. North selling to South or Oceania) for products or categories — those trades aren't visible to either side's product breakdown, so this can't be measured here.";
+  const INTERCOMPANY_NOTE = "Doesn't include inter-company sales (e.g. North selling to South or Oceania) for products or categories: those trades aren't visible to either side's product breakdown, so this can't be measured here.";
+
+  // An icon for each page in the navigation, chosen to fit its title.
+  const SECTION_ICONS = { overview: "grid", analytics: "bars", credits: "receipt", debtors: "wallet", chat: "sparkle", repusage: "users", socialweb: "megaphone", command: "compass", reps: "users", products: "award", movers: "zap", customers: "trophy" };
+  const money0 = (v) => (exactAmounts ? fmtExact(v, activeStore.currency) : fmtK(v, activeStore.currency));
+  // Chart axes and grid in the design kit's ink.
+  const axisTick = { fontSize: 11, fill: COLORS.mute };
+  // Sales by month for the year on screen, months that have not started left out. The latest month is the accent.
+  const monthBars = momData.filter(r => !r.notStarted).map(r => ({ label: r.month, value: r.revenue || 0 }));
+  const initials = (me?.label || "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "W";
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", color: T.text, paddingBottom: 40, transition: "background 0.3s, color 0.3s" }}>
+    <div className={st.page} style={{ background: T.bg, color: T.text }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:${T.scrollTrack}}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:4px}
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: ${darkMode ? "invert(1) opacity(0.4)" : "opacity(0.5)"}; }
+        ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:${T.scrollTrack}}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:6px}
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: opacity(0.5); }
       `}</style>
 
-      {/* HEADER */}
-      <div style={{ borderBottom: `1px solid ${T.borderAccent}`, padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, background: T.bgHeader, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* Logo, white on dark, black on light */}
-          <img
-            src={darkMode ? "/logo-white.png" : "/logo-black.png"}
-            alt="Worthy Logo"
-            style={{ height: 40, width: "auto", objectFit: "contain", filter: darkMode ? "none" : "none" }}
-          />
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: T.textHead, letterSpacing: "0.05em" }}>{activeStore.name}</div>
-              {anyLoading && <div style={{ fontSize: 10, color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: "2px 8px", borderRadius: 20 }}>LOADING…</div>}
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.04em", marginTop: 2 }}>
-              {activeStore.id === "worthy" ? "Live Odoo" : activeStore.id === "luxe" ? "Live Ostendo" : "Live Odoo"} · Performance Overview
-            </div>
-          </div>
+      <div className={st.shell}>
+      {/* TOP BAR: logo, the pages this department may open, who is signed in */}
+      <header className={st.top}>
+        <div className={st.brand}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-black.png" alt="Worthy Logo" className={st.brandLogo} />
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {STORES.map(s => <StorePill key={s.id} store={s} active={activeStore.id === s.id} onClick={() => setActiveStore(s)} />)}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {yearsForStore.map(y => {
-            const loaded   = hasData(y);
-            const fetching = isLoading(y);
-            return (
-              <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: selectedYear === y ? `1px solid ${accent}` : `1px solid ${T.border}`, background: selectedYear === y ? `${accent}20` : "transparent", color: selectedYear === y ? accent : loaded ? (darkMode ? "#c0a870" : "#6a5040") : T.textMuted, cursor: "pointer", transition: "all 0.2s", position: "relative" }}>
-                {onFYView() ? `FY${String(y).slice(2)}` : y}
-                {fetching && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: accent }} />}
-                {!fetching && loaded && selectedYear !== y && (activeStore.id === "worthy" || activeStore.id === "luxe") && <span style={{ position: "absolute", top: -3, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#4ade80", opacity: 0.7 }} />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
-      {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-        <div style={{ borderBottom: `1px solid ${T.borderFaint}`, padding: "0 32px", background: T.bgHeader, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-          {/* North is Odoo sales only for now: the Online and POS channels are not shown. Their
-              code is still here, switched off, in case they come back. */}
-          {[
-            { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => setChannelTab(tab.id)} style={{
-              padding: "14px 20px", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap",
-              border: "none", borderBottom: channelTab === tab.id ? `2px solid ${accent}` : "2px solid transparent",
-              background: "transparent", color: channelTab === tab.id ? accent : T.textSub,
-              cursor: "pointer", transition: "all 0.2s", marginBottom: -1,
-            }}>
-              <Icon name={tab.icon} size={15} style={{ marginRight: 8 }} />{tab.label}
-            </button>
-          ))}
-          <div style={{ marginLeft: "auto", fontSize: 10, color: T.textLabel, paddingRight: 8 }}>
-            {channelTab === "odoo"   ? "Odoo ERP invoices · ex-tax revenue" :
-             channelTab === "pos"    ? "In-person POS orders only" :
-                                      "Online store orders · includes sessions & conv rate"}
-          </div>
-        </div>
-      )}
-
-      <div style={{ padding: "32px 32px 0" }}>
-        {/* Page navigation: only the pages this department may open */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
+        <nav className={st.nav} aria-label="Dashboard pages">
           {(() => {
             // Categories & Products, Fast & Slow Movers and Customers share one tab.
             const GROUP = ["products", "movers", "customers"];
@@ -3108,47 +2981,133 @@ export default function EcommerceDashboard({ section = "overview" }) {
             // Worthy Products South stays on South instead of dropping back to North.
             const keep = new URLSearchParams({
               store: activeStore.id, fy: String(selectedYear), view, tab: channelTab,
-              m: String(weeklyMonth), w: String(selectedWeek), dark: darkMode ? "1" : "0",
+              m: String(weeklyMonth), w: String(selectedWeek),
             }).toString();
             return tabs.map(sec => {
               const on = sec.id === "analytics" ? GROUP.includes(section) : sec.id === section;
               return (
-                <Link key={sec.id} href={`${sec.path}#${keep}`} style={{
-                  padding: "8px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, textDecoration: "none",
-                  border: on ? `1.5px solid ${accent}` : `1px solid ${T.border}`,
-                  background: on ? `${accent}18` : "transparent", color: on ? accent : T.textMuted,
-                }}>{sec.label}</Link>
+                <Link key={sec.id} href={`${sec.path}#${keep}`} className={`${st.navBtn} ${on ? st.navOn : ""}`} aria-current={on ? "page" : undefined}>
+                  <Icon n={SECTION_ICONS[sec.id] || "grid"} size={15} />{sec.label}
+                </Link>
               );
             });
           })()}
-          <span style={{ flex: 1 }} />
-          {me && <span style={{ fontSize: 11, color: T.textMuted }}>{me.label}</span>}
-          <button onClick={async () => { await fetch("/api/auth/login", { method: "DELETE" }); window.location.href = "/login"; }}
-            style={{ padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", border: `1px solid ${T.border}`, background: "transparent", color: T.textMuted }}>
+        </nav>
+        <div className={st.tools}>
+          {me && <span className={st.me} title={me.label}><span className={st.avatar}>{initials}</span><span className={st.meLabel}>{me.label}</span></span>}
+          <button type="button" onClick={async () => { await fetch("/api/auth/login", { method: "DELETE" }); window.location.href = "/login"; }}
+            className={`${ui.btn} ${ui.btnSmall}`}>
             Sign out
           </button>
         </div>
+      </header>
 
+      {/* HEADING: company, source and freshness, then the company and year switchers */}
+      <div className={st.head}>
+        <div style={{ minWidth: 0 }}>
+          <h1 className={st.title}>{activeStore.name}</h1>
+          <div className={st.sub}>
+            <span className={st.liveDot} />
+            <span>{activeStore.id === "worthy" ? "Live Odoo" : activeStore.id === "luxe" ? "Live Ostendo" : "Live Odoo"} · Performance Overview</span>
+            {anyLoading && <Pill>Loading</Pill>}
+            {(() => {
+              /* Say when these figures were read, so nobody has to wonder how fresh they are. */
+              const at = fyPayload(selectedYear)?.generatedAt;
+              if (!at || activeStore.id === "luxe" || section !== "overview") return null;
+              const t = new Date(at).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
+              return <span>· Odoo figures as of {t} NZ, refreshed every few minutes</span>;
+            })()}
+          </div>
+        </div>
+        <div className={st.actions}>
+          <div className={ui.seg} role="group" aria-label="Company">
+            {STORES.map(s => <StorePill key={s.id} store={s} active={activeStore.id === s.id} onClick={() => setActiveStore(s)} />)}
+          </div>
+          <div className={ui.seg} role="group" aria-label="Year">
+            {yearsForStore.map(y => {
+              const loaded   = hasData(y);
+              const fetching = isLoading(y);
+              return (
+                <button type="button" key={y} onClick={() => setSelectedYear(y)} className={selectedYear === y ? ui.segOn : ""} style={{ position: "relative" }}>
+                  {onFYView() ? `FY${String(y).slice(2)}` : y}
+                  {fetching && <span className={st.yearDot} style={{ background: ORANGE }} />}
+                  {!fetching && loaded && selectedYear !== y && (activeStore.id === "worthy" || activeStore.id === "luxe") && <span className={st.yearDot} style={{ background: INK, opacity: 0.35 }} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* CHANNEL SUB-TABS, shown for Worthy North (Odoo/Online/POS) and Nova (Odoo only) */}
+      {(activeStore.id === "worthy" || activeStore.id === "nova") && (
+        <div className={st.channelRow}>
+          {/* North is Odoo sales only for now: the Online and POS channels are not shown. Their
+              code is still here, switched off, in case they come back. */}
+          <div className={ui.seg}>
+            {[
+              { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
+            ].map(tab => (
+              <button type="button" key={tab.id} onClick={() => setChannelTab(tab.id)} className={channelTab === tab.id ? ui.segOn : ""} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                <Icon n={tab.icon} size={14} />{tab.label}
+              </button>
+            ))}
+          </div>
+          <span className={st.channelNote}>
+            {channelTab === "odoo"   ? "Odoo ERP invoices · ex-tax revenue" :
+             channelTab === "pos"    ? "In-person POS orders only" :
+                                      "Online store orders · includes sessions & conv rate"}
+          </span>
+        </div>
+      )}
+
+      <div className={st.body}>
         {section === "overview" && (<>
-        {/* View toggle */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 28, background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)", borderRadius: 10, padding: 4, border: `1px solid ${T.border}`, width: "fit-content" }}>
-          {[["monthly","Monthly Performance"],["weekly","Weekly Breakdown"],["yoy","Yearly"]].map(([v, lbl]) => (
-            <button key={v} onClick={() => setView(v)} style={{ padding: "8px 20px", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.04em", background: view === v ? `linear-gradient(135deg,${accent}30,${accent}15)` : "transparent", color: view === v ? accent : T.textMuted, boxShadow: view === v ? `inset 0 0 0 1px ${accent}30` : "none" }}>{lbl}</button>
-          ))}
+        {/* View toggle, and the period the headline figures cover */}
+        <div className={st.viewRow}>
+          <div className={ui.seg} role="group" aria-label="View">
+            {[["monthly","Monthly Performance","calendar"],["weekly","Weekly Breakdown","bars"],["yoy","Yearly","chart"]].map(([v, lbl, ic]) => (
+              <button type="button" key={v} onClick={() => setView(v)} className={view === v ? ui.segOn : ""} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><Icon n={ic} size={14} />{lbl}</button>
+            ))}
+          </div>
+          {view === "weekly" ? (() => {
+            const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
+            const weekNums = [...new Set(allMonthWeeks.map(w => w.week))].sort((a,b) => a-b);
+            const periodLabel = `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <RangeTag text={periodLabel} />
+                {weekNums.length > 0 && (
+                  <div className={ui.seg}>
+                    {weekNums.map(w => (
+                      <button type="button" key={w} onClick={() => setSelectedWeek(w)} className={selectedWeek === w ? ui.segOn : ""} style={{ padding: "6px 11px" }}>W{w}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })() : (
+            <RangeTag text={
+              view === "yoy" && onFYView() && activeStore.id !== "luxe" && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete
+                ? `FY${String(selectedYear).slice(2)} · 1 Apr to ${fmtDay(fyPayload(selectedYear).range.end)} vs same period FY${String(selectedYear - 1).slice(2)}`
+              : view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
+             : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
+             : `${selectedYear} · year to date`} />
+          )}
         </div>
 
         {/* Anything the source system could not give us, said plainly, so an
             empty table is never mistaken for a quiet month. */}
         {onFYView() && (fyPayload(selectedYear)?.problems || []).length > 0 && (
-          <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12.5, color: "#b45309", lineHeight: 1.7 }}>
-            <strong>Some tables below are empty because Odoo could not return the data.</strong>{" "}
+          <Notice tone="warn" style={{ marginBottom: 14 }}>
+            <strong style={{ fontWeight: 500 }}>Some tables below are empty because Odoo could not return the data.</strong>{" "}
             {fyPayload(selectedYear).problems.some(p => /product/i.test(p))
               ? <>Odoo cannot build a display name for at least one product in this company (a variant with an
                  incomplete attribute) and the error stops the whole product query. Top Products and Top Categories
                  stay empty until that product record is corrected. Sales, customers and every figure above are
                  unaffected.</>
               : fyPayload(selectedYear).problems.join(' ')}
-          </div>
+          </Notice>
         )}
 
         {activeStore.id !== "luxe" && prevLoaded && (() => {
@@ -3156,62 +3115,49 @@ export default function EcommerceDashboard({ section = "overview" }) {
           const lastCmp = [...Array(12).keys()].filter(monthComparable).pop();
           if (lastCmp === undefined || lastCmp === 11) return null;
           return (
-            <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, background: `${accent}0c`, border: `1px solid ${accent}28`, fontSize: 12.5, color: T.textSub, lineHeight: 1.7 }}>
-              <strong style={{ color: T.textHead }}>{activeStore.name} · {selectedYear}</strong>{" "}
+            <Notice icon="calendar" style={{ marginBottom: 14 }}>
+              <strong style={{ fontWeight: 500 }}>{activeStore.name} · {selectedYear}</strong>{" "}
               reports a calendar year (January to December).{" "}
-              “Vs last year” covers <strong>{MONTH_NAMES[0]}–{MONTH_NAMES[lastCmp]}</strong> on both sides, complete
+              &ldquo;Vs last year&rdquo; covers <strong style={{ fontWeight: 500 }}>{MONTH_NAMES[0]} to {MONTH_NAMES[lastCmp]}</strong> on both sides, complete
               months only. {isCurrentYear && `${MONTH_NAMES[nowRef.getMonth()]} is still in progress, so it is shown in the tables but left out of the year-on-year figure.`}
-            </div>
+            </Notice>
           );
         })()}
 
-        {/* KPIs */}
-        {view === "weekly" ? (() => {
-          const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
-          const weekNums = [...new Set(allMonthWeeks.map(w => w.week))].sort((a,b) => a-b);
-          const periodLabel = `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`;
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>{periodLabel}</div>
-              <div style={{ display: "flex", gap: 3 }}>
-                {weekNums.map(w => (
-                  <button key={w} onClick={() => setSelectedWeek(w)} style={{ padding: "2px 8px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: selectedWeek === w ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: selectedWeek === w ? `${accent}20` : "transparent", color: selectedWeek === w ? accent : T.textMuted, cursor: "pointer", letterSpacing: "0.04em" }}>W{w}</button>
-                ))}
-              </div>
-            </div>
-          );
-        })() : (
-          <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
-            {view === "yoy" && onFYView() && activeStore.id !== "luxe" && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete
-              ? `FY${String(selectedYear).slice(2)} · 1 Apr to ${fmtDay(fyPayload(selectedYear).range.end)} vs same period FY${String(selectedYear - 1).slice(2)}`
-            : view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
-           : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
-           : `${selectedYear} · year to date`}
-          </div>
-        )}
-        {(() => {
-          /* Say when these figures were read, so nobody has to wonder how fresh they are. */
-          const at = fyPayload(selectedYear)?.generatedAt;
-          if (!at || activeStore.id === "luxe") return null;
-          const t = new Date(at).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
-          return <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>Odoo figures as of {t} NZ, refreshed every few minutes</div>;
-        })()}
         {onFY() && cacheRef.current[fyKey(activeStore.id, selectedYear)]?.failed && (
           /* A failed read must say so. Without this the cards drew NZ$0.00 and a dash,
              which reads as a quiet month, not as "the figures did not load". */
-          <div role="alert" style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, fontSize: 12,
-                 background: "rgba(220,80,60,0.10)", border: "1px solid rgba(220,80,60,0.45)", color: T.textHead,
-                 display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <span><strong>These figures did not load</strong> - the zeros below are not real. Odoo was too slow to answer.</span>
-            <button onClick={() => { delete cacheRef.current[fyKey(activeStore.id, selectedYear)]; fetchFYFor(activeStore.id, selectedYear, { fresh: true }); }}
-              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid currentColor", background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600 }}>Try again</button>
-          </div>
+          <Notice tone="warn" role="alert" style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <span><strong style={{ fontWeight: 500 }}>These figures did not load</strong>: the zeros below are not real. Odoo was too slow to answer.</span>
+              <button type="button" onClick={() => { delete cacheRef.current[fyKey(activeStore.id, selectedYear)]; fetchFYFor(activeStore.id, selectedYear, { fresh: true }); }}
+                className={`${ui.btn} ${ui.btnSmall} ${ui.btnDark}`}><Icon n="refresh" size={13} />Try again</button>
+            </div>
+          </Notice>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
-          <KPICard darkMode={darkMode} label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="dollar" accent={accent}    sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
-          <KPICard darkMode={darkMode} label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="bag" accent="#7C9EC9"   sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
-          {isMgmt && <KPICard darkMode={darkMode} label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} icon="percent" accent="#9EC97C" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />}
-          {isMgmt && <KPICard darkMode={darkMode} label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" accent="#C97C9E" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
+
+        {/* 1. HEADLINE FIGURES */}
+        <section className={`${ui.kpis} ${isMgmt ? "" : st.kpis2}`}>
+          <KPICard label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="dollar"  sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
+          <KPICard label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="bag"     sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
+          {isMgmt && <KPICard label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} growthUnit=" pts" icon="percent" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />}
+          {isMgmt && <KPICard label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
+        </section>
+
+        {/* 2. HOW THE HEADLINE FIGURES RELATE, and the year by month */}
+        <div className={ui.grid} style={{ marginBottom: 14 }}>
+          <Card>
+            <CardHead icon="bars" title={`Sales by month, ${onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}><RangeTag text={yearRange()} /></CardHead>
+            {monthBars.length > 0 ? <MonthBars rows={monthBars} fmt={moneyShort} /> : <div className={ui.empty}>{anyLoading ? "Loading" : "No sales recorded yet"}</div>}
+          </Card>
+          <Card className={st.chainFit}>
+            <CardHead icon="flow" title={isMgmt ? "From orders to profit" : "From orders to sales"} />
+            <Chain compact steps={[
+              { label: "Orders", value: kpiOrd ? kpiOrd.toLocaleString() : "-" },
+              { label: "Sales", value: money0(kpiRev), link: kpiOrd ? `${money0(kpiAOV)} an order` : "", accent: !isMgmt },
+              ...(isMgmt ? [{ label: "Gross profit", value: (kpiHasCost || partCost) && kpiGP !== null ? money0(kpiGP) : "-", link: kpiGPMargin !== null ? `${kpiGPMargin}% margin` : "", accent: true }] : []),
+            ]} />
+          </Card>
         </div>
 
         {isMgmt && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && onFYView() && (() => {
@@ -3229,135 +3175,122 @@ export default function EcommerceDashboard({ section = "overview" }) {
           const wkGp = wk.reduce((t, r) => t + (r.grossProfit || 0), 0);
           const weekWp = wk.length && wkGp + wkCost > 0
             ? { margin: Math.round((wkGp / (wkGp + wkCost)) * 10000) / 100, cost: wkCost, costed: wkGp + wkCost } : null;
-          return <SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency} theme={T} accent={accent}
+          return <SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency}
             companyName={activeStore.id === "nova" ? "Worthy Oceania" : "Worthy Products"} />;
         })()}
 
         {onFYView() && view !== "weekly" && (
           <ForecastCard cur={fyPayload(selectedYear)} prior={fyPayload(selectedYear - 1)} currency={activeStore.currency}
-            theme={T} accent={accent} fyLabel={`FY${String(selectedYear).slice(2)}`} />
+            fyLabel={`FY${String(selectedYear).slice(2)}`} />
         )}
 
         {view === "monthly" ? (
           <>
-            {/* Metric tabs */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
-              {metrics.map(m => (
-                <button key={m.id} onClick={() => setActiveMetric(m.id)} style={{ padding: "7px 16px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: activeMetric === m.id ? `1px solid ${accent}60` : `1px solid ${T.border}`, background: activeMetric === m.id ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"), color: activeMetric === m.id ? accent : T.textMuted, cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</button>
-              ))}
-            </div>
-
-            {/* Area chart */}
-            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-                <div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>Monthly {metrics.find(m => m.id === activeMetric)?.label} · {onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}</div>
-                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>{prevLoaded ? `vs ${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</div>
-                </div>
-                <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#5a5040" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 3, borderRadius: 2, background: accent, display: "inline-block" }} />{selectedYear}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.2)", display: "inline-block" }} />{selectedYear - 1}</span>
-                </div>
+            {/* Trend chart: this year in ink, last year faint and dashed */}
+            <Card style={{ marginBottom: 14 }}>
+              <CardHead icon="chart" title={`Monthly ${metrics.find(m => m.id === activeMetric)?.label} · ${onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}>
+                <RangeTag text={yearRange()} />
+              </CardHead>
+              <div className={ui.seg} role="group" aria-label="Measure" style={{ marginBottom: 14 }}>
+                {metrics.map(m => (
+                  <button type="button" key={m.id} onClick={() => setActiveMetric(m.id)} className={activeMetric === m.id ? ui.segOn : ""}>{m.label}</button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: COLORS.mute, margin: "-4px 0 14px" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 3, borderRadius: 2, background: INK, display: "inline-block" }} />{selectedYear}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 0, borderTop: `2px dashed ${inkA(0.35)}`, display: "inline-block" }} />{prevLoaded ? `${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</span>
               </div>
               <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={momData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={accent} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={accent} stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} />
-                  <XAxis dataKey="month" interval={0} tick={{ fontSize: 11, fill: T.textMuted }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
+                  <XAxis dataKey="month" interval={0} tick={axisTick} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "grossProfit" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "marginPct" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
-                  <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
-                  <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={accent} strokeWidth={2.5} fill="url(#ag)" dot={false} connectNulls={false} activeDot={{ r: 5, fill: accent, stroke: "#080A10", strokeWidth: 2 }} />
-                  <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric === "marginPct" ? "prevMarginPct" : activeMetric} name={`${selectedYear - 1}`} stroke={darkMode ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.35)"} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} />
+                  <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ stroke: inkA(0.15) }} />
+                  <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={INK} strokeWidth={2} fill={INK} fillOpacity={0.05} dot={false} connectNulls={false} activeDot={{ r: 5, fill: ORANGE, stroke: "#fff", strokeWidth: 2 }} />
+                  <Line type="monotone" dataKey={activeMetric === "revenue" ? "prevRevenue" : activeMetric === "orders" ? "prevOrders" : activeMetric === "marginPct" ? "prevMarginPct" : activeMetric} name={`${selectedYear - 1}`} stroke={inkA(0.35)} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+            </Card>
 
-            <div style={{ marginBottom: 24 }}>
-              {/* Monthly table */}
-              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>Monthly Breakdown<div style={{ marginTop: 6 }}><RangeTag text={yearRange()} theme={T} /></div></div>
-                  <div style={{ fontSize: 10, color: hasCost ? "#C97C9E" : "#5a4030" }}>
-                    {activeStore.id === "luxe"
-                      ? <><Icon name="sparkle" size={11} style={{ marginRight: 5 }} />Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
-                      : onFYView()
-                        ? <><Icon name="sparkle" size={11} style={{ marginRight: 5 }} />{fyPayload(selectedYear)?.costBasis || "cost from Odoo"} · {activeStore.currency}</>
-                        : <>{hasCost ? <><Icon name="sparkle" size={11} style={{ marginRight: 5 }} />Real cost from Shopify</> : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
-                  </div>
-                </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                    <thead>
-                      <tr>
-                        {["Month","Revenue","Bank Target","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
-                          <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {momData.map((row, i) => {
-                        const has = row.revenue > 0;
-                        const monthKey = row.key || `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
-                        const target = bankTargetFor(activeStore.id, monthKey);
-                        const vsTarget = (target && has) ? Math.round(((row.revenue - target) / target) * 1000) / 10 : null;
-                        return (
-                          <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
-                            onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
-                            <td style={{ padding: "8px", color: "#8a7860", fontWeight: 600 }}>{row.month}</td>
-                            <td style={{ padding: "8px", color: T.text, fontWeight: 600 }}>{has ? (exactAmounts ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px", color: T.textSub }}>
-                              {target ? (
-                                <>
-                                  <div>{exactAmounts ? fmtExact(target, activeStore.currency) : fmtK(target, activeStore.currency)}</div>
-                                  {vsTarget !== null && <div style={{ fontSize: 9, color: vsTarget >= 0 ? "#16a34a" : "#dc2626", fontWeight: 700, marginTop: 2 }}>{vsTarget >= 0 ? "+" : ""}{vsTarget}%</div>}
-                                </>
-                              ) : <span style={{ color: T.textLabel }}>-</span>}
-                            </td>
-                            <td style={{ padding: "8px", color: "#aa8a6a" }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px" }}>{has ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px", color: "#8aaa8a" }}>{has ? (exactAmounts ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px", color: "#aa8a8a" }}>{row.returns > 0 ? row.returns : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "8px" }}><GrowthBadge value={row.momGrowth} /></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                        <td style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>TOTAL</td>
-                        <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{exactAmounts ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
-                        <td style={{ padding: "10px 8px", color: T.textSub, fontWeight: 700 }}>
-                          {(() => {
-                            const totalTarget = momData.reduce((s, row, i) => {
-                              const mk = row.key || `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
-                              return s + (bankTargetFor(activeStore.id, mk) || 0);
-                            }, 0);
-                            return totalTarget > 0 ? (exactAmounts ? fmtExact(totalTarget, activeStore.currency) : fmtK(totalTarget, activeStore.currency)) : "-";
-                          })()}
-                        </td>
-                        <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "-"}</td>
-                        <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "-"}</td>
-                        <td style={{ padding: "10px 8px" }}><MarginBar value={gpMargin} accent={accent} /></td>
-                        <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{totalOrd}</td>
-                        <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{exactAmounts ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
-                        <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{totalNewC || "-"}</td>
-                        <td style={{ padding: "10px 8px", color: "#aa8a8a", fontWeight: 700 }}>{totalRet || "-"}</td>
-                        <td style={{ padding: "10px 8px" }}><GrowthBadge value={revG} /></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+            {/* Monthly table */}
+            <Card style={{ marginBottom: 14 }}>
+              <CardHead icon="calendar" title="Monthly Breakdown"><RangeTag text={yearRange()} /></CardHead>
+              <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px", display: "flex", alignItems: "center", gap: 5 }}>
+                {activeStore.id === "luxe"
+                  ? <><Icon n="sparkle" size={12} />Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
+                  : onFYView()
+                    ? <><Icon n="sparkle" size={12} />{fyPayload(selectedYear)?.costBasis || "cost from Odoo"} · {activeStore.currency}</>
+                    : <>{hasCost ? <><Icon n="sparkle" size={12} />Real cost from Shopify</> : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
               </div>
-            </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                  <thead>
+                    <tr>
+                      {["Month","Revenue","Bank Target","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
+                        <th key={h} style={thStyle("left")}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {momData.map((row, i) => {
+                      const has = row.revenue > 0;
+                      const monthKey = row.key || `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+                      const target = bankTargetFor(activeStore.id, monthKey);
+                      const vsTarget = (target && has) ? Math.round(((row.revenue - target) / target) * 1000) / 10 : null;
+                      const c = { ...tdStyle, padding: "9px 10px" };
+                      const none = <span style={{ color: COLORS.mute }}>-</span>;
+                      return (
+                        <tr key={i} style={{ background: hoveredMonth === i ? inkA(0.035) : "transparent", transition: "background 0.15s" }}
+                          onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>
+                          <td style={{ ...c, color: COLORS.ink2, fontWeight: 500 }}>{row.month}</td>
+                          <td style={{ ...c, fontWeight: 500 }}>{has ? (exactAmounts ? fmtExact(row.revenue, activeStore.currency) : fmtK(row.revenue, activeStore.currency)) : none}</td>
+                          <td style={{ ...c, color: COLORS.ink2 }}>
+                            {target ? (
+                              <>
+                                <div>{exactAmounts ? fmtExact(target, activeStore.currency) : fmtK(target, activeStore.currency)}</div>
+                                {vsTarget !== null && <div style={{ marginTop: 2 }}><Delta value={vsTarget} /></div>}
+                              </>
+                            ) : none}
+                          </td>
+                          <td style={{ ...c, color: COLORS.ink2 }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : none}</td>
+                          <td style={c}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : none}</td>
+                          <td style={c}>{has ? <MarginBar value={row.marginPct} /> : none}</td>
+                          <td style={{ ...c, color: COLORS.ink2 }}>{has ? row.orders : none}</td>
+                          <td style={{ ...c, color: COLORS.ink2 }}>{has ? (exactAmounts ? fmtExact(row.aov, activeStore.currency) : fmtK(row.aov, activeStore.currency)) : none}</td>
+                          <td style={{ ...c, color: COLORS.ink2 }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : none}</td>
+                          <td style={{ ...c, color: COLORS.ink2 }}>{row.returns > 0 ? row.returns : none}</td>
+                          <td style={c}><GrowthBadge value={row.momGrowth} /></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+                      <td style={footStyle("left")}>{exactAmounts ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
+                      <td style={{ ...footStyle("left"), color: COLORS.ink2 }}>
+                        {(() => {
+                          const totalTarget = momData.reduce((s, row, i) => {
+                            const mk = row.key || `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+                            return s + (bankTargetFor(activeStore.id, mk) || 0);
+                          }, 0);
+                          return totalTarget > 0 ? (exactAmounts ? fmtExact(totalTarget, activeStore.currency) : fmtK(totalTarget, activeStore.currency)) : "-";
+                        })()}
+                      </td>
+                      <td style={{ ...footStyle("left"), color: COLORS.ink2 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "-"}</td>
+                      <td style={footStyle("left")}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "-"}</td>
+                      <td style={footStyle("left")}><MarginBar value={gpMargin} /></td>
+                      <td style={footStyle("left")}>{totalOrd}</td>
+                      <td style={footStyle("left")}>{exactAmounts ? fmtExact(avgAOV, activeStore.currency) : fmtK(avgAOV, activeStore.currency)}</td>
+                      <td style={footStyle("left")}>{totalNewC || "-"}</td>
+                      <td style={footStyle("left")}>{totalRet || "-"}</td>
+                      <td style={footStyle("left")}><GrowthBadge value={revG} /></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </Card>
           </>
         ) : view === "weekly" ? (
           /* WEEKLY VIEW */
@@ -3380,80 +3313,66 @@ export default function EcommerceDashboard({ section = "overview" }) {
             return (
               <>
                 {/* Month selector */}
-                <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
+                <div className={ui.seg} style={{ marginBottom: 14 }}>
                   {MONTH_NAMES.map((mn, mi) => (
-                    <button key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(mi === new Date().getMonth() ? weekOfMonth(new Date()) : 1); }} style={{
-                      padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
-                      border: weeklyMonth === mi ? `1px solid ${accent}60` : `1px solid ${T.border}`,
-                      background: weeklyMonth === mi ? `${accent}15` : (darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"),
-                      color: weeklyMonth === mi ? accent : T.textMuted,
-                      cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.05em", textTransform: "uppercase",
-                    }}>{mn}</button>
+                    <button type="button" key={mn} onClick={() => { setWeeklyMonth(mi); setSelectedWeek(mi === new Date().getMonth() ? weekOfMonth(new Date()) : 1); }}
+                      className={weeklyMonth === mi ? ui.segOn : ""}>{mn}</button>
                   ))}
                 </div>
 
-                {/* Weekly bar chart */}
-                <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24, marginBottom: 24 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div>
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: T.textHead, fontWeight: 600 }}>
-                        Weekly Revenue · {MONTH_NAMES[weeklyMonth]} {selectedYear}
-                      </div>
-                      <div style={{ fontSize: 11, color: T.textSub, marginTop: 3 }}>Week-by-week sales breakdown</div>
-                    </div>
+                {/* Weekly bar chart: the week on the headline figures is the accent */}
+                <Card style={{ marginBottom: 14 }}>
+                  <CardHead icon="bars" title={`Weekly Revenue · ${MONTH_NAMES[weeklyMonth]} ${selectedYear}`}>
+                    <RangeTag text={monthRange()} />
+                  </CardHead>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap", margin: "-6px 0 12px" }}>
+                    <div style={{ fontSize: 12, color: COLORS.mute }}>Week-by-week sales breakdown</div>
                     {wTotalRev > 0 && (
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 11, color: T.textLabel }}>Month Total</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: accent }}>{fmtK(wTotalRev, activeStore.currency)}</div>
+                        <div className={ui.statNum} style={{ fontSize: 24 }}>{fmtK(wTotalRev, activeStore.currency)}</div>
+                        <div className={ui.statLabel}>Month Total</div>
                       </div>
                     )}
                   </div>
                   {weeklyData.length > 0 && wTotalRev > 0 ? (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={weeklyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-                        <defs>
-                          <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={accent} stopOpacity={0.9} />
-                            <stop offset="100%" stopColor={accent} stopOpacity={0.5} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
-                        <XAxis dataKey="label" interval={0} tick={{ fontSize: 12, fill: T.textMuted }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false}
+                        <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
+                        <XAxis dataKey="label" interval={0} tick={axisTick} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false}
                           tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
-                        <Bar dataKey="revenue" name="Revenue" fill="url(#wg)" radius={[6, 6, 0, 0]} />
+                        <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ fill: inkA(0.04) }} />
+                        <Bar dataKey="revenue" name="Revenue" fill={INK} radius={[6, 6, 0, 0]} maxBarSize={56}>
+                          {weeklyData.map((w, i) => <Cell key={i} fill={w.week === selectedWeek ? ORANGE : INK} fillOpacity={w.week === selectedWeek ? 1 : 0.2} />)}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: T.textLabel, fontSize: 13 }}>
+                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.mute, fontSize: 13 }}>
                       {anyLoading ? "Loading weekly data…" : `No sales recorded in ${MONTH_NAMES[weeklyMonth]} ${selectedYear}`}
                     </div>
                   )}
-                </div>
+                </Card>
 
                 {/* Weekly table */}
-                <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600 }}>
-                      Weekly Breakdown · {MONTH_NAMES[weeklyMonth]} {onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}
-                      <div style={{ marginTop: 6 }}><RangeTag text={monthRange()} theme={T} /></div>
-                    </div>
-                    <div style={{ fontSize: 10, color: T.textMuted }}>{activeStore.currency}</div>
-                  </div>
+                <Card style={{ marginBottom: 14 }}>
+                  <CardHead icon="calendar" title={`Weekly Breakdown · ${MONTH_NAMES[weeklyMonth]} ${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}`}>
+                    <RangeTag text={monthRange()} />
+                  </CardHead>
+                  <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{activeStore.currency}</div>
                   <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                       <thead>
                         <tr>
                           {["Week","Date Range","Revenue","Gross Profit","Margin","Orders","AOV","Discounts","New Cust.","vs Prev Week"].map(h => (
-                            <th key={h} style={{ textAlign: "left", padding: "0 8px 10px", color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9, fontWeight: 600, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: "nowrap" }}>{h}</th>
+                            <th key={h} style={thStyle("left")}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {weeklyData.length === 0 ? (
                           <tr>
-                            <td colSpan={10} style={{ padding: "28px 8px", color: T.textLabel, textAlign: "center" }}>
+                            <td colSpan={10} style={{ padding: "28px 8px", color: COLORS.mute, textAlign: "center" }}>
                               {anyLoading ? "Loading…" : "No weekly data available for this month"}
                             </td>
                           </tr>
@@ -3464,116 +3383,120 @@ export default function EcommerceDashboard({ section = "overview" }) {
                           const perDay = (w) => (w.days > 0 ? w.revenue / w.days : w.revenue);
                           const wGrowth = prevW ? calcGrowth(perDay(row), perDay(prevW)) : null;
                           const has = row.revenue > 0;
+                          const c = tdStyle;
+                          const none = <span style={{ color: COLORS.mute }}>-</span>;
                           return (
-                            <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: hoveredMonth === 100 + i ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}
+                            <tr key={i} style={{ background: hoveredMonth === 100 + i ? inkA(0.035) : "transparent", transition: "background 0.15s" }}
                               onMouseEnter={() => setHoveredMonth(100 + i)} onMouseLeave={() => setHoveredMonth(null)}>
-                              <td style={{ padding: "10px 8px", color: accent, fontWeight: 700, fontSize: 12 }}>Week {row.week}</td>
-                              <td style={{ padding: "10px 8px", color: T.textSub, fontSize: 10 }}>{row.dateRange}</td>
-                              <td style={{ padding: "10px 8px", color: T.text, fontWeight: 600 }}>{has ? fmtK(row.revenue, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 600 }}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px" }}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#8a9aaa" }}>{has ? row.orders : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#8aaa8a" }}>{has ? fmtK(row.aov, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#aa8a6a" }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px", color: "#9EC97C" }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : <span style={{ color: T.textLabel }}>-</span>}</td>
-                              <td style={{ padding: "10px 8px" }}><GrowthBadge value={wGrowth} /></td>
+                              <td style={{ ...c, fontWeight: 500, color: row.week === selectedWeek ? ORANGE : INK }}>Week {row.week}</td>
+                              <td style={{ ...c, color: COLORS.mute, fontSize: 11.5 }}>{row.dateRange}</td>
+                              <td style={{ ...c, fontWeight: 500 }}>{has ? fmtK(row.revenue, activeStore.currency) : none}</td>
+                              <td style={c}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : none}</td>
+                              <td style={c}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} /> : none}</td>
+                              <td style={{ ...c, color: COLORS.ink2 }}>{has ? row.orders : none}</td>
+                              <td style={{ ...c, color: COLORS.ink2 }}>{has ? fmtK(row.aov, activeStore.currency) : none}</td>
+                              <td style={{ ...c, color: COLORS.ink2 }}>{row.totalDiscounts > 0 ? fmtK(row.totalDiscounts, activeStore.currency) : none}</td>
+                              <td style={{ ...c, color: COLORS.ink2 }}>{row.newCustomers != null ? row.newCustomers.toLocaleString() : none}</td>
+                              <td style={c}><GrowthBadge value={wGrowth} /></td>
                             </tr>
                           );
                         })}
                       </tbody>
                       {weeklyData.length > 0 && wTotalRev > 0 && (
                         <tfoot>
-                          <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                            <td colSpan={2} style={{ padding: "10px 8px", color: T.textMuted, fontSize: 10, fontWeight: 700 }}>MONTH TOTAL</td>
-                            <td style={{ padding: "10px 8px", color: T.textHead, fontWeight: 700 }}>{fmtK(wTotalRev, activeStore.currency)}</td>
-                            <td style={{ padding: "10px 8px", color: "#C97C9E", fontWeight: 700 }}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "-"}</td>
-                            <td style={{ padding: "10px 8px" }}>{wMarginPct != null ? <MarginBar value={wMarginPct} accent={accent} /> : <span style={{ color: T.textLabel }}>-</span>}</td>
-                            <td style={{ padding: "10px 8px", color: "#8a9aaa", fontWeight: 700 }}>{wTotalOrd}</td>
-                            <td style={{ padding: "10px 8px", color: "#8aaa8a", fontWeight: 700 }}>{fmtK(wAvgAOV, activeStore.currency)}</td>
-                            <td style={{ padding: "10px 8px", color: "#aa8a6a", fontWeight: 700 }}>{wTotalDisc > 0 ? fmtK(wTotalDisc, activeStore.currency) : "-"}</td>
-                            <td style={{ padding: "10px 8px", color: "#9EC97C", fontWeight: 700 }}>{wTotalNewC || "-"}</td>
-                            <td />
+                          <tr>
+                            <td colSpan={2} style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>MONTH TOTAL</td>
+                            <td style={footStyle("left")}>{fmtK(wTotalRev, activeStore.currency)}</td>
+                            <td style={footStyle("left")}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "-"}</td>
+                            <td style={footStyle("left")}>{wMarginPct != null ? <MarginBar value={wMarginPct} /> : <span style={{ color: COLORS.mute }}>-</span>}</td>
+                            <td style={footStyle("left")}>{wTotalOrd}</td>
+                            <td style={footStyle("left")}>{fmtK(wAvgAOV, activeStore.currency)}</td>
+                            <td style={footStyle("left")}>{wTotalDisc > 0 ? fmtK(wTotalDisc, activeStore.currency) : "-"}</td>
+                            <td style={footStyle("left")}>{wTotalNewC || "-"}</td>
+                            <td style={footStyle("left")} />
                           </tr>
                         </tfoot>
                       )}
                     </table>
-                    <div style={{ marginTop: 10, fontSize: 10, color: T.textMuted }}>Weeks run Monday to Sunday and the first and last are clipped to the month. Vs Prev Week compares revenue per day, so a short or unfinished week is not judged against a full one.</div>
+                    <div style={{ marginTop: 10, fontSize: 11.5, color: COLORS.mute }}>Weeks run Monday to Sunday and the first and last are clipped to the month. Vs Prev Week compares revenue per day, so a short or unfinished week is not judged against a full one.</div>
                   </div>
-                </div>
+                </Card>
               </>
             );
           })()
         ) : (
           /* YOY VIEW */
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Annual Revenue</div>
-                <div style={{ fontSize: 11, color: T.textSub, marginBottom: 20 }}>Year-over-Year</div>
+            <div className={ui.grid2} style={{ marginBottom: 14 }}>
+              <Card>
+                <CardHead icon="bars" title="Annual Revenue" />
+                <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>Year-over-Year</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-                    <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent} stopOpacity={1} /><stop offset="100%" stopColor={accent} stopOpacity={0.5} /></linearGradient></defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: T.textMuted, fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-                    <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
-                    <Bar dataKey="revenue" name="Revenue" fill="url(#bg)" radius={[8, 8, 0, 0]} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: COLORS.mute }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+                    <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ fill: inkA(0.04) }} />
+                    <Bar dataKey="revenue" name="Revenue" fill={INK} radius={[8, 8, 0, 0]} maxBarSize={64}>
+                      {yoyData.map((yr) => <Cell key={yr.year} fill={yr.year === String(selectedYear) ? ORANGE : INK} fillOpacity={yr.year === String(selectedYear) ? 1 : 0.2} />)}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 4 }}>Orders & AOV Trend</div>
-                <div style={{ fontSize: 11, color: T.textSub, marginBottom: 20 }}>Volume and value evolution</div>
+              </Card>
+              <Card>
+                <CardHead icon="trending" title="Orders & AOV Trend" />
+                <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>Volume and value evolution</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"} />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: T.textMuted, fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: T.textLabel }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
-                    <Tooltip content={<CustomTooltip currency={activeStore.currency} accent={accent} />} />
-                    <Bar yAxisId="l" dataKey="orders" name="Orders" fill="#7C9EC960" radius={[6, 6, 0, 0]} />
-                    <Line yAxisId="r" type="monotone" dataKey="aov" name="AOV" stroke="#9EC97C" strokeWidth={3} dot={{ fill: "#9EC97C", r: 6, stroke: "#080A10", strokeWidth: 2 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: COLORS.mute }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                    <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ fill: inkA(0.04) }} />
+                    <Bar yAxisId="l" dataKey="orders" name="Orders" fill={inkA(0.18)} radius={[6, 6, 0, 0]} maxBarSize={56} />
+                    <Line yAxisId="r" type="monotone" dataKey="aov" name="AOV" stroke={INK} strokeWidth={2} dot={{ fill: INK, r: 4, stroke: "#fff", strokeWidth: 2 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
-              </div>
+              </Card>
             </div>
 
-            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 20, padding: 24 }}>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: T.textHead, fontWeight: 600, marginBottom: 20 }}>Year-over-Year Summary</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
+            <Card style={{ marginBottom: 14 }}>
+              <CardHead icon="calendar" title="Year-over-Year Summary" />
+              <div className={st.yearGrid}>
                 {yoyData.map((yr, i) => {
                   const p   = yoyData[i - 1];
                   const rg  = p ? calcGrowth(yr.revenue, p.revenue) : null;
                   const og  = p ? calcGrowth(yr.orders,  p.orders)  : null;
                   const isCur = yr.year === String(selectedYear);
+                  const lab = { fontSize: 11, color: COLORS.mute, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 };
                   return (
-                    <div key={yr.year} style={{ borderRadius: 14, padding: "18px 20px", border: `1px solid ${isCur ? accent + "40" : "rgba(255,255,255,0.06)"}`, background: isCur ? `${accent}08` : "rgba(255,255,255,0.01)", opacity: yr.loaded ? 1 : 0.3, transition: "opacity 0.4s" }}>
+                    <div key={yr.year} className={st.yearTile} style={{ borderColor: isCur ? INK : undefined, opacity: yr.loaded ? 1 : 0.35 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, color: isCur ? accent : "#6a5a40", fontWeight: 700 }}>{yr.year}</div>
-                        {isLoading(parseInt(yr.year)) && <span style={{ fontSize: 9, color: accent }}>…</span>}
+                        <div style={{ fontSize: 20, fontWeight: 300, color: isCur ? ORANGE : INK }}>{yr.year}</div>
+                        {isLoading(parseInt(yr.year)) && <Pill>Loading</Pill>}
                       </div>
-                      <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Revenue</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{fmt(yr.revenue, activeStore.currency)}</div>
-                        {rg !== null && <div style={{ fontSize: 11, color: rg >= 0 ? "#4ade80" : "#f87171", marginTop: 2, fontWeight: 600 }}>{fmtPct(rg)} vs {p.year}</div>}
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={lab}>Revenue</div>
+                        <div style={{ fontSize: 15, fontWeight: 500 }}>{fmt(yr.revenue, activeStore.currency)}</div>
+                        {rg !== null && <div style={{ marginTop: 2 }}><Delta value={rg} /> <span className={ui.was}>vs {p.year}</span></div>}
                       </div>
-                      <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Gross Profit</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#C97C9E" }}>
-                          {yr.grossProfit !== null ? fmt(yr.grossProfit, activeStore.currency) : <span style={{ color: T.textLabel }}>-</span>}
-                          {yr.margin !== null && <span style={{ fontSize: 10, color: "#7a5a6a", marginLeft: 5 }}>{yr.margin}%</span>}
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={lab}>Gross Profit</div>
+                        <div style={{ fontSize: 13.5 }}>
+                          {yr.grossProfit !== null ? fmt(yr.grossProfit, activeStore.currency) : <span style={{ color: COLORS.mute }}>-</span>}
+                          {yr.margin !== null && <span style={{ fontSize: 11, color: COLORS.mute, marginLeft: 5 }}>{yr.margin}%</span>}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 9, color: T.textLabel, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Orders</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#8a9aaa" }}>{yr.orders.toLocaleString()}</div>
-                        {og !== null && <div style={{ fontSize: 11, color: og >= 0 ? "#4ade80" : "#f87171", marginTop: 2, fontWeight: 600 }}>{fmtPct(og)} vs {p.year}</div>}
+                        <div style={lab}>Orders</div>
+                        <div style={{ fontSize: 13.5, color: COLORS.ink2 }}>{yr.orders.toLocaleString()}</div>
+                        {og !== null && <div style={{ marginTop: 2 }}><Delta value={og} /> <span className={ui.was}>vs {p.year}</span></div>}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </Card>
           </>
         )}
         </>)}
@@ -3581,8 +3504,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {/* SALES BY REP on the Overview page, for North, Oceania and South. The same table as
             the Sales by Rep page, fed by the same figures, so the two can never disagree. */}
         {section === "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
-          <div style={{ marginTop: 8 }}>
-            {activeStore.id === "worthy" && <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} />}
+          <div style={{ marginTop: 14 }}>
+            {activeStore.id === "worthy" && <SalesVsTargetTable payload={fyPayload(selectedYear)} />}
             <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
@@ -3594,24 +3517,25 @@ export default function EcommerceDashboard({ section = "overview" }) {
               onWeeklyMonthChange={setWeeklyMonth}
               fyMonths={FY_MONTHS}
               rangeLabel={yearRange()} monthRangeLabel={monthRange()}
-              T={T} accent={accent}
+              T={T}
               exact={exactAmounts}
             />
           </div>
         )}
         {section === "overview" && activeStore.id === "worthy" && channelTab !== "odoo" && (
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 14 }}>
             {channelTab === "pos" ? (
-              <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
-                aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
+              <AdvancedTable icon="users" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area."
+                visual={<BarList rows={salespeople.map(s => ({ name: s.name, value: s.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} />} />
             ) : (
-              <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0" }}>Online sales aren't broken down by rep - switch to the POS tab for rep figures.</div>
+              <div style={{ fontSize: 13, color: COLORS.mute, padding: "20px 0" }}>Online sales aren&apos;t broken down by rep - switch to the POS tab for rep figures.</div>
             )}
           </div>
         )}
         {section === "overview" && activeStore.id === "luxe" && (
-          <div style={{ marginTop: 8 }}>
-            <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} company="south" />
+          <div style={{ marginTop: 14 }}>
+            <SalesVsTargetTable payload={fyPayload(selectedYear)} company="south" />
             <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
               salespeople={getSalespeople()}
               salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
@@ -3623,7 +3547,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               onWeeklyMonthChange={setWeeklyMonth}
               fyMonths={FY_MONTHS}
               rangeLabel={yearRange()} monthRangeLabel={monthRange()}
-              T={T} accent={accent}
+              T={T}
               exact
             />
           </div>
@@ -3637,7 +3561,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {advTab === "reps" && (
               <>
                 {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
-                {activeStore.id === "worthy" && <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} />}
+                {activeStore.id === "worthy" && <SalesVsTargetTable payload={fyPayload(selectedYear)} />}
                 <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
                   salespeople={getOdooSalespeople()}
                   salespeopleMonthly={getOdooSalespeopleMonthly()}
@@ -3649,7 +3573,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   onWeeklyMonthChange={setWeeklyMonth}
                   fyMonths={FY_MONTHS}
                   rangeLabel={yearRange()} monthRangeLabel={monthRange()}
-                  T={T} accent={accent}
+                  T={T}
                   exact={exactAmounts}
                 />
               </>
@@ -3658,32 +3582,32 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {showGroup("products") && isAnalytics && <GroupTitle text="Categories & Products" />}
             {showGroup("products") && (
               <>
-                <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
-                  <Icon name="alert" size={13} style={{ marginRight: 6 }} />{INTERCOMPANY_NOTE}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-                  <AdvancedTable theme={T} icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
+                <Notice style={{ marginBottom: 14 }}>{INTERCOMPANY_NOTE}</Notice>
+                <div className={st.tableGrid}>
+                  <AdvancedTable icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
                     loading={isLoading(selectedYear)} currency={activeStore.currency}
                     data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
+                    visual={<BarList rows={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     columns={[
-                      { key: "name",         label: "Category",     color: T.text },
-                      { key: "productCount", label: "# Products",   align: "center", color: "#7C9EC9" },
-                      { key: "qty",          label: "Units Sold",   align: "right",  color: "#9EC97C" },
-                      { key: "revenue",      label: "Revenue",      align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                      { key: "margin",       label: "Margin",       align: "right",  color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                      { key: "name",         label: "Category",     color: INK },
+                      { key: "productCount", label: "# Products",   align: "center", color: COLORS.ink2 },
+                      { key: "qty",          label: "Units Sold",   align: "right",  color: COLORS.ink2 },
+                      { key: "revenue",      label: "Revenue",      align: "right",  color: INK, format: (v, c) => fmtK(v, c) },
+                      { key: "margin",       label: "Margin",       align: "right",  color: COLORS.ink2, format: v => v !== null ? `${v}%` : "-" },
                     ]}
                     aiContext="top Odoo categories"
                     aiExtra="Which categories drive the business? Flag any with margin < 15%, those need a price review."
                   />
-                  <AdvancedTable theme={T} icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
+                  <AdvancedTable icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
                     loading={isLoading(selectedYear)} currency={activeStore.currency}
                     data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                    visual={<BarList rows={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, value: p.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     columns={[
-                      { key: "name",     label: "Product",  color: T.text },
-                      { key: "category", label: "Category", color: T.textMuted },
-                      { key: "qtySold",  label: "Units",    align: "right", color: "#9EC97C" },
-                      { key: "revenue",  label: "Revenue",  align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                      { key: "margin",   label: "Margin",   align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                      { key: "name",     label: "Product",  color: INK },
+                      { key: "category", label: "Category", color: COLORS.mute },
+                      { key: "qtySold",  label: "Units",    align: "right", color: COLORS.ink2 },
+                      { key: "revenue",  label: "Revenue",  align: "right", color: INK, format: (v, c) => fmtK(v, c) },
+                      { key: "margin",   label: "Margin",   align: "right", color: COLORS.ink2, format: v => v !== null ? `${v}%` : "-" },
                     ]}
                     aiContext="top Odoo products"
                     aiExtra="Are these stocked correctly? Imported lines with long lead times need 60+ days of cover. Flag anything trending down vs prior month."
@@ -3694,28 +3618,30 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
             {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
             {showGroup("movers") && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-                <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
+              <div className={st.tableGrid}>
+                <AdvancedTable icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
                   loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooFastMoving().slice(0, 20)}
+                  visual={<BarList rows={getOdooFastMoving().slice(0, 20).map(p => ({ name: p.name, value: p.unitsSold }))} share={false} />}
                   columns={[
-                    { key: "name",         label: "Product",     color: T.text },
-                    { key: "category",     label: "Category",    color: T.textMuted },
-                    { key: "unitsSold",    label: "Units Sold",  align: "right", color: "#16a34a" },
-                    { key: "currentStock", label: "On Hand",     align: "right", color: T.textSub },
-                    { key: "revenue",      label: "Revenue",     align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                    { key: "margin",       label: "Margin",      align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                    { key: "name",         label: "Product",     color: INK },
+                    { key: "category",     label: "Category",    color: COLORS.mute },
+                    { key: "unitsSold",    label: "Units Sold",  align: "right", color: INK },
+                    { key: "currentStock", label: "On Hand",     align: "right", color: COLORS.ink2 },
+                    { key: "revenue",      label: "Revenue",     align: "right", color: INK, format: (v, c) => fmtK(v, c) },
+                    { key: "margin",       label: "Margin",      align: "right", color: COLORS.ink2, format: v => v !== null ? `${v}%` : "-" },
                   ]}
                   aiContext="fast-moving Odoo SKUs"
                   aiExtra="These are your engine. Make sure cover ratio is at least 6 weeks. Are any close to stockout?"
                 />
-                <AdvancedTable theme={T} icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period, ranked by capital sitting idle. Clear, bundle or discontinue"
+                <AdvancedTable icon="hourglass" title="Slow-Moving SKUs" range={tableRange()} subtitle="Stock held today against sales in the period, ranked by capital sitting idle. Clear, bundle or discontinue"
                   loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooSlowMoving().slice(0, 20)}
+                  visual={<BarList rows={getOdooSlowMoving().slice(0, 20).map(p => ({ name: p.name, value: p.lockedCapital }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                   columns={[
-                    { key: "name",          label: "Product",       color: T.text },
-                    { key: "category",      label: "Category",      color: T.textMuted },
-                    { key: "currentStock",  label: "On Hand",       align: "right", color: T.textSub },
-                    { key: "qtySold",       label: "Units Sold",    align: "right", color: T.textMuted },
-                    { key: "lockedCapital", label: "Capital Tied",  align: "right", color: "#f87171", format: (v, c) => fmtK(v, c) },
+                    { key: "name",          label: "Product",       color: INK },
+                    { key: "category",      label: "Category",      color: COLORS.mute },
+                    { key: "currentStock",  label: "On Hand",       align: "right", color: COLORS.ink2 },
+                    { key: "qtySold",       label: "Units Sold",    align: "right", color: COLORS.mute },
+                    { key: "lockedCapital", label: "Capital Tied",  align: "right", color: ORANGE, format: (v, c) => fmtK(v, c) },
                   ]}
                   aiContext="slow-moving Odoo SKUs"
                   aiExtra="Top 3 by capital tied, recommend specific clearance pricing or rep push. Anything with an expiry risk?"
@@ -3725,33 +3651,34 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
             {showGroup("customers") && isAnalytics && <GroupTitle text="Customers" />}
             {showGroup("customers") && isAnalytics && activeStore.id === "worthy" && (
-              <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
+              <Notice icon="building" style={{ marginBottom: 14 }}>
                 Worthy Products South (Dutch Rusk) and Worthy Oceania are inter-company customers of North and appear in this list.
-              </div>
+              </Notice>
             )}
             {showGroup("customers") && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-                <AdvancedTable theme={T} icon="trophy" title="Top Customers" range={tableRange()} subtitle="Ranked by net invoice revenue (customers only, suppliers excluded)"
+              <div className={st.tableGrid}>
+                <AdvancedTable icon="trophy" title="Top Customers" range={tableRange()} subtitle="Ranked by net invoice revenue (customers only, suppliers excluded)"
                   loading={isLoading(selectedYear)} currency={activeStore.currency} data={getOdooCustomers().slice(0, 20)}
+                  visual={<BarList rows={getOdooCustomers().slice(0, 20).map(c => ({ name: c.name, value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                   columns={[
-                    { key: "name",    label: "Customer", color: T.text },
+                    { key: "name",    label: "Customer", color: INK },
                     /* `orderCount`, not `orders` - the getter's own field name. Reading
                        the wrong key left this column blank on every row. */
-                    { key: "orderCount", label: "Orders", align: "center", color: "#7C9EC9" },
-                    { key: "revenue", label: "Revenue",  align: "right",  color: accent, format: (v, c) => fmtK(v, c) },
-                    { key: "aov",     label: "Avg Order",align: "right",  color: "#9EC97C", format: (v, c) => fmtK(v, c) },
+                    { key: "orderCount", label: "Orders", align: "center", color: COLORS.ink2 },
+                    { key: "revenue", label: "Revenue",  align: "right",  color: INK, format: (v, c) => fmtK(v, c) },
+                    { key: "aov",     label: "Avg Order",align: "right",  color: COLORS.ink2, format: (v, c) => fmtK(v, c) },
                     { key: "status",  label: "Status",   align: "center", format: v => renderStatus(v) },
                   ]}
                   aiContext="Odoo top customers"
                   aiExtra="These are B2B wholesale customers on credit terms. Note any dairies, gas stations or corner stores. Flag anyone showing 'At Risk' or 'Lapsed' status, call them this week."
                 />
-                <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 days)" range={tableRange("asat")} subtitle="Overdue for reorder, call before they lapse"
+                <AdvancedTable icon="alert" title="At-Risk Customers (45 to 90 days)" range={tableRange("asat")} subtitle="Overdue for reorder, call before they lapse"
                   loading={isLoading(selectedYear)} currency={activeStore.currency}
                   data={getOdooAtRisk().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, status: c.status, orderCount: c.orderCount }))}
                   columns={atRiskColumns} aiContext="at-risk Odoo customers"
                   aiExtra="Suggest which rep should phone each customer this week. These reorder windows close fast."
                 />
-                <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 days)" range={tableRange("asat")} subtitle="Stopped ordering, win-back priority"
+                <AdvancedTable icon="userMinus" title="Lapsed Customers (>90 days)" range={tableRange("asat")} subtitle="Stopped ordering, win-back priority"
                   loading={isLoading(selectedYear)} currency={activeStore.currency}
                   data={getOdooLapsed().slice(0, 20).map(c => ({ name: c.name, revenue: c.revenue, daysSince: c.daysSince, lastOrderDate: c.lastOrderDate, orderCount: c.orderCount }))}
                   columns={churnedColumns} aiContext="lapsed Odoo customers"
@@ -3761,11 +3688,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
             )}
 
             {advTab === "credits" && (
-              <CreditsPanel source={`/api/odoo/credits?company=${activeStore.odooCompanyId}`} theme={T} accent={accent} currency={activeStore.currency} rangeLabel={yearRange()} />
+              <CreditsPanel source={`/api/odoo/credits?company=${activeStore.odooCompanyId}`} currency={activeStore.currency} rangeLabel={yearRange()} />
             )}
 
             {advTab === "debtors" && (
-              <DebtorsPanel source={`/api/odoo/debtors?company=${activeStore.odooCompanyId}`} theme={T} accent={accent} currency={activeStore.currency} />
+              <DebtorsPanel source={`/api/odoo/debtors?company=${activeStore.odooCompanyId}`} currency={activeStore.currency} />
             )}
           </>
         )}
@@ -3779,42 +3706,34 @@ export default function EcommerceDashboard({ section = "overview" }) {
               products={categoryModal?.products}
               currency={activeStore.currency}
               onClose={() => setCategoryModal(null)}
-              accent={accent}
             />
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28, marginBottom: 0, padding: "14px 20px", background: T.bgCard, border: `1px solid ${accent}30`, borderRadius: 12, flexWrap: "wrap", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Icon name="chart" size={20} style={{ color: accent }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: T.textHead }}>
-                    {view === "weekly"
-                      ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
-                      : view === "yoy"
-                      ? `All Years · Year on Year`
-                      : activeStore.id === "luxe"
-                      ? `Financial year ${selectedYear}`
-                      : latestMonth
-                      ? `${latestMonth.month} ${selectedYear}`
-                      : `${selectedYear}`}
-                  </div>
-                  <div style={{ fontSize: 11, color: T.textMuted }}>
-                    {activeStore.id === "luxe" && view !== "weekly"
-                      ? "Everything below covers the whole financial year so far, not just the latest month"
-                      : "Analytics for the selected period"}
-                  </div>
-                </div>
+            <Card style={{ marginTop: 14, marginBottom: 14 }}>
+              <CardHead icon="chart" title={
+                view === "weekly"
+                  ? `Week ${selectedWeek} · ${weekDateRange(selectedYear, weeklyMonth, selectedWeek)}`
+                  : view === "yoy"
+                  ? `All Years · Year on Year`
+                  : activeStore.id === "luxe"
+                  ? `Financial year ${selectedYear}`
+                  : latestMonth
+                  ? `${latestMonth.month} ${selectedYear}`
+                  : `${selectedYear}`}>
+                <RangeTag text={tableRange()} />
+              </CardHead>
+              <div style={{ fontSize: 12.5, color: COLORS.mute, marginTop: -6 }}>
+                {activeStore.id === "luxe" && view !== "weekly"
+                  ? "Everything below covers the whole financial year so far, not just the latest month"
+                  : "Analytics for the selected period"}
               </div>
-              <span style={{ fontSize: 10, color: T.textMuted, fontFamily: "monospace", background: T.bgTableHead, padding: "4px 10px", borderRadius: 8, border: `1px solid ${T.border}` }}>
-                {tableRange()}
-              </span>
-            </div>
+            </Card>
 
             {renderAdvTabs(activeStore.id === "luxe" ? ADV_TABS : ADV_TABS.filter(t => !["credits", "debtors"].includes(t.id)))}
 
             {advTab === "reps" && (
               activeStore.id === "luxe" ? (
                 <>
-                <SalesVsTargetTable theme={T} payload={fyPayload(selectedYear)} company="south" />
+                <SalesVsTargetTable payload={fyPayload(selectedYear)} company="south" />
                 <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
@@ -3826,30 +3745,31 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   onWeeklyMonthChange={setWeeklyMonth}
                   fyMonths={FY_MONTHS}
                   rangeLabel={yearRange()} monthRangeLabel={monthRange()}
-                  T={T} accent={accent}
+                  T={T}
                   exact
                 />
                 </>
               ) : channelTab === "pos" ? (
-                <AdvancedTable theme={T} icon="user" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
-                  aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area." />
+                <AdvancedTable icon="users" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
+                  aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area."
+                  visual={<BarList rows={salespeople.map(s => ({ name: s.name, value: s.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} />} />
               ) : (
-                <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0" }}>Online sales aren't broken down by rep - switch to the POS tab for rep figures.</div>
+                <div style={{ fontSize: 13, color: COLORS.mute, padding: "20px 0" }}>Online sales aren&apos;t broken down by rep - switch to the POS tab for rep figures.</div>
               )
             )}
 
             {showGroup("products") && isAnalytics && <GroupTitle text="Categories & Products" />}
             {showGroup("products") && (
               <>
-                <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "#b4530912", border: "1px solid #b4530933", fontSize: 12, color: "#b45309", lineHeight: 1.6 }}>
-                  <Icon name="alert" size={13} style={{ marginRight: 6 }} />{INTERCOMPANY_NOTE}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-                  <AdvancedTable theme={T} title="Top Categories" range={tableRange()} subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
+                <Notice style={{ marginBottom: 14 }}>{INTERCOMPANY_NOTE}</Notice>
+                <div className={st.tableGrid}>
+                  <AdvancedTable icon="folder" title="Top Categories" range={tableRange()} subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
                     onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
+                    visual={<BarList rows={displayCategories.map(c => ({ name: c.name, value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     aiContext="top revenue categories"
                     aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
-                  <AdvancedTable theme={T} title="Top Products" range={tableRange()}    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
+                  <AdvancedTable icon="award" title="Top Products" range={tableRange()}    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
+                    visual={<BarList rows={displayProducts.map(p => ({ name: p.name, value: p.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     aiExtra="Note any imported products in the top list, these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
                 </div>
               </>
@@ -3857,25 +3777,27 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
             {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
             {showGroup("movers") && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-                <AdvancedTable theme={T} icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
+              <div className={st.tableGrid}>
+                <AdvancedTable icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
                   loading={advLoading} currency={activeStore.currency}
                   /* Read the fast-moving list the endpoint builds from EVERY product.
                      Re-sorting the top-by-revenue list by units cannot find a fast
                      mover that earns little: nine of these twenty rows were wrong,
                      and the real leader - 4,676 units - was not on the page at all. */
                   data={(advancedData.curr?.fastMoving || []).slice(0, 20).map(p => ({ name: p.title, category: p.category, unitsSold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                  visual={<BarList rows={(advancedData.curr?.fastMoving || []).slice(0, 20).map(p => ({ name: p.title, value: p.unitsSold }))} share={false} />}
                   columns={[
-                    { key: "name",      label: "Product",    color: T.text },
-                    { key: "category",  label: "Category",   color: T.textMuted },
-                    { key: "unitsSold", label: "Units Sold", align: "right", color: "#16a34a" },
-                    { key: "revenue",   label: "Revenue",    align: "right", color: accent, format: (v, c) => fmtK(v, c) },
-                    { key: "margin",    label: "Margin",     align: "right", color: "#C97C9E", format: v => v !== null ? `${v}%` : "-" },
+                    { key: "name",      label: "Product",    color: INK },
+                    { key: "category",  label: "Category",   color: COLORS.mute },
+                    { key: "unitsSold", label: "Units Sold", align: "right", color: INK },
+                    { key: "revenue",   label: "Revenue",    align: "right", color: INK, format: (v, c) => fmtK(v, c) },
+                    { key: "margin",    label: "Margin",     align: "right", color: COLORS.ink2, format: v => v !== null ? `${v}%` : "-" },
                   ]}
                   aiContext="fast-moving SKUs"
                   aiExtra="Ensure 6+ weeks of cover on these. Flag any close to stockout, these drive the business."
                 />
-                <AdvancedTable theme={T} icon="alert" title="Slow-Moving Inventory" range={tableRange()} subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
+                <AdvancedTable icon="hourglass" title="Slow-Moving Inventory" range={tableRange()} subtitle="Capital tied up in low-turnover stock"    loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.slowMoving || []} columns={slowMovingColumns} aiContext="slow-moving inventory"
+                  visual={<BarList rows={(advancedData.curr?.slowMoving || []).map(p => ({ name: p.name, value: p.lockedCapital }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                   aiExtra="Pay special attention to imported products, slow-moving imports tie up capital for months and risk obsolescence. Suggest clearance pricing, bundle deals, or targeted rep push for specific territories." />
               </div>
             )}
@@ -3883,65 +3805,72 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {showGroup("customers") && isAnalytics && <GroupTitle text="Customers" />}
             {showGroup("customers") && (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 20 }}>
-                  <AdvancedTable theme={T} title="Top Customers" range={tableRange()}   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
+                <div className={st.tableGrid} style={{ marginBottom: 14 }}>
+                  <AdvancedTable icon="trophy" title="Top Customers" range={tableRange()}   subtitle="Loyalty & Spend" loading={advLoading} currency={activeStore.currency} data={displayCustomers}  columns={customerColumns} aiContext="top customers by spend"
+                    visual={<BarList rows={displayCustomers.map(c => ({ name: c.name, value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     aiExtra="Consider customer types: dairies, supermarkets, gas stations, night markets. Identify any at risk of switching to competitors. Note credit vs B2C customers if distinguishable." />
-                  <AdvancedTable theme={T} icon="userMinus" title="Lapsed Customers (>90 Days)" range={tableRange("asat")} subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
+                  <AdvancedTable icon="userMinus" title="Lapsed Customers (>90 Days)" range={tableRange("asat")} subtitle="High-value clients who stopped ordering" loading={advLoading} currency={activeStore.currency} data={advancedData.curr?.churned    || []} columns={churnedColumns} aiContext="lapsed customers"
                     aiExtra="These are likely dairies, gas stations or corner stores that may have switched to Gilmours, DKSH or Stock4Shop. Suggest which rep should personally visit and what offer might win them back." />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-                  <AdvancedTable theme={T} icon="alert" title="At-Risk Customers (45 to 90 Days)" range={tableRange("asat")} subtitle="Overdue for a reorder, act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
-                  <AdvancedTable theme={T} icon="gem" title="Customer Lifetime Value" range={tableRange("lifetime")} subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
+                <div className={st.tableGrid}>
+                  <AdvancedTable icon="alert" title="At-Risk Customers (45 to 90 Days)" range={tableRange("asat")} subtitle="Overdue for a reorder, act before they lapse" loading={advLoading} currency={activeStore.currency} data={displayAtRisk} columns={atRiskColumns} aiContext="at-risk customers" />
+                  <AdvancedTable icon="gem" title="Customer Lifetime Value" range={tableRange("lifetime")} subtitle="Top accounts by total spend" loading={advLoading} currency={activeStore.currency} data={displayCLV} columns={clvColumns} aiContext="customer lifetime value" />
                 </div>
               </>
             )}
 
             {advTab === "credits" && activeStore.id === "luxe" && (
-              <CreditsPanel source="/api/ostendo/credits" theme={T} accent={accent} currency={activeStore.currency} rangeLabel={yearRange()} />
+              <CreditsPanel source="/api/ostendo/credits" currency={activeStore.currency} rangeLabel={yearRange()} />
             )}
 
             {advTab === "debtors" && activeStore.id === "luxe" && (
-              <DebtorsPanel source="/api/ostendo/debtors" theme={T} accent={accent} currency={activeStore.currency} />
+              <DebtorsPanel source="/api/ostendo/debtors" currency={activeStore.currency} />
             )}
           </>
         )}
 
-        {/* Footer */}
-        <div style={{ marginTop: 32, padding: "16px 24px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-            {[
-              ...(isMgmt && activeStore.id === "luxe" ? [["Rebates (already deducted)", (() => {
-                const r = view === "monthly" ? (latestMonth?.rebates ?? null)
-                        : curr.reduce((a, m) => a + (m.rebates || 0), 0);
-                return r ? fmtExact(r, activeStore.currency) : "-";
-              })(), "#aa8a6a"]] : []),
-              ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "-", "#8aaa8a"],
-              ...(isMgmt ? [["Total Discounts", kpiDisc != null && kpiDisc !== 0
-                                    ? (exactAmounts ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
-                                    : "-", accent],
-              ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "-", "#C97C9E"]] : []),
-              ...(canSeeStock ? [["Stock Valuation (today, at cost)", stockValue != null ? fmtExact(stockValue, activeStore.currency) : "-", "#7C9EC9"]] : []),
-            ].map(([lbl, val, clr]) => (
-              <div key={lbl}>
-                <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: T.textLabel, marginBottom: 2 }}>{lbl}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: clr }}>{val}</div>
-              </div>
-            ))}
+        {/* Footer: the period's other figures, and what the page is showing */}
+        <Card style={{ marginTop: 22 }}>
+          <div className={st.footer}>
+            <div className={st.footStats}>
+              {[
+                ...(isMgmt && activeStore.id === "luxe" ? [["Rebates (already deducted)", (() => {
+                  const r = view === "monthly" ? (latestMonth?.rebates ?? null)
+                          : curr.reduce((a, m) => a + (m.rebates || 0), 0);
+                  return r ? fmtExact(r, activeStore.currency) : "-";
+                })(), "percent"]] : []),
+                ["New Customers",   kpiNewC != null ? kpiNewC.toLocaleString() : "-", "user"],
+                ...(isMgmt ? [["Total Discounts", kpiDisc != null && kpiDisc !== 0
+                                      ? (exactAmounts ? fmtExact(kpiDisc, activeStore.currency) : fmtK(kpiDisc, activeStore.currency))
+                                      : "-", "receipt"],
+                ["Gross Profit",    kpiGP !== null ? fmtK(kpiGP, activeStore.currency) : "-", "wallet"]] : []),
+                ...(canSeeStock ? [["Stock Valuation (today, at cost)", stockValue != null ? fmtExact(stockValue, activeStore.currency) : "-", "store"]] : []),
+              ].map(([lbl, val, ic]) => (
+                <div key={lbl} className={st.footStat}>
+                  <span className={ui.chip}><Icon n={ic} size={14} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className={ui.statLabel} style={{ marginTop: 0 }}>{lbl}</div>
+                    <div style={{ fontSize: 17, fontWeight: 400, overflowWrap: "anywhere" }}>{val}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className={st.scope}>
+              {(() => {
+                const scope = view === "weekly"  ? `WEEK ${selectedWeek} OF ${MONTH_NAMES[weeklyMonth].toUpperCase()}`
+                            : view === "monthly" ? (latestMonth ? `${latestMonth.month.toUpperCase()} ONLY` : "")
+                            : activeStore.id === "luxe" ? `FULL FY${String(selectedYear).slice(2)}`
+                            : (onFYView() && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete) ? `FY${String(selectedYear).slice(2)} TO DATE`
+                            : `FULL ${selectedYear}`;
+                const who = activeStore.id === "luxe"
+                  ? `WORTHY PRODUCTS SOUTH · FY${String(selectedYear).slice(2)}`
+                  : activeStore.name?.toUpperCase();
+                return `${who} · ${scope}`;
+              })()}
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.06em" }}>
-            {(() => {
-              const scope = view === "weekly"  ? `WEEK ${selectedWeek} OF ${MONTH_NAMES[weeklyMonth].toUpperCase()}`
-                          : view === "monthly" ? (latestMonth ? `${latestMonth.month.toUpperCase()} ONLY` : "")
-                          : activeStore.id === "luxe" ? `FULL FY${String(selectedYear).slice(2)}`
-                          : (onFYView() && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete) ? `FY${String(selectedYear).slice(2)} TO DATE`
-                          : `FULL ${selectedYear}`;
-              const who = activeStore.id === "luxe"
-                ? `WORTHY PRODUCTS SOUTH · FY${String(selectedYear).slice(2)}`
-                : activeStore.name?.toUpperCase();
-              return `${who} · ${scope}`;
-            })()}
-          </div>
-        </div>
+        </Card>
+      </div>
       </div>
     </div>
   );

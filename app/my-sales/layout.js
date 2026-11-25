@@ -14,7 +14,7 @@ export default function MySalesLayout({ children }) {
   return (
     <>
       {/* This page owns the whole screen: no default browser margin, and no sideways scrolling on any device. */}
-      <style>{'html,body{margin:0;padding:0;background:#FAF8F5;overflow-x:hidden}*{box-sizing:border-box}'}</style>
+      <style>{'html,body{margin:0;padding:0;background:#f5f4ef;overflow-x:hidden}*{box-sizing:border-box}'}</style>
       {children}
     </>
   );

@@ -2,135 +2,90 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BarList, Big, Card, CardHead, Empty, Icon, Mini, MonthBars, Pill, Range, Ring, Skeleton, StatLine, Trend, dLong as day, money, monthLabel as mon, n0, pct, ui } from "@/app/design/ui";
+import css from "./social-web.module.css";
 
-const C = { brown: "#66270F", gold: "#FDB714", orange: "#F58220", rust: "#B13924", green: "#2f7a3d", line: "#E4E0DA", bg: "#FAF8F5", muted: "#7A7168", text: "#2B2420" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 18 };
-const th = { textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${C.line}`, color: C.brown, fontSize: 12, whiteSpace: "nowrap" };
-const thR = { ...th, textAlign: "right" };
-const td = { padding: "8px 10px", borderBottom: `1px solid ${C.line}`, fontSize: 13, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
-const h2 = { fontSize: 18, color: C.brown, margin: "28px 0 12px" };
-const h3 = { fontSize: 14, color: C.brown, margin: "0 0 8px" };
+const tbl = `${ui.table} ${css.plain}`;
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const day = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? `${Number(m[3])} ${MONTHS[m[2] - 1]} ${m[1]}` : ""; };
-const mon = (ym) => { const m = /^(\d{4})-(\d{2})/.exec(ym || ""); return m ? `${MONTHS[m[2] - 1]} ${m[1].slice(2)}` : ym; };
-const n0 = (v) => (v === null || v === undefined ? "-" : Math.round(v).toLocaleString("en-NZ"));
-const money = (v) => (v === null || v === undefined ? "-" : `$${Math.round(v).toLocaleString("en-NZ")}`);
-const pct = (v) => (v === null || v === undefined ? "-" : `${(v * 100).toFixed(1)}%`);
-
-const Range = ({ text }) => !text ? null : (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, color: C.muted, border: `1px solid ${C.line}`, maxWidth: "100%", lineHeight: 1.4 }}>
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
-    {text}
-  </span>
-);
-
-function Change({ now, before }) {
-  if (now === null || now === undefined || !before) return null;
-  const d = (now - before) / before;
-  if (!Number.isFinite(d)) return null;
-  const up = d >= 0;
+function Table({ title, icon, cols, rows }) {
+  if (!rows?.length) return null;
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: up ? C.green : C.rust, whiteSpace: "nowrap" }}>
-      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ marginRight: 3 }}>{up ? <path d="M12 4l9 16H3z" /> : <path d="M12 20 3 4h18z" />}</svg>
-      {Math.abs(d * 100).toFixed(1)}%
-    </span>
-  );
-}
-
-function Tile({ label, pair, fmt = n0 }) {
-  if (!pair) return null;
-  return (
-    <div style={{ minWidth: 130 }}>
-      <div style={{ fontSize: 12, color: C.muted }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: C.brown, lineHeight: 1.3 }}>{fmt(pair[0])}</div>
-      <div style={{ display: "flex", gap: 6, alignItems: "baseline", fontSize: 11, color: C.muted }}>
-        <Change now={pair[0]} before={pair[1]} /><span>was {fmt(pair[1])}</span>
+    <div style={{ minWidth: 0 }}>
+      <Mini icon={icon}>{title}</Mini>
+      <div className={ui.tableWrap}>
+        <table className={tbl}>
+          <thead><tr>{cols.map((c, i) => <th key={c[0]} className={i ? ui.num : undefined}>{c[0]}</th>)}</tr></thead>
+          <tbody>{rows.map((r, j) => <tr key={j}>{cols.map((c, i) => <td key={c[0]} className={i ? ui.num : css.nameCell}>{c[1](r)}</td>)}</tr>)}</tbody>
+        </table>
       </div>
     </div>
   );
 }
-
-function Bars({ rows, value, label }) {
-  if (!rows?.length) return null;
-  const max = Math.max(1, ...rows.map((r) => r[value] || 0));
-  return (
-    <div>
-      <div style={h3}>{label}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, paddingTop: 16 }}>
-        {rows.map((r) => (
-          <div key={r.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }} title={`${mon(r.month)}: ${n0(r[value])}`}>
-            <div style={{ fontSize: 9, color: C.muted, whiteSpace: "nowrap" }}>{(r[value] || 0) >= 1000 ? `${((r[value] || 0) / 1000).toFixed(1)}k` : n0(r[value])}</div>
-            <div style={{ width: "100%", maxWidth: 34, height: `${Math.max(2, ((r[value] || 0) / max) * 80)}px`, background: C.orange, borderRadius: "4px 4px 0 0" }} />
-            <div style={{ fontSize: 10, color: C.muted, whiteSpace: "nowrap" }}>{mon(r.month).slice(0, 3)}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Table({ title, cols, rows }) {
-  if (!rows?.length) return null;
-  return (
-    <div style={{ minWidth: 0, overflowX: "auto" }}>
-      <div style={h3}>{title}</div>
-      <table style={{ borderCollapse: "collapse", width: "100%" }}>
-        <thead><tr>{cols.map((c, i) => <th key={c[0]} style={i ? thR : th}>{c[0]}</th>)}</tr></thead>
-        <tbody>{rows.map((r, j) => <tr key={j}>{cols.map((c, i) => <td key={c[0]} style={i ? tdR : { ...td, maxWidth: 280, wordBreak: "break-word" }}>{c[1](r)}</td>)}</tr>)}</tbody>
-      </table>
-    </div>
-  );
-}
-
-const Status = ({ text }) => <div style={{ color: C.muted, fontSize: 14 }}>{text}</div>;
-const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 22, marginTop: 18 };
 
 function Site({ s, range }) {
+  const shop = s.source === "shopify";
   const head = (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-      <a href={`https://${s.name}`} target="_blank" rel="noreferrer" style={{ fontSize: 17, fontWeight: 700, color: C.brown, textDecoration: "none" }}>{s.name}</a>
-      <span style={{ fontSize: 11, color: C.muted, border: `1px solid ${C.line}`, borderRadius: 999, padding: "2px 8px" }}>{s.source === "shopify" ? "Shopify" : "Google Analytics"}</span>
-      <Range text={range} />
-    </div>
+    <CardHead icon={shop ? "store" : "building"} title={<a href={`https://${s.name}`} target="_blank" rel="noreferrer" className={css.siteLink}>{s.name}<Icon n="out" size={13} /></a>}>
+      <Pill>{shop ? "Shopify" : "Google Analytics"}</Pill>
+      <span className={css.rangeWrap}><Range>{range}</Range></span>
+    </CardHead>
   );
   if (s.status !== "ok") {
     const msg = s.status === "not_connected" ? "Not connected yet" : s.status === "no_property" ? "Waiting for its Google Analytics property" : `Could not load: ${s.error || "error"}`;
-    return <div style={card}>{head}<Status text={msg} /></div>;
+    return <Card>{head}<Empty>{msg}</Empty></Card>;
   }
   const t = s.totals;
   return (
-    <div style={card}>
+    <Card>
       {head}
-      <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-        {s.source === "shopify" ? (<>
-          <Tile label="NZ sessions" pair={t.sessions} />
-          <Tile label="NZ conversion rate" pair={t.conversion} fmt={pct} />
-          <Tile label="Online orders" pair={t.orders} />
-          <Tile label="Online net sales" pair={t.revenue} fmt={money} />
+      <StatLine>
+        {shop ? (<>
+          {t.sessions && <Big label="NZ sessions" pair={t.sessions} />}
+          {t.conversion && <Big label="NZ conversion rate" pair={t.conversion} fmt={pct} />}
+          {t.orders && <Big label="Online orders" pair={t.orders} />}
+          {t.revenue && <Big label="Online net sales" pair={t.revenue} fmt={money} accent />}
         </>) : (<>
-          <Tile label="Visitors" pair={t.visitors} />
-          <Tile label="New visitors" pair={t.newVisitors} />
-          <Tile label="Sessions" pair={t.sessions} />
-          <Tile label="Engaged sessions" pair={t.engagedRate} fmt={pct} />
-          <Tile label="Page views" pair={t.pageViews} />
-          <Tile label="Key events" pair={t.keyEvents} />
-          <Tile label="Orders" pair={t.orders} />
-          <Tile label="Revenue" pair={t.revenue} fmt={money} />
+          {t.visitors && <Big label="Visitors" pair={t.visitors} />}
+          {t.newVisitors && <Big label="New visitors" pair={t.newVisitors} />}
+          {t.sessions && <Big label="Sessions" pair={t.sessions} />}
+          {t.engagedRate && <Big label="Engaged sessions" pair={t.engagedRate} fmt={pct} />}
+          {t.pageViews && <Big label="Page views" pair={t.pageViews} />}
+          {t.keyEvents && <Big label="Key events" pair={t.keyEvents} accent />}
+          {t.orders && <Big label="Orders" pair={t.orders} />}
+          {t.revenue && <Big label="Revenue" pair={t.revenue} fmt={money} />}
         </>)}
+      </StatLine>
+
+      <div className={`${ui.grid2} ${css.block}`}>
+        {s.months?.length > 0 && (
+          <div>
+            <Mini icon="bars">{shop ? "NZ sessions by month" : "Visitors by month"}</Mini>
+            <MonthBars rows={s.months} k={shop ? "sessions" : "visitors"} />
+          </div>
+        )}
+        {shop
+          ? s.months?.length > 0 && <div><Mini icon="bag">Online net sales by month</Mini><MonthBars rows={s.months} k="revenue" fmt={money} /></div>
+          : s.devices?.length > 0 && <div><Mini icon="devices">Device</Mini><Ring rows={s.devices} k="sessions" /></div>}
       </div>
-      <div style={grid}>
-        <Table title={s.source === "shopify" ? "Where NZ visitors came from" : "Where visitors came from"} cols={[["Source", (r) => r.name], ["Sessions", (r) => n0(r.sessions)], ...(s.source === "ga4" ? [["Key events", (r) => n0(r.keyEvents)]] : [])]} rows={s.sources} />
-        {s.pages && <Table title="Most viewed pages" cols={[["Page", (r) => r.name], ["Views", (r) => n0(r.views)], ["Visitors", (r) => n0(r.visitors)]]} rows={s.pages} />}
-        {s.channels && <Table title="Sales by channel" cols={[["Channel", (r) => r.name], ["Orders", (r) => n0(r.orders)], ["Net sales", (r) => money(r.revenue)]]} rows={s.channels} />}
-        <Table title="Device" cols={[["Device", (r) => r.name], ["Sessions", (r) => n0(r.sessions)]]} rows={s.devices} />
+      <div className={`${ui.grid2} ${css.block}`}>
+        {s.sources?.length > 0 && (
+          <div>
+            <Mini icon="compass">{shop ? "Where NZ visitors came from" : "Where visitors came from"}</Mini>
+            <BarList rows={s.sources} k="sessions" caps />
+          </div>
+        )}
+        {shop
+          ? s.devices?.length > 0 && <div><Mini icon="devices">Device</Mini><Ring rows={s.devices} k="sessions" /></div>
+          : s.pages?.length > 0 && <div><Mini icon="eye">Most viewed pages</Mini><BarList rows={s.pages} k="views" /></div>}
       </div>
-      <div style={{ ...grid, marginTop: 22 }}>
-        <Bars rows={s.months} value={s.source === "shopify" ? "sessions" : "visitors"} label={s.source === "shopify" ? "NZ sessions by month" : "Visitors by month"} />
-        {s.source === "shopify" && <Bars rows={s.months} value="revenue" label="Online net sales by month" />}
+
+      <div className={`${css.details} ${css.tables}`}>
+        <Table icon="compass" title={shop ? "Where NZ visitors came from" : "Where visitors came from"} cols={[["Source", (r) => r.name], ["Sessions", (r) => n0(r.sessions)], ...(s.source === "ga4" ? [["Key events", (r) => n0(r.keyEvents)]] : [])]} rows={s.sources} />
+        {s.pages && <Table icon="eye" title="Most viewed pages" cols={[["Page", (r) => r.name], ["Views", (r) => n0(r.views)], ["Visitors", (r) => n0(r.visitors)]]} rows={s.pages} />}
+        {s.channels && <Table icon="cart" title="Sales by channel" cols={[["Channel", (r) => r.name], ["Orders", (r) => n0(r.orders)], ["Net sales", (r) => money(r.revenue)]]} rows={s.channels} />}
+        <Table icon="devices" title="Device" cols={[["Device", (r) => r.name], ["Sessions", (r) => n0(r.sessions)]]} rows={s.devices} />
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -138,35 +93,47 @@ const SOCIAL_COLS = [["views", "Views"], ["reach", "Reach"], ["engagements", "En
 
 function Social({ meta, range }) {
   if (meta.status !== "ok") {
-    return <div style={card}><div style={h3}>Facebook and Instagram</div><Status text={meta.status === "not_connected" ? "Not connected yet" : `Could not load: ${meta.error}`} /></div>;
+    return <Card><CardHead icon="megaphone" title="Facebook and Instagram" /><Empty>{meta.status === "not_connected" ? "Not connected yet" : `Could not load: ${meta.error}`}</Empty></Card>;
   }
-  const cell = (pair) => pair ? <><div>{n0(pair[0])}</div><Change now={pair[0]} before={pair[1]} /></> : "-";
+  const cell = (pair) => pair ? <><div>{n0(pair[0])}</div><div className={css.chg}><Trend now={pair[0]} before={pair[1]} /></div></> : "-";
+  const views = meta.accounts.map((a) => ({ name: a.name, views: a.totals?.views?.[0] || 0 })).sort((a, b) => b.views - a.views);
   return (<>
-    <div style={{ ...card, overflowX: "auto" }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}><div style={{ ...h3, margin: 0 }}>Facebook and Instagram</div><Range text={range} /></div>
-      <table style={{ borderCollapse: "collapse", width: "100%" }}>
-        <thead><tr><th style={th}>Account</th><th style={thR}>Followers</th>{SOCIAL_COLS.map(([, l]) => <th key={l} style={thR}>{l}</th>)}</tr></thead>
-        <tbody>{meta.accounts.map((a) => (
-          <tr key={a.platform + a.name}>
-            <td style={td}><a href={a.link} target="_blank" rel="noreferrer" style={{ color: C.text, fontWeight: 600, textDecoration: "none" }}>{a.name}</a><div style={{ color: C.muted, fontSize: 12 }}>{a.platform}</div></td>
-            <td style={tdR}>{n0(a.followers)}</td>
-            {SOCIAL_COLS.map(([k]) => <td key={k} style={tdR}>{cell(a.totals?.[k])}</td>)}
-          </tr>
-        ))}</tbody>
-      </table>
-    </div>
-    <div style={grid}>
+    <Card>
+      <CardHead icon="megaphone" title="Facebook and Instagram"><span className={css.rangeWrap}><Range>{range}</Range></span></CardHead>
+      {views.some((v) => v.views > 0) && (
+        <div style={{ marginBottom: 22 }}>
+          <Mini icon="eye">Views by account</Mini>
+          <BarList rows={views} k="views" limit={views.length} />
+        </div>
+      )}
+      <div className={ui.tableWrap}>
+        <table className={tbl}>
+          <thead><tr><th>Account</th><th className={ui.num}>Followers</th>{SOCIAL_COLS.map(([, l]) => <th key={l} className={ui.num}>{l}</th>)}</tr></thead>
+          <tbody>{meta.accounts.map((a) => (
+            <tr key={a.platform + a.name}>
+              <td><a href={a.link} target="_blank" rel="noreferrer" className={css.acctLink}>{a.name}</a><div className={css.small}>{a.platform}</div></td>
+              <td className={ui.num}>{n0(a.followers)}</td>
+              {SOCIAL_COLS.map(([k]) => <td key={k} className={ui.num}>{cell(a.totals?.[k])}</td>)}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </Card>
+    <div className={css.posts}>
       {meta.accounts.filter((a) => a.posts?.length).map((a) => (
-        <div key={a.platform + a.name} style={{ ...card, marginBottom: 0 }}>
-          <div style={h3}>Latest posts, {a.name} ({a.platform})</div>
+        <Card key={a.platform + a.name}>
+          <CardHead icon={a.platform === "Instagram" ? "instagram" : "facebook"} title={`Latest posts, ${a.name} (${a.platform})`} />
           {a.posts.map((p, i) => (
-            <a key={i} href={p.link} target="_blank" rel="noreferrer" style={{ display: "block", padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none", textDecoration: "none", color: C.text }}>
-              <div style={{ fontSize: 11, color: C.muted }}>{day(p.when)}</div>
-              <div style={{ fontSize: 13, margin: "2px 0" }}>{p.text || "(no caption)"}</div>
-              <div style={{ fontSize: 12, color: C.brown }}>{n0(p.reactions)} likes, {n0(p.comments)} comments{p.shares !== null ? `, ${n0(p.shares)} shares` : ""}</div>
+            <a key={i} href={p.link} target="_blank" rel="noreferrer" className={css.post}>
+              <div style={{ minWidth: 0 }}>
+                <div className={css.postMeta}>{day(p.when)}</div>
+                <div className={css.postText}>{p.text || "(no caption)"}</div>
+                <div className={css.postStats}>{n0(p.reactions)} likes, {n0(p.comments)} comments{p.shares !== null ? `, ${n0(p.shares)} shares` : ""}</div>
+              </div>
+              <Icon n="out" size={14} />
             </a>
           ))}
-        </div>
+        </Card>
       ))}
     </div>
   </>);
@@ -188,40 +155,41 @@ function Manual({ manual, onSaved }) {
       setMsg("Saved"); onSaved(j.values);
     } catch (e) { setMsg(`Not saved: ${e.message}`); } finally { setBusy(false); }
   };
-  const input = { padding: "7px 9px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, width: "100%", boxSizing: "border-box", marginTop: 4, background: "#fff" };
   return (
-    <div style={{ ...card, overflowX: "auto" }}>
-      <div style={h3}>LinkedIn and TikTok</div>
+    <Card>
+      <CardHead icon="users" title="LinkedIn and TikTok" />
       {months.length ? (
-        <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 18 }}>
-          <thead><tr><th style={th}>Account</th><th style={th}>Month</th>{manual.fields.map((f) => <th key={f.id} style={thR}>{f.label}</th>)}</tr></thead>
-          <tbody>{manual.accounts.flatMap((a) => months.filter((m) => manual.values?.[a.id]?.[m]).map((m) => (
-            <tr key={a.id + m} onClick={() => pick(a.id, m)} style={{ cursor: "pointer" }}>
-              <td style={td}><span style={{ fontWeight: 600 }}>{a.name}</span><div style={{ color: C.muted, fontSize: 12 }}>{a.platform}</div></td>
-              <td style={td}>{mon(m)}</td>
-              {manual.fields.map((f) => <td key={f.id} style={tdR}>{n0(manual.values[a.id][m][f.id])}</td>)}
-            </tr>
-          )))}</tbody>
-        </table>
-      ) : <div style={{ color: C.muted, fontSize: 14, marginBottom: 14 }}>No figures entered yet.</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, alignItems: "end" }}>
-        <label style={{ fontSize: 12, color: C.muted }}>Account
-          <select style={input} value={form.account} onChange={(e) => pick(e.target.value, form.month)}>
+        <div className={ui.tableWrap}>
+          <table className={tbl}>
+            <thead><tr><th>Account</th><th>Month</th>{manual.fields.map((f) => <th key={f.id} className={ui.num}>{f.label}</th>)}</tr></thead>
+            <tbody>{manual.accounts.flatMap((a) => months.filter((m) => manual.values?.[a.id]?.[m]).map((m) => (
+              <tr key={a.id + m} onClick={() => pick(a.id, m)} className={css.clickRow}>
+                <td><span style={{ fontWeight: 500 }}>{a.name}</span><div className={css.small}>{a.platform}</div></td>
+                <td style={{ whiteSpace: "nowrap" }}>{mon(m)}</td>
+                {manual.fields.map((f) => <td key={f.id} className={ui.num}>{n0(manual.values[a.id][m][f.id])}</td>)}
+              </tr>
+            )))}</tbody>
+          </table>
+        </div>
+      ) : <Empty>No figures entered yet.</Empty>}
+      <div className={css.form}>
+        <label className={css.field}>Account
+          <select value={form.account} onChange={(e) => pick(e.target.value, form.month)}>
             {manual.accounts.map((a) => <option key={a.id} value={a.id}>{a.platform}: {a.name}</option>)}
           </select>
         </label>
-        <label style={{ fontSize: 12, color: C.muted }}>Month
-          <input type="month" style={input} value={form.month} onChange={(e) => pick(form.account, e.target.value)} />
+        <label className={css.field}>Month
+          <input type="month" value={form.month} onChange={(e) => pick(form.account, e.target.value)} />
         </label>
         {manual.fields.map((f) => (
-          <label key={f.id} style={{ fontSize: 12, color: C.muted }}>{f.label}
-            <input inputMode="numeric" style={input} value={form.values[f.id] ?? ""} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.id]: e.target.value } })} />
+          <label key={f.id} className={css.field}>{f.label}
+            <input inputMode="numeric" value={form.values[f.id] ?? ""} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.id]: e.target.value } })} />
           </label>
         ))}
-        <button onClick={save} disabled={busy} style={{ padding: "9px 14px", borderRadius: 9, border: "none", background: C.brown, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{busy ? "Saving..." : "Save"}</button>
+        <button onClick={save} disabled={busy} className={`${ui.btn} ${ui.btnDark} ${css.save}`}><Icon n="check" size={14} />{busy ? "Saving..." : "Save"}</button>
       </div>
-      {msg && <div style={{ marginTop: 8, fontSize: 13, color: msg === "Saved" ? C.green : C.rust }}>{msg}</div>}
-    </div>
+      {msg && <div className={css.msg}>{msg === "Saved" ? <span className={css.ok}><Icon n="check" size={14} />{msg}</span> : <span className={css.warn}><Icon n="alert" size={14} />{msg}</span>}</div>}
+    </Card>
   );
 }
 
@@ -236,23 +204,25 @@ export default function SocialWeb() {
   const p = d?.web?.periods;
   const range = p ? `${day(p.start)} to ${day(p.end)}, against ${day(p.prevStart)} to ${day(p.prevEnd)}` : "";
   return (
-    <div style={{ background: C.bg, minHeight: "100dvh", padding: "20px 16px", color: C.text, fontFamily: "-apple-system, BlinkMacSystemFont, 'DM Sans', 'Segoe UI', sans-serif" }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-          <Link href="/" style={{ fontSize: 13, color: C.muted, textDecoration: "none" }}>Dashboard</Link>
-          <span style={{ color: C.line }}>/</span>
-          <h1 style={{ color: C.brown, fontSize: 24, margin: 0 }}>Social and Web</h1>
-          <span style={{ flex: 1 }} />
-          <button onClick={() => load(true)} disabled={loading} style={{ padding: "7px 14px", borderRadius: 9, border: `1px solid ${C.line}`, background: "#fff", color: C.brown, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{loading ? "Loading..." : "Refresh"}</button>
+    <div className={css.page}>
+      <div className={css.wrap}>
+        <div className={css.head}>
+          <Link href="/" className={css.crumb}><Icon n="home" size={13} />Dashboard</Link>
+          <span className={css.slash}>/</span>
+          <h1 className={css.h1}><span className={css.chip}><Icon n="globe" size={18} /></span>Social and Web</h1>
+          <span className={css.spacer} />
+          <button onClick={() => load(true)} disabled={loading} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="refresh" size={13} />{loading ? "Loading..." : "Refresh"}</button>
         </div>
-        {err && <div style={{ color: C.rust, margin: "12px 0" }}>Could not load: {err}</div>}
-        {!d && !err && <div style={{ color: C.muted, marginTop: 16 }}>Loading...</div>}
+        {err && <Card style={{ marginTop: 12 }}><div className={css.warn}><Icon n="alert" size={15} />Could not load: {err}</div></Card>}
+        {!d && !err && <div style={{ marginTop: 16 }}><Skeleton height={320} /></div>}
         {d && (<>
-          <h2 style={h2}>Websites</h2>
-          {d.web.sites.map((s) => <Site key={s.id} s={s} range={range} />)}
-          <h2 style={h2}>Social media</h2>
+          <h2 className={css.section}><span className={css.sectionChip}><Icon n="globe" size={15} /></span>Websites</h2>
+          <div className={css.stack}>
+            {d.web.sites.map((s) => <Site key={s.id} s={s} range={range} />)}
+          </div>
+          <h2 className={css.section}><span className={css.sectionChip}><Icon n="megaphone" size={15} /></span>Social media</h2>
           <Social meta={d.meta} range={range} />
-          <div style={{ height: 18 }} />
+          <div style={{ height: 14 }} />
           <Manual manual={d.manual} onSaved={(values) => setD({ ...d, manual: { ...d.manual, values } })} />
         </>)}
       </div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-const BRAND = { rust: "#B13924", gold: "#FDB714", brown: "#66270F", bg: "#FAF8F5", line: "#E4E0DA", muted: "#7A7168", ink: "#2b2622" };
+import { Icon } from "@/app/design/icons";
+import css from "./my-sales.module.css";
 
 const STORE_KEY = "worthy_my_account_chat_v1";   // kept on this device only, per rep
 const KEEP_FOR_MS = 24 * 60 * 60 * 1000;
@@ -55,10 +55,10 @@ function Answer({ text }) {
       const body = rows.filter((r) => !/^[|:\-\s]+$/.test(r));   // drop the |---| divider row
       const [head, ...rest] = body;
       blocks.push(
-        <div key={blocks.length} style={{ overflowX: "auto", margin: "8px 0" }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 14, minWidth: "100%" }}>
-            <thead><tr>{cells(head).map((c, j) => <th key={j} style={{ textAlign: "left", padding: "6px 10px", borderBottom: `1px solid ${BRAND.line}`, color: BRAND.brown, whiteSpace: "nowrap" }}>{inline(c, `h${j}`)}</th>)}</tr></thead>
-            <tbody>{rest.map((r, ri) => <tr key={ri}>{cells(r).map((c, j) => <td key={j} style={{ padding: "6px 10px", borderBottom: `1px solid ${BRAND.line}`, whiteSpace: "nowrap" }}>{inline(c, `c${ri}-${j}`)}</td>)}</tr>)}</tbody>
+        <div key={blocks.length} className={css.ansTable}>
+          <table>
+            <thead><tr>{cells(head).map((c, j) => <th key={j}>{inline(c, `h${j}`)}</th>)}</tr></thead>
+            <tbody>{rest.map((r, ri) => <tr key={ri}>{cells(r).map((c, j) => <td key={j}>{inline(c, `c${ri}-${j}`)}</td>)}</tr>)}</tbody>
           </table>
         </div>);
       continue;
@@ -83,8 +83,6 @@ const STATUS = [
   [60, "Still working. If nothing appears soon, tap Try again."],
 ];
 const statusFor = (secs) => [...STATUS].reverse().find(([s]) => secs >= s)[1];
-
-const tapBtn = { minHeight: 44, textAlign: "left", fontSize: 15, padding: "10px 14px", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 12, cursor: "pointer", color: BRAND.ink, maxWidth: "100%" };
 
 export default function MySales() {
   const [rep, setRep] = useState(undefined);   // undefined = checking, null = signed out
@@ -248,68 +246,70 @@ export default function MySales() {
   const lastAnswer = !busy && last && last.role === "assistant" && !last.error ? splitAnswer(last.content) : null;
   const followUps = lastAnswer ? (lastAnswer.next.length ? lastAnswer.next : DEFAULT_FOLLOW_UPS) : [];
 
-  const shell = { minHeight: "100dvh", background: BRAND.bg, color: BRAND.ink, fontFamily: "-apple-system, BlinkMacSystemFont, 'DM Sans', 'Segoe UI', sans-serif", display: "flex", flexDirection: "column" };
-
-  if (rep === undefined) return <div style={{ ...shell, alignItems: "center", justifyContent: "center", color: BRAND.muted, fontSize: 16 }}>Loading...</div>;
+  if (rep === undefined) return <div className={`${css.shell} ${css.center}`}><div className={css.loading}>Loading...</div></div>;
 
   if (!rep) {
     return (
-      <div style={{ ...shell, alignItems: "center", justifyContent: "center", padding: 16 }}>
-        <form onSubmit={signIn} style={{ boxSizing: "border-box", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 16, padding: 28, width: "100%", maxWidth: 400 }}>
-          <img src="/logo-black.png" alt="Worthy" style={{ height: 56, width: "auto", display: "block", marginBottom: 14 }} />
-          <h1 style={{ fontSize: 22, margin: "0 0 6px", color: BRAND.brown }}>My account</h1>
-          <p style={{ fontSize: 16, color: BRAND.muted, margin: "0 0 18px", lineHeight: 1.45 }}>Type your email and password below, then tap Open. Then you can ask about your own and your team's sales and customers.</p>
-          {signErr && <div role="alert" style={{ color: BRAND.rust, fontSize: 15, marginBottom: 12, lineHeight: 1.4 }}>{signErr}</div>}
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" autoComplete="username" autoFocus required
-            style={{ width: "100%", boxSizing: "border-box", padding: "14px", fontSize: 16, borderRadius: 10, border: `1px solid ${BRAND.line}`, marginBottom: 12 }} />
-          <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Your password" autoComplete="current-password" required
-            style={{ width: "100%", boxSizing: "border-box", padding: "14px", fontSize: 16, borderRadius: 10, border: `1px solid ${BRAND.line}`, marginBottom: 12 }} />
-          <button type="submit" disabled={signing || code.trim().length < 10 || !email.includes("@")}
-            style={{ width: "100%", minHeight: 48, fontSize: 17, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 10, cursor: "pointer", opacity: signing || code.trim().length < 10 || !email.includes("@") ? 0.6 : 1 }}>
+      <div className={`${css.shell} ${css.center}`}>
+        <form onSubmit={signIn} className={`${css.card} ${css.signIn}`}>
+          <img src="/logo-black.png" alt="Worthy" className={css.signLogo} />
+          <h1 className={css.h1}><span className={css.chip}><Icon n="user" size={17} /></span>My account</h1>
+          <p className={css.lead}>Type your email and password below, then tap Open. Then you can ask about your own and your team&apos;s sales and customers.</p>
+          {signErr && <div role="alert" className={css.alert}><Icon n="alert" size={16} />{signErr}</div>}
+          <div className={css.field}>
+            <Icon n="mail" size={17} />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" autoComplete="username" autoFocus required className={css.input} />
+          </div>
+          <div className={css.field}>
+            <Icon n="users" size={17} />
+            <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Your password" autoComplete="current-password" required className={css.input} />
+          </div>
+          <button type="submit" disabled={signing || code.trim().length < 10 || !email.includes("@")} className={`${css.primary} ${css.wide}`}>
             {signing ? "Checking..." : "Open"}
           </button>
-          <p style={{ fontSize: 14, color: BRAND.muted, margin: "14px 0 0", lineHeight: 1.4 }}>Your email and password are on the sheet we gave you. Lost them? Ask Pratham.</p>
+          <p className={css.small}>Your email and password are on the sheet we gave you. Lost them? Ask Pratham.</p>
         </form>
       </div>
     );
   }
 
+  const fewLeft = quota && quota.remaining <= 5;
+
   return (
-    <div style={shell}>
-      <style>{"@keyframes wslide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}"}</style>
-      <header style={{ background: "#fff", borderBottom: `1px solid ${BRAND.line}`, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="/logo-black.png" alt="Worthy" style={{ height: 40, width: "auto", display: "block" }} />
-          <div style={{ fontWeight: 700, fontSize: 17, color: BRAND.brown }}>My account</div>
+    <div className={css.shell}>
+      <header className={css.top}>
+        <div className={css.brand}>
+          <img src="/logo-black.png" alt="Worthy" className={css.logo} />
+          <div className={css.brandName}><Icon n="user" size={16} />My account</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
-          <div style={{ fontSize: 13, color: BRAND.muted, textAlign: "right", lineHeight: 1.3 }}>Signed in as<br /><strong style={{ color: BRAND.brown, fontWeight: 600 }}>{rep.name}</strong>{rep.team ? <span> · Team lead</span> : null}</div>
-          <button onClick={signOut} style={{ minHeight: 40, fontSize: 14, color: BRAND.rust, background: "none", border: `1px solid ${BRAND.line}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Sign out</button>
+        <div className={css.me}>
+          <div className={css.meText}>Signed in as<br /><strong>{rep.name}</strong>{rep.team ? <span> · Team lead</span> : null}</div>
+          <button onClick={signOut} className={css.ghost}><Icon n="out" size={14} />Sign out</button>
         </div>
       </header>
 
-      <main style={{ flex: 1, width: "100%", maxWidth: 760, margin: "0 auto", padding: "16px 16px 8px", boxSizing: "border-box" }}>
+      <main className={css.main}>
         {messages.length > 0 && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
-            <button onClick={newChat} disabled={busy} style={{ minHeight: 40, fontSize: 14, color: BRAND.brown, background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", opacity: busy ? 0.6 : 1 }}>New conversation</button>
+          <div className={css.newRow}>
+            <button onClick={newChat} disabled={busy} className={css.ghost}><Icon n="plus" size={14} />New conversation</button>
           </div>
         )}
 
         {messages.length === 0 && (
-          <div>
-            <h2 style={{ fontSize: 22, color: BRAND.brown, margin: "8px 0 6px" }}>Hi {rep.name.split(" ")[0]}, how can I help?</h2>
-            <p style={{ fontSize: 16, color: BRAND.muted, margin: "0 0 14px", lineHeight: 1.5 }}>
+          <div className={`${css.card} ${css.welcome}`}>
+            <h2 className={css.h2}><span className={css.chip}><Icon n="sparkle" size={17} /></span>Hi {rep.name.split(" ")[0]}, how can I help?</h2>
+            <p className={css.lead}>
               {rep.teamMembers && rep.teamMembers.length
                 ? <>I am your team helper. I can see {rep.hasOwnSales ? "your own sales and " : ""}the sales, customers and unpaid invoices of your team ({rep.teamMembers.join(", ")}), and nobody else. Ask about the whole team, or about one person by name.</>
                 : "I am your sales helper. I can only see your own sales and your own customers, so everything I tell you is about you."}
             </p>
-            <ol style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", paddingLeft: 22 }}>
-              <li><strong>Tap a question</strong> below, or type your own at the bottom and tap Ask.</li>
-              <li><strong>Wait a few seconds</strong> while I look up your figures.</li>
-              <li><strong>Tap one of the next questions</strong> I suggest, to go deeper.</li>
+            <ol className={css.steps}>
+              <li><span className={css.stepNum}>1</span><span><strong>Tap a question</strong> below, or type your own at the bottom and tap Ask.</span></li>
+              <li><span className={css.stepNum}>2</span><span><strong>Wait a few seconds</strong> while I look up your figures.</span></li>
+              <li><span className={css.stepNum}>3</span><span><strong>Tap one of the next questions</strong> I suggest, to go deeper.</span></li>
             </ol>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {(rep.suggestions && rep.suggestions.length ? rep.suggestions : SUGGESTIONS).map((s) => <button key={s} onClick={() => ask(s)} style={tapBtn}>{s}</button>)}
+            <div className={css.taps}>
+              {(rep.suggestions && rep.suggestions.length ? rep.suggestions : SUGGESTIONS).map((s) => <button key={s} onClick={() => ask(s)} className={css.tap}><Icon n="search" size={15} />{s}</button>)}
             </div>
           </div>
         )}
@@ -319,29 +319,28 @@ export default function MySales() {
           if (m.streaming && !m.content) return null;   // nothing written yet: the progress panel below shows instead
           const text = isUser || m.error ? m.content : (m.streaming ? visibleWhileStreaming(m.content) : splitAnswer(m.content).body);
           const finishedAnswer = !isUser && !m.error && !m.streaming;
-          const btn = { minHeight: 40, fontSize: 14, background: "none", border: `1px solid ${BRAND.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer" };
           return (
-            <div key={i} style={{ margin: "10px 0" }}>
-              <div style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "92%", minWidth: 0, overflowWrap: "anywhere", padding: "11px 15px", borderRadius: 14, fontSize: 16, lineHeight: 1.5, background: isUser ? BRAND.rust : "#fff", color: isUser ? "#fff" : (m.error ? BRAND.rust : BRAND.ink), border: isUser ? "none" : `1px solid ${BRAND.line}` }}>
+            <div key={i} className={css.msg}>
+              <div className={`${css.row} ${isUser ? css.rowUser : ""}`}>
+                <div className={`${css.bubble} ${isUser ? css.bubbleUser : css.bubbleBot} ${!isUser && m.error ? css.bubbleErr : ""}`}>
                   {isUser ? text : <Answer text={text} />}
                 </div>
               </div>
               {finishedAnswer && (
-                <div style={{ marginTop: 6, fontSize: 14, color: BRAND.muted }}>
-                  {fb[i] === "sent" ? "Thank you. We will check it." : fb[i] === "good" ? "Thank you." : fb[i] === "form" ? (
-                    <div style={{ background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 12, padding: 12, maxWidth: 420 }}>
-                      <div style={{ marginBottom: 6, color: BRAND.ink }}>What looks wrong? (You can leave this blank.)</div>
-                      <textarea value={fbNote} onChange={(e) => setFbNote(e.target.value)} rows={3} maxLength={400} style={{ width: "100%", boxSizing: "border-box", fontSize: 16, padding: 8, borderRadius: 8, border: `1px solid ${BRAND.line}` }} />
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button onClick={() => sendFeedback(i, "wrong", fbNote)} style={{ minHeight: 44, padding: "0 16px", fontSize: 15, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 10, cursor: "pointer" }}>Send</button>
-                        <button onClick={() => setFb((f) => ({ ...f, [i]: undefined }))} style={{ minHeight: 44, padding: "0 16px", fontSize: 15, color: BRAND.ink, background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 10, cursor: "pointer" }}>Cancel</button>
+                <div className={css.fb}>
+                  {fb[i] === "sent" ? <span className={css.fbDone}><Icon n="check" size={14} />Thank you. We will check it.</span> : fb[i] === "good" ? <span className={css.fbDone}><Icon n="check" size={14} />Thank you.</span> : fb[i] === "form" ? (
+                    <div className={`${css.card} ${css.fbForm}`}>
+                      <div className={css.fbAsk}>What looks wrong? (You can leave this blank.)</div>
+                      <textarea value={fbNote} onChange={(e) => setFbNote(e.target.value)} rows={3} maxLength={400} className={css.textarea} />
+                      <div className={css.fbActions}>
+                        <button onClick={() => sendFeedback(i, "wrong", fbNote)} className={css.primary}>Send</button>
+                        <button onClick={() => setFb((f) => ({ ...f, [i]: undefined }))} className={css.ghost}>Cancel</button>
                       </div>
                     </div>
                   ) : (
-                    <span>
-                      <button onClick={() => sendFeedback(i, "good", "")} style={{ ...btn, color: BRAND.brown, marginRight: 8 }}>Helpful</button>
-                      <button onClick={() => { setFbNote(""); setFb((f) => ({ ...f, [i]: "form" })); }} style={{ ...btn, color: BRAND.rust }}>This looks wrong</button>
+                    <span className={css.fbBtns}>
+                      <button onClick={() => sendFeedback(i, "good", "")} className={css.ghost}><Icon n="heart" size={14} />Helpful</button>
+                      <button onClick={() => { setFbNote(""); setFb((f) => ({ ...f, [i]: "form" })); }} className={css.ghost}><Icon n="alert" size={14} />This looks wrong</button>
                     </span>
                   )}
                 </div>
@@ -351,43 +350,43 @@ export default function MySales() {
         })}
 
         {busy && !(streamingNow && last.content) && (
-          <div style={{ margin: "12px 0", padding: "14px 16px", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 14 }}>
-            <div style={{ fontSize: 16, color: BRAND.ink, marginBottom: 10 }}>{statusText || statusFor(secs)}</div>
-            <div style={{ height: 6, background: "#F1ECE6", borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "30%", background: BRAND.gold, borderRadius: 3, animation: "wslide 1.6s ease-in-out infinite" }} />
-            </div>
-            <div style={{ fontSize: 14, color: BRAND.muted, marginTop: 8 }}>Most answers take 10 to 40 seconds. You do not need to do anything.</div>
+          <div className={`${css.card} ${css.progress}`}>
+            <div className={css.progressHead}><span className={css.chip}><Icon n="hourglass" size={16} /></span>{statusText || statusFor(secs)}</div>
+            <div className={css.track}><i /></div>
+            <div className={css.progressFoot}>Most answers take 10 to 40 seconds. You do not need to do anything.</div>
           </div>
         )}
 
         {needsRetry && (
-          <div style={{ margin: "12px 0", padding: "12px 14px", background: "#fff", border: `1px solid ${BRAND.line}`, borderRadius: 12, fontSize: 16, lineHeight: 1.45 }}>
+          <div className={`${css.card} ${css.retry}`}>
             {last.error ? null : <div>Your last question did not finish.</div>}
-            <button onClick={tryAgain} style={{ minHeight: 44, marginTop: last.error ? 0 : 6, display: "block", color: "#fff", background: BRAND.rust, border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>Try again</button>
+            <button onClick={tryAgain} className={css.primary}><Icon n="refresh" size={16} />Try again</button>
           </div>
         )}
 
         {followUps.length > 0 && (
-          <div style={{ margin: "12px 0" }}>
-            <div style={{ fontSize: 14, color: BRAND.muted, marginBottom: 8 }}>Tap to ask next:</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {followUps.map((q) => <button key={q} onClick={() => ask(q)} style={tapBtn}>{q}</button>)}
+          <div className={css.next}>
+            <div className={css.nextHead}><Icon n="compass" size={13} />Tap to ask next:</div>
+            <div className={css.taps}>
+              {followUps.map((q) => <button key={q} onClick={() => ask(q)} className={css.tap}><Icon n="search" size={15} />{q}</button>)}
             </div>
           </div>
         )}
         <div ref={endRef} />
       </main>
 
-      <form onSubmit={(e) => { e.preventDefault(); ask(); }} style={{ position: "sticky", bottom: 0, background: BRAND.bg, borderTop: `1px solid ${BRAND.line}`, padding: "10px 16px calc(10px + env(safe-area-inset-bottom))" }}>
-        <div style={{ display: "flex", gap: 8, maxWidth: 760, margin: "0 auto" }}>
+      <form onSubmit={(e) => { e.preventDefault(); ask(); }} className={css.askBar}>
+        <div className={css.askRow}>
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={noneLeft ? "No questions left today" : "Type your question here"} maxLength={2000} aria-label="Your question" disabled={noneLeft}
-            style={{ flex: 1, minWidth: 0, minHeight: 48, padding: "0 14px", fontSize: 16, borderRadius: 12, border: `1px solid ${BRAND.line}`, background: "#fff" }} />
-          <button type="submit" disabled={busy || !input.trim() || noneLeft}
-            style={{ flexShrink: 0, minHeight: 48, padding: "0 22px", fontSize: 16, fontWeight: 700, color: "#fff", background: BRAND.rust, border: "none", borderRadius: 12, cursor: "pointer", opacity: busy || !input.trim() ? 0.6 : 1 }}>Ask</button>
+            className={css.askInput} />
+          <button type="submit" disabled={busy || !input.trim() || noneLeft} className={css.primary}>Ask</button>
         </div>
-        <div style={{ maxWidth: 760, margin: "6px auto 0", fontSize: 13, color: noneLeft ? BRAND.rust : (quota && quota.remaining <= 5 ? "#B26A00" : BRAND.muted), display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <span>{quota ? (noneLeft ? `You have used all of today's questions. You get ${quota.limit} more tomorrow.` : `Questions left today: ${quota.remaining}${quota.carried ? ` (${quota.limit} a day + ${quota.carried} saved from earlier days)` : ` of ${quota.limit}`}`) : ""}</span>
-          <span>Your questions are saved so we can improve this.</span>
+        <div className={css.meta}>
+          <span className={`${css.left} ${fewLeft ? css.leftWarn : ""}`}>
+            {quota && !quota.carried && quota.limit > 0 && <span className={css.leftBar} aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(1, quota.remaining / quota.limit)) * 100}%` }} /></span>}
+            <span>{quota ? (noneLeft ? `You have used all of today's questions. You get ${quota.limit} more tomorrow.` : `Questions left today: ${quota.remaining}${quota.carried ? ` (${quota.limit} a day + ${quota.carried} saved from earlier days)` : ` of ${quota.limit}`}`) : ""}</span>
+          </span>
+          <span className={css.saved}><Icon n="folder" size={13} />Your questions are saved so we can improve this.</span>
         </div>
       </form>
     </div>
