@@ -32,6 +32,8 @@ One rule everywhere: dashboard, chat, connectors and the Odoo Sunday emails.
 
 Every page is built from the shared kit in `app/design/`: `ui.js` (cards, headline strip, trends, month bars, ranked bars, ring, chain, share bar, progress), `icons.js` (one icon set), `SiteNav.js` (top bar with the pages the department may open, Back button, Dashboard / page / part trail, Skip to content). Three colours only (`app/globals.css`: page off-white, ink, orange accent), Outfit font, no dark mode. While figures load the page shows a dash, never a zero.
 
+Year tables show Revenue, Sales with a cost, and Cost (the cost of those sales), so Sales with a cost minus Cost equals Gross Profit on every row and in the total, for all three businesses.
+
 ## Speed and Odoo load (26 Nov 2026)
 
 Year figures (`lib/odooFyCache.js`): one Odoo read per company and year at a time, every complete result saved as the last good copy in Upstash, a visitor waits at most 2.5 s and otherwise gets the last good copy (marked stale, with the time Odoo was read) while the read finishes in the background; the page asks again a minute later. Before this, every visitor started a 35 to 107 second read and Odoo slowed for the whole company. The GitHub warm job is meant to run every 5 minutes but GitHub runs it only 2 or 3 times a day.
@@ -69,7 +71,6 @@ Year figures (`lib/odooFyCache.js`): one Odoo read per company and year at a tim
 - Oceania per-rep and weekly margins still leave out the four fabric variants Odoo cannot name (one invoice this year, May, $834.05 cost); month and year totals include them.
 - A stash in `C:\wdd` ("Debtors: add Over 60 days late tile", from before November) is unreviewed.
 - Command Center 'Online sales' and conversion add Google Analytics revenue for dutchrusk.co.nz (about 7% below Shopify's own figure, 27 Oct to 25 Nov: GA $710,312 vs Shopify $765,245). Switch it to Shopify once `DUTCHRUSK_REPORTS_KEY` is in Vercel.
-- South (Ostendo) monthly table: the Cost column includes lines left out of the margin basis, so sales minus cost does not equal gross profit on screen (agreed finance basis; presentation decision pending).
 - ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web, waiting on the Dutch Rusk Shopify permission), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
 
 ## History in short
