@@ -9,6 +9,8 @@
  *   GET ?search=1&start=&end=        Search Console for any period (date picker)
  *   GET ?events=worthy&start=&end=   each key event (enquiry) on that site: time, event, page, source, town, device
  *   GET ?live=1    visitors right now, the Asana meeting tasks and the ClickUp cards, for the page's 30-second refresh
+ *   GET ?meeting=1                   meeting notes, discussion points, actions and the Asana members (lib/meeting.js)
+ *   POST           { action: 'meeting-notes' | 'meeting-read' | 'meeting-edit' | 'meeting-send' | 'meeting-point', ... }
  *   POST           { action: 'save' | 'delete', item }  change the typed-in board
  *   POST           { action: 'external', source: 'asana' | 'clickup', id, op, value, title }  change the task in Asana or ClickUp
  */
@@ -20,6 +22,7 @@ import { clickupSafe, clickupWrite } from '@/lib/clickup';
 import { aiReferrals, latestChecks, runChecks, readGoogleAi, saveGoogleAi } from '@/lib/aiVisibility';
 import { shoppingData } from '@/lib/shopping';
 import { worthyEnquiries } from '@/lib/worthyForms';
+import { meetingState, saveNotes, readNotes, editAction, sendActions, setPoint } from '@/lib/meeting';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -60,6 +63,10 @@ export async function GET(request) {
     try { return NextResponse.json(await keyEventDetail(site, q.get('start'), q.get('end'))); }
     catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
   }
+  if (q.get('meeting') === '1') {
+    try { return NextResponse.json(await meetingState()); }
+    catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
+  }
   if (q.get('live') === '1') {
     const fresh = q.get('fresh') === '1';
     const [live, log, asana, clickup, todayNow] = await Promise.all([liveVisitors(), readLog(), asanaSafe({ fresh }), clickupSafe({ fresh }), todaySoFar({ fresh })]);
@@ -87,6 +94,29 @@ export async function POST(request) {
       await logEvent({ what: 'AI answers checked', kind: 'search', title: 'AI search check', person });
       return NextResponse.json(await latestChecks());
     } catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
+  }
+  // Meeting notes: save as people type, read them into points and actions, send actions to Asana
+  if (String(body.action || '').startsWith('meeting-')) {
+    try {
+      if (body.action === 'meeting-notes') { await saveNotes(body.date, body.notes, person); return NextResponse.json({ ok: true, savedAt: new Date().toISOString() }); }
+      if (body.action === 'meeting-read' && typeof body.trialText === 'string') {
+        return NextResponse.json(await readNotes(body.date, person, { trialText: body.trialText }));
+      }
+      if (body.action === 'meeting-read') {
+        await readNotes(body.date, person);
+        await logEvent({ what: 'read into points and actions', kind: 'meeting', title: `Meeting notes ${body.date}`, person });
+      } else if (body.action === 'meeting-edit') {
+        await editAction(body.id, body.patch || {});
+      } else if (body.action === 'meeting-send') {
+        const { created, failed } = await sendActions(Array.isArray(body.ids) ? body.ids : [], person);
+        for (const a of created) await logEvent({ what: 'added', kind: 'asana', title: a.title, person, source: 'asana', id: a.asanaGid });
+        const st = await meetingState();
+        return NextResponse.json({ ok: true, ...st, created: created.length, failed, asana: await asanaSafe({ fresh: true }), log: await readLog() });
+      } else if (body.action === 'meeting-point') {
+        await setPoint(body.id, body.status, person);
+      } else throw new Error('Unknown meeting action');
+      return NextResponse.json({ ok: true, ...(await meetingState()), log: await readLog() });
+    } catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 300) }, { status: 400 }); }
   }
   // Changes to Asana tasks and ClickUp cards, made straight in those tools and written to the activity log
   if (body.action === 'external') {

@@ -974,6 +974,176 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
 }
 
 // ── Thursday meeting ────────────────────────────────────────────────────────────────────────────────
+// ── Meeting notes: type, read into points and actions, send to Asana, carry forward (lib/meeting.js) ─────────────
+function MeetingNotes({ asanaTasks, today, onAsana }) {
+  const [m, setM] = useState(null);
+  const [date, setDate] = useState(null);
+  const [text, setText] = useState(null);
+  const [saveState, setSaveState] = useState("saved");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const [note, setNote] = useState("");
+  const timer = useRef(null);
+  const post = async (body) => {
+    const r = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+    return j;
+  };
+  useEffect(() => {
+    let stop = false;
+    fetch("/api/command?meeting=1", { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      if (stop) return;
+      if (j.error) { setErr(j.error); return; }
+      setM(j); setDate(j.current);
+      // Unsaved typing from this browser comes back first, then the saved notes
+      const draft = cache.get("cc-meet-draft-v1", 7 * 24 * HOUR);
+      setText(draft && draft.date === j.current && draft.text !== (j.meetings?.[j.current]?.notes || "") ? draft.text : (j.meetings?.[j.current]?.notes || ""));
+      if (draft && draft.date === j.current && draft.text !== (j.meetings?.[j.current]?.notes || "")) setSaveState("unsaved");
+    }).catch((e) => { if (!stop) setErr(String(e.message || e)); });
+    return () => { stop = true; };
+  }, []);
+  const isCurrent = m && date === m.current;
+  const saveNow = async (value) => {
+    setSaveState("saving");
+    try { await post({ action: "meeting-notes", date: m.current, notes: value }); setSaveState("saved"); cache.del("cc-meet-draft-v1"); }
+    catch (e) { setSaveState("unsaved"); setErr(String(e.message || e)); }
+  };
+  const type = (v) => {
+    setText(v); setSaveState("unsaved");
+    cache.set("cc-meet-draft-v1", { date: m.current, text: v });
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => saveNow(v), 1200);
+  };
+  const act = async (label, body, after) => {
+    setBusy(label); setErr(""); setNote("");
+    try { const j = await post(body); setM((cur) => ({ ...cur, ...j })); if (after) after(j); }
+    catch (e) { setErr(String(e.message || e)); }
+    finally { setBusy(""); }
+  };
+  const readNotes = async () => {
+    clearTimeout(timer.current);
+    if (saveState !== "saved") await saveNow(text);
+    await act("read", { action: "meeting-read", date: m.current });
+  };
+  if (err && !m) return <section className={s.card} style={{ marginTop: 14 }}><div className={s.err}>Meeting notes could not load: {err}</div></section>;
+  if (!m) return <section className={s.card} style={{ marginTop: 14 }}><div className={s.skeleton} style={{ height: 160 }} /></section>;
+
+  const members = m.members || [];
+  const proposed = m.actions.filter((a) => a.status === "proposed" && a.meeting === m.current);
+  const sent = m.actions.filter((a) => a.status === "sent");
+  const byGid = new Map((asanaTasks || []).map((t) => [t.id, t]));
+  const live = sent.map((a) => ({ ...a, t: byGid.get(a.asanaGid) }));
+  const openActions = live.filter((a) => !a.t?.done);
+  const lastMeeting = Object.keys(m.meetings).filter((d) => d < m.current).sort().pop() || null;
+  const doneSince = live.filter((a) => a.t?.done && (!lastMeeting || (a.t.doneAt || "") >= lastMeeting));
+  const openPoints = m.points.filter((p) => p.status === "open");
+  const past = Object.keys(m.meetings).filter((d) => d !== m.current).sort().reverse();
+  const shown = isCurrent ? text : (m.meetings[date]?.notes || "");
+  const fmtDay = (iso) => `${DAYS_LONG[d0(iso).getUTCDay()]} ${dLong(iso)}`;
+
+  return (
+    <section className={s.card} style={{ marginTop: 14 }}>
+      <div className={s.cardHead}>
+        <Title icon="edit">Meeting notes, {fmtDay(date)}</Title>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {isCurrent && <span className={`${s.pill} ${saveState === "saved" ? s.pillGrey : s.pillWarn}`}>{saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving" : "Not saved yet"}</span>}
+          {past.length > 0 && (
+            <select className={s.select} value={date} onChange={(e) => setDate(e.target.value)} aria-label="Meeting">
+              <option value={m.current}>This meeting</option>
+              {past.map((d) => <option key={d} value={d}>{fmtDay(d)}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+
+      <div className={s.grid2} style={{ alignItems: "start" }}>
+        {/* notes */}
+        <div>
+          <textarea className={s.notes} value={shown || ""} readOnly={!isCurrent} onChange={(e) => type(e.target.value)} aria-label="Meeting notes"
+            placeholder={"Type as you normally would, for example:\nAnu to send the December email plan by Friday\nVishva: brand page for Calypso next week\nDiscuss: Google Ads budget for January"} />
+          {isCurrent && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button type="button" className={`${s.btn} ${s.btnDark}`} onClick={readNotes} disabled={!!busy || !(text || "").trim()}>
+                <Icon n="sparkle" size={14} />{busy === "read" ? "Reading" : "Read notes into actions"}
+              </button>
+              {m.meetings[m.current]?.readAt && <span className={s.rowMeta}>Last read {nzTime(m.meetings[m.current].readAt)}</span>}
+            </div>
+          )}
+          {err && <div className={s.err}>{err}</div>}
+          {note && <div className={s.rowMeta} style={{ marginTop: 8 }}>{note}</div>}
+        </div>
+
+        {/* what the notes say: actions to send, and the agenda that carries forward */}
+        <div>
+          {proposed.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div className={s.miniHead}><Icon n="flow" size={13} />Actions from these notes</div>
+              {proposed.map((a) => (
+                <div key={a.id} className={s.actionRow}>
+                  <input className={s.actionTitle} defaultValue={a.title} aria-label="Action"
+                    onBlur={(e) => { if (e.target.value !== a.title) act("edit", { action: "meeting-edit", id: a.id, patch: { title: e.target.value } }); }} />
+                  <div className={s.actionMeta}>
+                    <select value={a.ownerGid || ""} aria-label="Owner" onChange={(e) => act("edit", { action: "meeting-edit", id: a.id, patch: { ownerGid: e.target.value } })}>
+                      <option value="">No owner</option>
+                      {members.map((p) => <option key={p.gid} value={p.gid}>{p.name}</option>)}
+                    </select>
+                    <input type="date" value={a.due || ""} aria-label="Due" onChange={(e) => act("edit", { action: "meeting-edit", id: a.id, patch: { due: e.target.value } })} />
+                    <button type="button" className={s.iconBtn} style={{ width: 32, height: 32 }} aria-label={`Remove ${a.title}`} title="Remove"
+                      onClick={() => act("edit", { action: "meeting-edit", id: a.id, patch: { drop: true } })}><Icon n="close" size={14} /></button>
+                  </div>
+                  {!a.ownerGid && <div className={s.rowMeta} style={{ color: "var(--orange)" }}>Pick who does this</div>}
+                </div>
+              ))}
+              <button type="button" className={`${s.btn} ${s.btnDark}`} style={{ marginTop: 10 }} disabled={!!busy}
+                onClick={() => {
+                  const ready = proposed.filter((a) => a.ownerGid);
+                  if (!ready.length) { setErr("Pick an owner for each action first"); return; }
+                  if (!window.confirm(`Create ${ready.length} task${ready.length > 1 ? "s" : ""} in Asana and tell each person?\n\n${ready.map((a) => `${a.title} (${a.owner}${a.due ? `, due ${dShort(a.due)}` : ""})`).join("\n")}`)) return;
+                  act("send", { action: "meeting-send", ids: ready.map((a) => a.id) }, (j) => { setNote(`${j.created} sent to Asana${j.failed?.length ? `, ${j.failed.length} failed: ${j.failed.map((f) => f.error).join("; ")}` : ""}`); if (j.asana && onAsana) onAsana(j.asana); });
+                }}>
+                <Icon n="out" size={14} />{busy === "send" ? "Sending" : `Send ${proposed.filter((a) => a.ownerGid).length} to Asana`}
+              </button>
+            </div>
+          )}
+
+          <div className={s.miniHead}><Icon n="calendar" size={13} />Next meeting</div>
+          {openPoints.length === 0 && openActions.length === 0 && <div className={s.empty}>Nothing carried forward</div>}
+          {openPoints.map((p) => (
+            <div key={p.id} className={s.row}>
+              <div style={{ minWidth: 0 }}><div className={s.rowTitle} style={{ fontWeight: 400 }}>{p.text}</div><div className={s.rowMeta}>To discuss · from {dShort(p.meeting)}</div></div>
+              <button type="button" className={s.toggle} aria-label={`Mark discussed: ${p.text}`} title="Discussed" onClick={() => act("point", { action: "meeting-point", id: p.id, status: "resolved" })} disabled={!!busy} />
+            </div>
+          ))}
+          {openActions.map((a) => {
+            const due = a.t?.due || a.due; const late = due && due < today;
+            return (
+              <div key={a.id} className={s.row}>
+                <div style={{ minWidth: 0 }}>
+                  <a className={s.rowTitle} href={a.url} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{a.t?.name || a.title}</a>
+                  <div className={s.rowMeta}>{a.t?.owner || a.owner || "No owner"}{due ? <> · <span className={late ? s.overdue : ""}>{late ? "Overdue, " : "Due "}{dShort(due)}</span></> : ""} · from {dShort(a.meeting)}</div>
+                </div>
+                <span className={`${s.pill} ${s.pillGrey}`}>Open</span>
+              </div>
+            );
+          })}
+          {doneSince.length > 0 && (
+            <>
+              <div className={s.miniHead} style={{ marginTop: 16 }}><Icon n="check" size={13} />Done since {lastMeeting ? dShort(lastMeeting) : "the last meeting"}</div>
+              {doneSince.map((a) => (
+                <div key={a.id} className={s.row}>
+                  <div style={{ minWidth: 0 }}><div className={s.rowTitle} style={{ fontWeight: 400 }}>{a.t?.name || a.title}</div><div className={s.rowMeta}>{a.t?.owner || a.owner} · done {a.t?.doneAt ? dShort(a.t.doneAt) : ""}</div></div>
+                  <span className={`${s.pill} ${s.pillDark} ${s.pillPlain}`}><Icon n="check" size={11} stroke={2.4} /></span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, external, site, items, today, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving, start, end }) {
   const t = d0(today); const wd = t.getUTCDay();
   const nextThu = addDays(today, (4 - wd + 7) % 7);
@@ -1027,6 +1197,8 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
         </div>
         <TodaySoFar todayNow={todayNow} site={site} />
       </section>
+
+      <MeetingNotes asanaTasks={asanaTasks} today={today} />
 
       <AsanaCard asana={asana} tasks={asanaTasks} site={site} today={today} lastThu={lastThu} onExt={onExt} saving={saving} />
 
