@@ -38,14 +38,19 @@ Product sales only (it used to count management fees, interest and other non-pro
 
 ## Checked 25 Nov 2026
 
-| | Email | Dashboard | Chat tool | Odoo ledger |
-|---|---|---|---|---|
-| Worthy Products, 16 to 22 Nov | $319,478.77, 16.47% | $319,478.77, 16.47% | $319,478.77, 16.47% | cost $266,771.77 |
-| Worthy Products, 1 to 25 Nov | $1,105,468.65, 15.70% | $1,105,468.65, 15.7% | $1,105,468.65, 15.7% | cost $931,589.37 |
-| Worthy Products, FY to 25 Nov | $9,540,181.14, 15.12% | $9,540,181.14, 15.1% | | |
-| Dutch Rusk (sister), 16 to 22 Nov | $111,900.14, 0.22% | same | same | |
-| All invoiced, 16 to 22 Nov | $453,077.92 | same | same | |
+Read from Odoo at 12 pm on 25 Nov, each place separately:
 
-Known difference: for a product-month where only some lines have a booked cost, the dashboard uses the booked cost alone while `wpSales` adds standard cost for the unbooked lines. April to October 2026 that was $820 on $7.16M of cost (0.01%), invisible at one decimal place.
+| | Sunday email | Dashboard | Chat tool | Odoo ledger |
+|---|---|---|---|---|
+| Worthy Products, 16 to 22 Nov | $319,418.77, 16.47% | $319,418.77, 16.47% | $319,418.77, 16.47% | cost $266,771.77 |
+| Worthy Products, 1 to 25 Nov | | $1,116,077.84, 15.74% | $1,116,077.84, 15.74% | cost $940,253.09 |
+| Worthy Products, FY to 25 Nov | | $9,550,450.33, 15.12% | $9,550,450.33, 15.12% | cost $8,104,830.61 |
+| Dutch Rusk (sister), 16 to 22 Nov | $111,900.14, 0.22% | same | same | |
+| All product sales, 16 to 22 Nov | $431,481.71, 12.25% | same | same | |
+| Worthy Oceania, FY to 25 Nov | | $4,998,950.73, 42.5% | same | sales match |
+
+Report 151 (Weekly Sales Report - All Reps): 94 of 94 figures match. Every other rebuilt scheduled action (103, 104, 107, 108, 110, 111, 123, 137) was checked against Odoo and re-sent to Kishan, cc Pratham, on 25 Nov.
+
+Cost rule, exactly: booked cost-of-goods for the product and period, plus today's standard cost on any quantity that had no booked cost line. The dashboard, the shared calculation (`wpSales`) and the Sunday emails all do this, so they agree to the cent, month by month and week by week. Figures read minutes apart can differ slightly as invoices are posted; the dashboard shows the time it read Odoo.
 
 What went wrong before: the dashboard counted sales to Dutch Rusk and Oceania inside Worthy Products (week $431,541.71 at 10.4%); the email counted Dutch Rusk's $20,073.68 of recharged freight and customs as profit (51.84% "margin"); ChatGPT answered from confirmed sales orders ($601K) because nothing told it which basis to use.
