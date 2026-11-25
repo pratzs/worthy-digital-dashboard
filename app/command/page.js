@@ -1582,7 +1582,9 @@ function Big({ value, label, pair, fmt = n0, points, accent }) {
     <div className={s.stat}>
       <div className={s.statNum} style={accent ? { color: "var(--orange)" } : undefined}>{value ?? (pair ? fmt(pair[0]) : "-")}</div>
       <div className={s.statLabel}>{label}</div>
-      {pair && <div style={{ marginTop: 4 }}><Trend now={pair[0]} before={pair[1]} points={points} /> <span className={s.was}>was {fmt(pair[1])}</span></div>}
+      {pair && (pair[1] === 0 && pair[0] > 0
+        ? <div style={{ marginTop: 4 }}><span className={s.was}>none recorded before</span></div>
+        : <div style={{ marginTop: 4 }}><Trend now={pair[0]} before={pair[1]} points={points} /> <span className={s.was}>was {fmt(pair[1])}</span></div>)}
     </div>
   );
 }
