@@ -7,8 +7,8 @@ import { readSouth } from '@/lib/ostendoCache';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-/* Keeps the shared figures filled so nobody waits for Odoo. A scheduled GitHub job
-   calls this every five minutes (Vercel's own scheduler is not available on this
+/* Keeps the shared figures filled so nobody waits for Odoo. The Dutch Rusk Catalog Manager server on Render
+   (app/lib/dashboard-warm.server.js) calls this every five minutes; a GitHub job is an hourly backup (Vercel cron is not available on this
    plan). It fills this five-minute slot and the NEXT one, for the figures the
    dashboard opens with: North and Oceania, this financial year and last.
    One at a time, so the warm-up never piles onto Odoo.

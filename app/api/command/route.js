@@ -9,6 +9,7 @@
  *   GET ?search=1&start=&end=        Search Console for any period (date picker)
  *   GET ?events=worthy&start=&end=   each key event (enquiry) on that site: time, event, page, source, town, device
  *   GET ?live=1    visitors right now, the Asana meeting tasks and the ClickUp cards, for the page's 30-second refresh
+ *   GET ?spend=1&start=&end=          Google Ads (via GA4 advertiserAdCost) and Meta ads spend by month (lib/adSpend.js)
  *   GET ?meeting=1                   meeting notes, discussion points, actions and the Asana members (lib/meeting.js)
  *   POST           { action: 'meeting-notes' | 'meeting-read' | 'meeting-edit' | 'meeting-send' | 'meeting-point', ... }
  *   POST           { action: 'save' | 'delete', item }  change the typed-in board
@@ -23,6 +24,7 @@ import { aiReferrals, latestChecks, runChecks, readGoogleAi, saveGoogleAi } from
 import { shoppingData } from '@/lib/shopping';
 import { worthyEnquiries } from '@/lib/worthyForms';
 import { meetingState, saveNotes, readNotes, editAction, sendActions, setPoint } from '@/lib/meeting';
+import { adSpend } from '@/lib/adSpend';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -62,6 +64,10 @@ export async function GET(request) {
     if (!['worthy', 'dutchrusk', 'worthyproducts'].includes(site) || !ok(q.get('start')) || !ok(q.get('end'))) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
     try { return NextResponse.json(await keyEventDetail(site, q.get('start'), q.get('end'))); }
     catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 502 }); }
+  }
+  if (q.get('spend') === '1') {
+    try { return NextResponse.json(await adSpend(q.get('start'), q.get('end'), { fresh: q.get('fresh') === '1' })); }
+    catch (e) { return NextResponse.json({ error: String(e.message || e).slice(0, 200) }, { status: 400 }); }
   }
   if (q.get('meeting') === '1') {
     try { return NextResponse.json(await meetingState()); }

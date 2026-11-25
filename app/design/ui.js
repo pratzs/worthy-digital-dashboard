@@ -14,6 +14,7 @@
  * - Only show what is verified: never add figures that are measured differently, say "none recorded before" rather than
  *   "was 0" when there was no data, leave out what cannot be added up honestly.
  */
+import { useState } from "react";
 import u from "./ui.module.css";
 import { Icon } from "./icons";
 
@@ -101,24 +102,57 @@ export function Big({ value, label, pair, fmt = n0, points, accent, invert }) {
 export const StatLine = ({ children, tight }) => <div className={`${u.statLine} ${tight ? u.statTight : ""}`}>{children}</div>;
 
 // ── infographics ──
-/** Bars by month (or any period). rows = [{ month: "2026-11" | label, value }]. The last bar is the accent. */
-export function MonthBars({ rows, k = "value", fmt = n0, labelOf }) {
+/** Bars by month (or any period). rows = [{ month: "2026-11" | label, value }]. The last bar is the accent.
+ *  `partialTo` (ISO date): the last bar is a month still running, drawn hatched and labelled "to 26". */
+export function MonthBars({ rows, k = "value", fmt = n0, labelOf, partialTo }) {
   if (!rows?.length) return null;
   const max = Math.max(1, ...rows.map((r) => Math.max(0, r[k] || 0)));
+  const pm = /^(\d{4})-(\d{2})-(\d{2})/.exec(partialTo || "");
   return (
     <div className={u.monthBars}>
       {rows.map((r, i) => {
         const lab = labelOf ? labelOf(r) : /^\d{4}-\d{2}/.test(String(r.month)) ? monthLabel(r.month).slice(0, 3) : String(r.month ?? r.label ?? "");
+        const last = i === rows.length - 1, part = last && pm;
         return (
-          <div key={`${r.month ?? r.label}-${i}`} title={`${lab}: ${fmt(r[k])}`}>
+          <div key={`${r.month ?? r.label}-${i}`} title={`${lab}${part ? `, 1 to ${Number(pm[3])} ${MONTHS[Number(pm[2]) - 1]}` : ""}: ${fmt(r[k])}`}>
             <b>{fmt === money || fmt === moneyShort ? moneyShort(r[k]) : short(r[k])}</b>
-            <i className={i === rows.length - 1 ? u.hot : ""} style={{ height: `${Math.max(3, (Math.max(0, r[k] || 0) / max) * 100)}%` }} />
-            <span>{lab}</span>
+            <i className={`${last ? u.hot : ""} ${part ? u.part : ""}`} style={{ height: `${Math.max(3, (Math.max(0, r[k] || 0) / max) * 100)}%` }} />
+            <span>{lab}{part && <em>to {Number(pm[3])}</em>}</span>
           </div>
         );
       })}
     </div>
   );
+}
+
+// ── long tables ──
+export const PAGE = 25;
+/** Shows the first 25 rows of a long list with "Show 25 more" and "Show all". Totals must still be worked from the full
+ *  list. `resetKey` goes back to the first 25 when filters or sorting change. Returns { shown, bar }. */
+export function usePaged(rows, resetKey = "", step = PAGE) {
+  const list = rows || [];
+  const [st, setSt] = useState({ n: step, key: resetKey });
+  const n = st.key === resetKey ? st.n : step;
+  const shown = list.length > n ? list.slice(0, n) : list;
+  const bar = <MoreRows total={list.length} n={n} step={step} onMore={() => setSt({ n: n + step, key: resetKey })} onAll={() => setSt({ n: Infinity, key: resetKey })} onLess={() => setSt({ n: step, key: resetKey })} />;
+  return { shown, bar };
+}
+export function MoreRows({ total, n, step = PAGE, onMore, onAll, onLess }) {
+  if (total <= step) return null;
+  const shown = Math.min(n, total), left = total - shown;
+  return (
+    <div className={u.more}>
+      <span>Showing {shown.toLocaleString("en-NZ")} of {total.toLocaleString("en-NZ")}</span>
+      {left > 0 && <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={onMore}><Icon n="down" size={12} />Show {Math.min(step, left).toLocaleString("en-NZ")} more</button>}
+      {left > step && <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={onAll}>Show all</button>}
+      {left === 0 && onLess && <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={onLess}><Icon n="up" size={12} />Show first {step}</button>}
+    </div>
+  );
+}
+/** usePaged for places that cannot call a hook (render helpers): children(shownRows), then the bar. */
+export function Paged({ rows, resetKey = "", step = PAGE, children }) {
+  const { shown, bar } = usePaged(rows, resetKey, step);
+  return <>{children(shown)}{bar}</>;
 }
 
 /** Ranked horizontal bars with value and share. The top row is the accent. */

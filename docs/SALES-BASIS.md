@@ -15,7 +15,7 @@ Code: `lib/salesTool.js` `resolveBusinesses` (management) and `lib/systemNames.j
 ## Worthy Products (Odoo company 4)
 
 - **Sales:** product lines on posted customer invoices less credit notes, before GST (finance's basis).
-- **Freight is never counted** (Pratham, 25 Nov 2026): not in sales, not in margin, not in any total. Freight = any line on 6030 Freight Recovered or 7310 Outward Freight, or a shipping/delivery product (Standard Shipping 77932, 79478, 77497; delivery method product 76579), with or without a product on the line (`FREIGHT_ACCOUNTS`, `FREIGHT_PRODUCT_IDS`, `NOT_FREIGHT` in `lib/salesBasis.js`).
+- **Freight is never counted** (Pratham, 25 Nov 2026): not in sales, not in margin, not in any total. Freight = any line on 6030 Freight Recovered or 7310 Outward Freight, or a shipping/delivery product (Standard Shipping 77932, 79478, 77497; delivery method product 76579; Worthy Oceania's "[FREIGHT] FREIGHT (Outgoing)" 12872, added 26 Nov 2026 after the daily health check found 4 lines, $142.98, on 6020 Sales Local), with or without a product on the line (`FREIGHT_ACCOUNTS`, `FREIGHT_PRODUCT_IDS`, `NOT_FREIGHT` in `lib/salesBasis.js`).
 - **Other lines with no product** (discounts typed as lines, rebates, management fees, interest): not sales, never margin.
 - **Cost:** the cost Odoo booked on each invoice: the cost-of-goods lines (`display_type = 'cogs'`) on the 7xxx accounts, which is what accounts reports. Today's standard cost only for a product with no booked cost. A product with neither is left out of the margin base.
 - **Margin %:** (costed sales - cost) / costed sales.

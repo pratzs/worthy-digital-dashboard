@@ -1,7 +1,7 @@
 name: Keep dashboard figures warm
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '17 * * * *'   # hourly backup; the Dutch Rusk Catalog Manager on Render calls /api/cron/warm every 5 minutes (26 Nov 2026)
   workflow_dispatch:
 
 # One warm-up at a time. If a run is still going when the next one is due, the next waits

@@ -1166,7 +1166,19 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
   const e = [sumOf(ew.cur, "conversions"), sumOf(ew.prev, "conversions")];
   // spend and return by month
   const spend = items.filter((x) => x.kind === "spend" && (site === "all" || x.site === site));
-  const months = [...new Set([...spend.map((x) => x.month).filter(Boolean)])].sort().reverse().slice(0, 6);
+  /* Ad spend read automatically: Google Ads through Google Analytics, Meta ads from Meta (lib/adSpend.js), the last
+     six months, added to anything typed in. Meta ads are not tied to one site, so they count under All sites only. */
+  const [auto, setAuto] = useState(null);
+  const spendFrom = `${addDays(`${today.slice(0, 7)}-01`, -160).slice(0, 7)}-01`;
+  useEffect(() => {
+    let stop = false;
+    fetch(`/api/command?spend=1&start=${spendFrom}&end=${addDays(today, -1)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (!stop) setAuto(j); }).catch(() => {});
+    return () => { stop = true; };
+  }, [spendFrom, today]);
+  const autoRows = [...(auto?.google?.rows || []), ...(auto?.meta?.rows || [])].filter((r) => (r.site ? site === "all" || r.site === site : site === "all"));
+  const spendOf = (ym) => spend.filter((x) => x.month === ym).reduce((a, x) => a + (Number(x.amount) || 0), 0) + autoRows.filter((r) => r.month === ym).reduce((a, r) => a + r.amount, 0);
+  const months = [...new Set([...spend.map((x) => x.month).filter(Boolean), ...autoRows.map((r) => r.month)])].sort().reverse().slice(0, 6);
+  const byChannel = (() => { const m = new Map(); autoRows.filter((r) => r.month === months[0]).forEach((r) => m.set(r.channel, (m.get(r.channel) || 0) + r.amount)); return [...m.entries()]; })();
   const revByMonth = (ym) => daily.filter((d) => d.date.startsWith(ym)).reduce((a, d) => a + d.revenue, 0);
   const leadsByMonth = (ym) => daily.filter((d) => d.date.startsWith(ym)).reduce((a, d) => a + d.conversions, 0);
   const channels = (() => {
@@ -1224,6 +1236,11 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
             <Title icon="wallet">Spend and return</Title>
             <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("spend", { month: today.slice(0, 7) })}><Icon n="plus" size={13} />Add spend</button>
           </div>
+          <div className={s.rowMeta} style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!auto && <span>Reading ad spend</span>}
+            {auto && <span className={`${s.pill} ${auto.google?.linked?.length ? s.pillGrey : s.pillWarn}`}>Google Ads: {auto.google?.linked?.length ? `automatic, ${auto.google.linked.map(siteName).join(", ")}` : auto.google?.status === "ok" ? "no spend linked in Analytics" : "not read"}</span>}
+            {auto && <span className={`${s.pill} ${auto.meta?.status === "ok" ? s.pillGrey : s.pillWarn}`}>Meta ads: {auto.meta?.status === "ok" ? "automatic" : (auto.meta?.reason || "not connected")}</span>}
+          </div>
           {months.length === 0 && <div className={s.empty}>Nothing yet</div>}
           {months.length > 0 && (
             <div className={s.tableWrap}>
@@ -1231,7 +1248,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
                 <thead><tr><th>Month</th><th className={s.num}>Spend</th><th className={s.num}>{lead ? "Enquiries" : "Online sales"}</th><th className={s.num}>{lead ? "Cost each" : "Return"}</th></tr></thead>
                 <tbody>
                   {months.map((ym) => {
-                    const sp = spend.filter((x) => x.month === ym).reduce((a, x) => a + (Number(x.amount) || 0), 0);
+                    const sp = spendOf(ym);
                     if (lead) { const ld = leadsByMonth(ym); return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{n0(ld)}</td><td className={s.num}>{ld ? money(sp / ld) : "-"}</td></tr>; }
                     const rv = revByMonth(ym);
                     return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{money(rv)}</td><td className={`${s.num} ${ym === months[0] ? s.accentNum : ""}`}>{sp ? `${(rv / sp).toFixed(1)}x` : "-"}</td></tr>;
@@ -1240,6 +1257,12 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
               </table>
             </div>
           )}
+          {byChannel.length > 0 && <div style={{ marginTop: 12 }}>{byChannel.map(([ch, amt]) => (
+            <div key={ch} className={s.row}>
+              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{ch}</div><div className={s.rowMeta}>Automatic · {monthLabel(months[0])}</div></div>
+              <div className={s.rowNum} style={{ fontSize: 17 }}>{money(amt)}</div>
+            </div>
+          ))}</div>}
           {spend.length > 0 && <div style={{ marginTop: 12 }}>{spend.slice(0, 6).map((x) => (
             <div key={x.id} className={s.row} style={{ cursor: "pointer" }} onClick={() => onEdit(x)}>
               <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{siteName(x.site) || "All of Worthy"}{x.month ? ` · ${monthLabel(x.month)}` : ""}</div></div>
@@ -1893,18 +1916,30 @@ function Big({ value, label, pair, fmt = n0, points, accent }) {
   );
 }
 
-function MonthBars({ rows, k, fmt = n0 }) {
+/* The range end when the last month bar stops part-way through its month (the month still running), else null. */
+const partOfMonth = (rows, endIso) => {
+  const ym = rows?.[rows.length - 1]?.month;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(endIso || "");
+  if (!ym || !m || `${m[1]}-${m[2]}` !== String(ym).slice(0, 7)) return null;
+  return Number(m[3]) < new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate() ? endIso : null;
+};
+
+function MonthBars({ rows, k, fmt = n0, partialTo }) {
   if (!rows?.length) return null;
   const max = Math.max(1, ...rows.map((r) => r[k] || 0));
+  const day = partialTo ? Number(String(partialTo).slice(8, 10)) : null;
   return (
     <div className={s.monthBars}>
-      {rows.map((r, i) => (
-        <div key={r.month} title={`${monthLabel(r.month)}: ${fmt(r[k])}`}>
-          <b>{fmt === money ? moneyShort(r[k]) : short(r[k])}</b>
-          <i className={i === rows.length - 1 ? s.hot : ""} style={{ height: `${Math.max(3, ((r[k] || 0) / max) * 100)}%` }} />
-          <span>{monthLabel(r.month).slice(0, 3)}</span>
-        </div>
-      ))}
+      {rows.map((r, i) => {
+        const last = i === rows.length - 1, part = last && day;
+        return (
+          <div key={r.month} title={`${monthLabel(r.month)}${part ? `, 1 to ${day}` : ""}: ${fmt(r[k])}`}>
+            <b>{fmt === money ? moneyShort(r[k]) : short(r[k])}</b>
+            <i className={`${last ? s.hot : ""} ${part ? s.part : ""}`} style={{ height: `${Math.max(3, ((r[k] || 0) / max) * 100)}%` }} />
+            <span>{monthLabel(r.month).slice(0, 3)}{part && <em>to {day}</em>}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1973,7 +2008,7 @@ function Chain({ steps, compact = false }) {
   );
 }
 
-function WebSiteCard({ x, range }) {
+function WebSiteCard({ x, range, end }) {
   const shop = x.source === "shopify";
   const t = x.totals || {};
   return (
@@ -2004,10 +2039,10 @@ function WebSiteCard({ x, range }) {
           <div className={s.grid2} style={{ marginTop: 24 }}>
             <div>
               <Mini icon="bars">{shop ? "NZ visits by month" : "Visitors by month"}</Mini>
-              <MonthBars rows={x.months} k={shop ? "sessions" : "visitors"} />
+              <MonthBars rows={x.months} k={shop ? "sessions" : "visitors"} partialTo={partOfMonth(x.months, end)} />
             </div>
             {shop
-              ? <div><Mini icon="bag">Online sales by month</Mini><MonthBars rows={x.months} k="revenue" fmt={money} /></div>
+              ? <div><Mini icon="bag">Online sales by month</Mini><MonthBars rows={x.months} k="revenue" fmt={money} partialTo={partOfMonth(x.months, end)} /></div>
               : <div><Mini icon="devices">Device</Mini><Ring rows={x.devices} k="sessions" /></div>}
           </div>
           <div className={s.grid2} style={{ marginTop: 24 }}>
@@ -2155,7 +2190,7 @@ function SocialTab({ site, start, end, nonce = 0 }) {
               {shopMonths.length > 0 && (
                 <div style={{ marginTop: 20 }}>
                   <Mini icon="bars">Online sales by month{shops.length === 1 ? `, ${shops[0].name}` : ""}</Mini>
-                  <MonthBars rows={shopMonths} k="revenue" fmt={money} />
+                  <MonthBars rows={shopMonths} k="revenue" fmt={money} partialTo={partOfMonth(shopMonths, p?.end || end)} />
                 </div>
               )}
               {shops.length > 1 && sales?.[0] > 0 && (
@@ -2189,7 +2224,7 @@ function SocialTab({ site, start, end, nonce = 0 }) {
         {/* 3. each site, then 4. each social account */}
         <div className={s.grid}>
           <div className={s.stack}>
-            {sites.map((x) => <WebSiteCard key={x.id} x={x} range={range} />)}
+            {sites.map((x) => <WebSiteCard key={x.id} x={x} range={range} end={p?.end || end} />)}
           </div>
           <aside className={s.stack}>
             {cur.meta?.status !== "ok" && <section className={s.card}><T icon="megaphone">Facebook and Instagram</T><div className={s.empty}>{cur.meta?.status === "not_connected" ? "Not connected yet" : `Could not load: ${cur.meta?.error || ""}`}</div></section>}

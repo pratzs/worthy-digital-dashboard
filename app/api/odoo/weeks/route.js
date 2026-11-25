@@ -12,10 +12,11 @@ import { cachedAuth } from '@/lib/odooAuth';
 import { loadUnitCosts, makeQtyInProductUnit } from '@/lib/odooCost';
 import { repGroup, usesFinanceBasis } from '@/lib/odooReps';
 import { NextResponse } from 'next/server';
+import { readWeeks } from '@/lib/odooWeeksCache';
 import { toCents, toDollars, pct1 } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;   // a cold read, or waiting on another visitor's read, can take a few minutes when Odoo is busy
 
 const NORTH = 4; // Worthy Products North. Oceania (company 1) is read in its own company too.
 async function connect(cid) {
@@ -53,7 +54,8 @@ export async function GET(request) {
   const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
   const end = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-  try {
+  // Reads Odoo. Run through readWeeks so only one read per company and month runs at a time (lib/odooWeeksCache.js).
+  const compute = async () => {
     const exec = await connect(cid);
     const lineDom = (type) => [
       ['move_id.company_id', '=', cid], ['move_id.move_type', '=', type],
@@ -167,7 +169,13 @@ export async function GET(request) {
       };
     });
 
-    return NextResponse.json({ company: cid, month, start, end, hasCost, rows });
+    return { company: cid, month, start, end, hasCost, rows, generatedAt: new Date().toISOString() };
+  };
+
+  try {
+    // Same figures; a saved copy is marked stale: true with the time Odoo was read (generatedAt).
+    const { payload } = await readWeeks(cid, month, compute);
+    return NextResponse.json(payload);
   } catch (err) {
     console.error('[odoo/weeks]', err.message);
     return NextResponse.json({ company: cid, month, error: err.message, rows: [] }, { status: 502 });

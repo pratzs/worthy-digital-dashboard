@@ -73,22 +73,25 @@ Year figures (`lib/odooFyCache.js`): one Odoo read per company and year at a tim
 - Command Center 'Online sales' and conversion add Google Analytics revenue for dutchrusk.co.nz (about 7% below Shopify's own figure, 27 Oct to 25 Nov: GA $710,312 vs Shopify $765,245). `DUTCHRUSK_REPORTS_KEY` is in Vercel and the Social and Web page uses it (26 Nov), so the Command Center can switch to the same Shopify figures (`shopifyql(q, 'dutchrusk')` in `lib/webStats.js`).
 - ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web; Dutch Rusk on Shopify figures since 26 Nov), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
 
-## Improvements to do (edge cases found 26 Nov 2026)
+## Improvements (edge cases found 26 Nov 2026)
 
-Most important first.
-1. **Reliable warm-up.** The GitHub job meant to run every 5 minutes runs 2 or 3 times a day. Move it to a scheduler that keeps time (a Render cron on the Dutch Rusk app calling `/api/cron/warm`, or Vercel Pro cron) so saved copies, including last year's, are always fresh before anyone opens the page.
-2. **Weekly figures need the same protection** as the year figures (`/api/odoo/weeks` reads Odoo per visitor with no shared lock or saved copy; a busy Odoo leaves the weekly margin blank).
-3. **Say when figures are old.** The page shows the Odoo time, but nothing stands out when the saved copy is over 15 minutes old because Odoo is slow. Add an orange "Odoo slow, figures from 10:05" notice.
-4. **Chat and connector answers should state the Odoo time** when they answer from the saved copy.
-5. **Spam enquiries.** A form entry with no visit behind it (e.g. "katalogTew", 22 Nov) is counted as an enquiry. Mark likely spam and leave it out of the count, listed separately.
-6. **Partial month.** "Sales by month" shows the current month as a full bar; mark it as "to 26 Nov" so it is not read as a drop.
-7. **Self-host the font.** A Vercel build failed on 26 Nov because Google Fonts did not answer; serve Outfit from the repo with next/font/local.
-8. **Long tables** (Debtors, customers, products, rep tables): add paging or "show more" with a count, so phones are not scrolled through hundreds of rows.
-9. **Test the department logins** (Purchasing: Kylie, Hari; Business Development) on production: the new navigation shows only their pages, but no real sign-in has been tried since the redesign.
-10. **Health alerts** for the Meta token, the Dutch Rusk reports key and the Render app (Render can sleep; a slow first answer falls back to the last good copy).
-11. **New freight or sister-company codes** would silently enter sales: alert when an invoice line uses a delivery product or a related-company partner that is not in `lib/salesBasis.js`.
-12. **Management chat cost** (about US$0.30 a question): trim `get_financial_year` and `get_debtors` payloads.
-13. **Rep budgets in the public repo** (`lib/repTargets.js`): move to an environment value or the store.
+Done 26 Nov:
+1. Reliable warm-up: the Dutch Rusk Catalog Manager on Render calls `/api/cron/warm` every 5 minutes (`app/lib/dashboard-warm.server.js` in that repo); the GitHub job is an hourly backup.
+2. Weekly figures have the same Odoo protection as the year figures (`lib/odooWeeksCache.js`, keys `wk:last:v1`, `wk:busy:v1`); the page asks again a minute later when it got a saved copy.
+3. An orange note on the dashboard when figures are over 15 minutes old or a saved copy is shown.
+4. Chat and connector answers say when Odoo was read if the figures came from a saved copy (`figuresAsOf`, `fromSavedCopy`; rule `SAVED_COPY_RULE` in lib/mcpRoles.js).
+5. Spam: the enquiries popup leaves likely spam out of real enquiries and explains every gap. A worthy.nz Code Snippet (#13, "Contact forms: block obvious bot spam") is ready to switch on so bots stop reaching the inbox.
+6. Month bars mark a month in progress (striped, "to 26").
+7. The Outfit font is served from the repo (`@fontsource-variable/outfit` through next/font/local), so a Google Fonts outage cannot fail a build.
+8. Long tables show 25 rows at a time with Show more / Show all; totals and CSV still use every row.
+10. Daily health check (`/api/cron/health`, `.github/workflows/health.yml`, docs/HEALTH.md): Meta, Dutch Rusk reports, Asana, ClickUp, worthy.nz forms, Google Analytics, saved year figures under 2 hours old.
+11. The same check flags freight products and own-company partners that would slip into sales. Its first run found Oceania product 12872 "[FREIGHT] FREIGHT (Outgoing)" on 4 sales lines ($142.98 this FY), now in `FREIGHT_PRODUCT_IDS`.
+
+Still to do:
+9. Test the Purchasing (Kylie, Hari) and Business Development logins on production (needs the passwords typed by Pratham).
+12. Management chat cost (about US$0.30 a question): trim `get_financial_year` and `get_debtors` payloads.
+13. Rep budgets in the public repo (`lib/repTargets.js`): move to an environment value or the store.
+- Meta ad spend in the Command Center's Spend and return needs `ads_read` and the ad account on Worthydashboardreader (asked of Anu 26 Nov). Google Ads spend is read through Google Analytics (`lib/adSpend.js`) where an Ads account is linked.
 
 ## History in short
 

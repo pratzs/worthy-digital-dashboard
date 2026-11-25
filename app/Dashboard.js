@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { bankTargetFor } from "@/lib/bankTargets";
 import { weekOfMonth } from "@/lib/weekOfMonth";
-import { Card, CardHead, Mini, Pill, StatLine, MonthBars, BarList, Ring, Chain, ShareBar, COLORS, ui, moneyShort } from "@/app/design/ui";
+import { Card, CardHead, Mini, Pill, StatLine, MonthBars, BarList, Ring, Chain, ShareBar, COLORS, ui, moneyShort, usePaged, Paged } from "@/app/design/ui";
 import { Icon } from "@/app/design/icons";
 import st from "./page.module.css";
 
@@ -400,7 +400,10 @@ const ExportButton = ({ title, range, columns, data }) => {
 const WARN_COLOURS = ["#f87171", "#dc2626", "#b91c1c", "#c2410c", "#b45309"];
 const tone = (c) => (!c ? INK : WARN_COLOURS.includes(c) ? ORANGE : c.startsWith("#") && c !== INK && c !== ORANGE && c !== COLORS.ink2 && c !== COLORS.mute ? COLORS.ink2 : c);
 
-const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, icon, range, visual }) => (
+// Long tables show 25 rows at a time; the CSV and the AI summary still use every row.
+const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, icon, range, visual }) => {
+  const pg = usePaged(data, `${title}|${data?.length ?? 0}`);
+  return (
   <Card style={{ display: "flex", flexDirection: "column", height: "100%" }}>
     <CardHead icon={icon || "grid"} title={<>{title}{loading && <span style={{ marginLeft: 10, verticalAlign: "middle" }}><Pill>Loading</Pill></span>}</>}>
       {headerExtra}<RangeTag text={range} /><ExportButton title={title} range={range} columns={columns} data={data} />
@@ -417,7 +420,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
           </tr>
         </thead>
         <tbody>
-          {!loading && data?.map((row, i) => (
+          {!loading && pg.shown.map((row, i) => (
             <tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined}
               style={{ cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
               onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = inkA(0.04); }}
@@ -435,11 +438,13 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
         </tbody>
       </table>
     </div>
+    {!loading && pg.bar}
     {aiContext && !loading && data?.length > 0 && (
       <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} />
     )}
   </Card>
-);
+  );
+};
 
 /* Debtors: what customers owe and how overdue it is, as at today. The figure is
    Odoo's own receivable balance (checked against the ledger to the cent). */
@@ -468,7 +473,6 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
   const [sort, setSort] = useState("overdue");
   const [hideIC, setHideIC] = useState(false);
   const [open, setOpen] = useState(null);
-  const [limit, setLimit] = useState(100);
   const money = (v) => fmtExact(v, currency);
   const red = ORANGE;
   const t = d.totals;
@@ -502,8 +506,11 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
     name: (a, b) => a.name.localeCompare(b.name),
   }[sort];
   rows.sort(order);
+  // Totals and the CSV use every matching customer; only the table rows are paged.
   const sum = (k) => rows.reduce((s, c) => s + c[k], 0);
-  const shownRows = rows.slice(0, limit);
+  const pg = usePaged(rows, `${q}|${show}|${rep}|${sort}|${hideIC}`);
+  const repPg = usePaged(d.reps);
+  const shownRows = pg.shown;
   const filtered = rows.length !== d.customers.length;
 
   // Chase first: customers with money more than 60 days past due, biggest first.
@@ -592,7 +599,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
               <th style={head("left")}>Sales rep</th><th style={head()}>Customers</th><th style={head()}>Owed</th><th style={head()}>Overdue</th>
               <th style={head()}>31 to 60</th><th style={head()}>61 to 90</th><th style={head()}>Over 90</th>
             </tr></thead>
-            <tbody>{d.reps.map(r => (
+            <tbody>{repPg.shown.map(r => (
               <tr key={r.rep}>
                 <td style={{ ...cell, fontWeight: 500 }}>{r.rep}</td>
                 <td style={{ ...cell, textAlign: "right" }}>{r.customers.toLocaleString()} <span style={{ color: COLORS.mute }}>({r.overdueCustomers} late)</span></td>
@@ -613,17 +620,18 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
             </tr></tfoot>
           </table>
         </div>
+        {repPg.bar}
       </Card>
 
       <Card style={card}>
         {title("receipt", "Every Customer Who Owes Us", "Open invoices less credit notes, aged by days past the due date. Click a customer to see their open invoices", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-          <input value={q} onChange={e => { setQ(e.target.value); setLimit(100); }} placeholder="Search customer" style={{ ...sel, minWidth: 0, flex: "1 1 220px" }} />
-          <select value={show} onChange={e => { setShow(e.target.value); setLimit(100); }} style={sel}>
+          <input value={q} onChange={e => { setQ(e.target.value); }} placeholder="Search customer" style={{ ...sel, minWidth: 0, flex: "1 1 220px" }} />
+          <select value={show} onChange={e => { setShow(e.target.value); }} style={sel}>
             <option value="all">Everyone who owes</option><option value="overdue">Overdue only</option>
             <option value="31">More than 30 days late</option><option value="61">More than 60 days late</option><option value="90">More than 90 days late</option>
           </select>
-          <select value={rep} onChange={e => { setRep(e.target.value); setLimit(100); }} style={sel}>
+          <select value={rep} onChange={e => { setRep(e.target.value); }} style={sel}>
             <option value="All">All sales reps</option>{d.reps.map(r => <option key={r.rep} value={r.rep}>{r.rep}</option>)}
           </select>
           <select value={sort} onChange={e => setSort(e.target.value)} style={sel}>
@@ -692,10 +700,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
             </tr></tfoot>
           </table>
         </div>
-        {rows.length > limit && (
-          <div style={{ marginTop: 12, textAlign: "center" }}>
-            <button type="button" onClick={() => setLimit(limit + 200)} className={`${ui.btn} ${ui.btnSmall}`}>Show 200 more ({(rows.length - limit).toLocaleString()} not shown)</button>
-          </div>)}
+        {pg.bar}
       </Card>
     </div>
   );
@@ -783,6 +788,12 @@ const DebtorsPanel = ({ source, currency = "NZD" }) => {
    sits under, and the reason the team logged in Odoo. The same two totals as the
    Overview: credits against product sales, and discounts / rebates / adjustments that
    carry no product, which together are the full value of the notes. */
+/* The end date when a month bar stops part-way through its month (the month still running), else null. */
+const partOfMonth = (ym, endIso) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(endIso || "");
+  if (!ym || !m || `${m[1]}-${m[2]}` !== String(ym).slice(0, 7)) return null;
+  return Number(m[3]) < new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate() ? endIso : null;
+};
 const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
   const [q, setQ] = useState("");
   const [kind, setKind] = useState("All");
@@ -800,8 +811,10 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
     (kind === "All" || n.kind === kind) && (rep === "All" || n.rep === rep) &&
     (month === "All" || String(n.date).slice(0, 7) === month) && (by === "All" || n.raisedBy === by) &&
     (!needle || [n.customer, n.docNumber, n.reason, n.about, n.rep, n.raisedBy, n.kind].join(" ").toLowerCase().includes(needle)));
+  // The total credited is worked from every matching note; only the table rows are paged.
   const shown = rows.reduce((s, n) => s + n.amount, 0);
   const filtered = rows.length !== d.notes.length;
+  const notePg = usePaged(rows, `${q}|${kind}|${rep}|${month}|${by}`);
 
   const cell = tdStyle;
   const head = thStyle;
@@ -814,13 +827,14 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
       {title(label[0], label[1], <RangeTag text={rangeLabel} />)}
       {label[3] && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{label[3]}</div>}
       {visual && list.length > 0 && <div style={{ marginBottom: 18 }}>{visual}</div>}
+      <Paged rows={list}>{(shownList) => (
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr>
           <th style={head("left")}>{label[2]}</th><th style={head()}>Credit notes</th>
           <th style={head()}>Product credits</th><th style={head()}>{otherHead}</th><th style={head()}>Total</th>
         </tr></thead>
         <tbody>
-          {list.map(r => (
+          {shownList.map(r => (
             <tr key={keyOf(r)}>
               <td style={{ ...cell, fontWeight: 500, whiteSpace: "nowrap" }}>{labelOf(r)}</td>
               <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
@@ -836,7 +850,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
           <td style={footStyle()}>{money(d.totals.otherValue)}</td>
           <td style={{ ...footStyle(), color: red }}>{money(d.totals.value)}</td>
         </tr></tfoot>
-      </table>
+      </table>)}</Paged>
     </Card>);
 
   const csv = () => {
@@ -877,7 +891,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
 
       <div className={ui.grid2} style={{ margin: "14px 0" }}>
         {summary(["calendar", "By Month", "Month"], d.months, r => r.month, r => monthLabel(r.month),
-          <MonthBars rows={d.months.map(m => ({ month: m.month, value: m.value }))} fmt={moneyShort} />)}
+          <MonthBars rows={d.months.map(m => ({ month: m.month, value: m.value }))} fmt={moneyShort} partialTo={partOfMonth(d.months[d.months.length - 1]?.month, d.range?.end)} />)}
         {summary(["receipt", "What The Credits Were For", "Type", "Product credits are returns and corrections to product sales. The rest carry no product. Each credit note is counted once, under its main type."], d.kinds, r => r.kind, r => r.kind,
           <Ring rows={d.kinds.map(k => ({ name: k.kind, value: k.value }))} fmt={money} />)}
         {summary(["users", "By Sales Rep", "Sales rep"], d.reps, r => r.rep, r => r.rep,
@@ -887,9 +901,10 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
       <Card style={{ ...card, overflowX: "auto", marginBottom: 14 }}>
         {title("trophy", "Customers With The Most Credits", <RangeTag text={rangeLabel} />)}
         {d.customers.length > 0 && <div style={{ marginBottom: 18 }}><BarList rows={d.customers.map(r => ({ name: r.customer, value: r.value }))} fmt={money} limit={5} share={false} /></div>}
+        <Paged rows={d.customers}>{(shownCustomers) => (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={head("left")}>Customer</th><th style={head()}>Credit notes</th><th style={head()}>Product credits</th><th style={head()}>{otherHead}</th><th style={head()}>Total</th></tr></thead>
-          <tbody>{d.customers.map(r => (
+          <tbody>{shownCustomers.map(r => (
             <tr key={r.customer}>
               <td style={{ ...cell, fontWeight: 500 }}>{r.customer}</td>
               <td style={{ ...cell, textAlign: "right" }}>{r.count.toLocaleString()}</td>
@@ -897,7 +912,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
               <td style={{ ...cell, textAlign: "right" }}>{money(r.other)}</td>
               <td style={{ ...cell, textAlign: "right", fontWeight: 500 }}>{money(r.value)}</td>
             </tr>))}</tbody>
-        </table>
+        </table>)}</Paged>
       </Card>
 
       <Card style={card}>
@@ -916,7 +931,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
           <button type="button" onClick={csv} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download CSV</button>
         </div>
         <div style={{ fontSize: 12, color: COLORS.mute, marginBottom: 10 }}>
-          Showing {rows.length.toLocaleString()} of {d.notes.length.toLocaleString()} credit notes{filtered ? ` · ${money(shown)} of ${money(d.totals.value)}` : ""}. Click a row to read the whole reason.
+          {filtered ? `${rows.length.toLocaleString()} of ${d.notes.length.toLocaleString()} credit notes match · ${money(shown)} of ${money(d.totals.value)}` : `${d.notes.length.toLocaleString()} credit notes`}. Click a row to read the whole reason.
         </div>
         <div style={{ overflow: "auto", maxHeight: 620 }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -927,7 +942,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
             </tr></thead>
             <tbody>
               {rows.length === 0 && <tr><td colSpan={8} style={{ ...cell, textAlign: "center", padding: 24, color: COLORS.mute }}>No credit notes match</td></tr>}
-              {rows.map(n => {
+              {notePg.shown.map(n => {
                 const isOpen = open === n.docNumber;
                 const text = n.reason || n.note || (n.about ? `(${n.about})` : "No reason logged");
                 return (
@@ -949,8 +964,9 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
             </tbody>
           </table>
         </div>
+        {notePg.bar}
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>
-          {filtered ? "SHOWN" : "TOTAL"}&nbsp;CREDITED<span style={{ color: red, fontSize: 18, fontWeight: 400, letterSpacing: 0 }}>{money(shown)}</span>
+          {filtered ? "MATCHING" : "TOTAL"}&nbsp;CREDITED<span style={{ color: red, fontSize: 18, fontWeight: 400, letterSpacing: 0 }}>{money(shown)}</span>
         </div>
       </Card>
     </div>
@@ -999,6 +1015,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
         <CardHead icon="users" title={<>By Rep{loading && <span style={{ marginLeft: 10, verticalAlign: "middle" }}><Pill>Loading</Pill></span>}</>}><RangeTag text={rangeLabel} /></CardHead>
         {d?.reps?.length > 0 && <div style={{ marginBottom: 18 }}><BarList rows={d.reps.map(r => ({ name: r.rep, value: r.value }))} fmt={(v) => fmtExact(v, currency)} limit={6} /></div>}
         <div style={{ overflowX: "auto" }}>
+          <Paged rows={d?.reps || []}>{(shownReps) => (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr>
@@ -1012,7 +1029,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
                 <tr><td colSpan={3} style={{ padding: "20px 10px", textAlign: "center", color: COLORS.mute }}>
                   {loading ? "Loading…" : "No credit notes in this period"}
                 </td></tr>
-              ) : d.reps.map((r, i) => (
+              ) : shownReps.map((r, i) => (
                 <tr key={i}>
                   <td style={{ ...tdStyle, fontWeight: 500 }}>{r.rep}</td>
                   <td style={{ ...tdStyle, textAlign: "right", color: COLORS.ink2 }}>{r.count.toLocaleString()}</td>
@@ -1029,7 +1046,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
                 </tr>
               </tfoot>
             )}
-          </table>
+          </table>)}</Paged>
         </div>
       </Card>
 
@@ -1276,7 +1293,7 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
 };
 
 // ── Sales Rep Breakdown - ONE table with annual/monthly/weekly toggle ─────────
-const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, exact = false }) => {
+const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMonthly, salespeopleWeekly, repMargins, loading, currency, weeklyMonth, onWeeklyMonthChange, fyMonths = null, rangeLabel = null, monthRangeLabel = null, T, exact = false, partialMonth = null }) => {
   // Merge margin numbers (cost, GP, marginPct) onto each rep by name
   const marginByName = {};
   for (const m of (repMargins || [])) marginByName[m.name] = m;
@@ -1345,6 +1362,10 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
     while (list.length && !list[list.length - 1].value) list.pop();
     return list;
   })();
+  // The month still running (from the page's own month rows) is drawn as part of a month, never as a full one.
+  const repBarsPartialTo = partialMonth && monthBarRows.length && monthBarRows[monthBarRows.length - 1].label === partialMonth.label ? partialMonth.to : null;
+  // Long rep lists show 25 at a time; every TOTAL row below is still worked from all reps.
+  const repPg = usePaged(repView === "annual" ? annualRows : repView === "monthly" ? monthlyPivot : weeklyPivot, `${repView}|${weeklyMonth}`);
 
   return (
     <Card style={{ marginTop: 14 }}>
@@ -1370,7 +1391,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
       {repView === "monthly" && monthBarRows.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <Mini icon="bars">Revenue by month, all reps</Mini>
-          <MonthBars rows={monthBarRows} fmt={moneyShort} />
+          <MonthBars rows={monthBarRows} fmt={moneyShort} partialTo={repBarsPartialTo} />
         </div>
       )}
 
@@ -1393,7 +1414,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 <tr><td colSpan={hasMargin ? 6 : 4} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
                   {loading ? "Loading…" : "No sales rep data"}
                 </td></tr>
-              ) : annualRows.map((r, i) => (
+              ) : repPg.shown.map((r, i) => (
                 <tr key={i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
                   <td style={repCellStyle}>{r.name}</td>
                   <td style={numStyle()}>{r.orders.toLocaleString()}</td>
@@ -1439,6 +1460,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
               );
             })()}
           </table>
+          {repPg.bar}
         </div>
       )}
 
@@ -1460,7 +1482,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 <tr><td colSpan={hasMargin ? 16 : 14} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
                   {loading ? "Loading…" : "No monthly data"}
                 </td></tr>
-              ) : monthlyPivot.map((rep, i) => {
+              ) : repPg.shown.map((rep, i) => {
                 const total = displayMonths.reduce((s, _, fi) => s + (monthAt(rep.months, fi)?.revenue || 0), 0);
                 const marg  = marginByName[rep.name];
                 return (
@@ -1545,6 +1567,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
               </tfoot>
             )}
           </table>
+          {repPg.bar}
         </div>
       )}
 
@@ -1572,7 +1595,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                   <tr><td colSpan={maxWeeks + (hasMargin ? 4 : 2)} style={{ padding: "20px 10px", textAlign: "center", color: T.textLabel }}>
                     {loading ? "Loading…" : `No data for ${MONTH_NAMES[weeklyMonth]}`}
                   </td></tr>
-                ) : weeklyPivot.map((rep, i) => {
+                ) : repPg.shown.map((rep, i) => {
                   // weeklyMonth is a calendar index (8 = Sep) but the months array
                   // is in financial-year order, so match on the name.
                   const mo   = (marginByName[rep.name]?.months || [])
@@ -1663,6 +1686,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 );
               })()}
             </table>
+            {repPg.bar}
           </div>
         </>
       )}
@@ -1696,6 +1720,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
     fetch("/api/auth/me", { cache: "no-store" }).then(r => r.json()).then(j => { if (j.ok) setMe(j); }).catch(() => {});
   }, []);
   const isMgmt = me?.role === "mgmt";
+  // A minute clock, so an old copy of the Odoo figures is flagged without a reload.
+  const [clock, setClock] = useState(0);
+  useEffect(() => {
+    const tick = () => setClock(Date.now());
+    const first = setTimeout(tick, 0), every = setInterval(tick, 60000);
+    return () => { clearTimeout(first); clearInterval(every); };
+  }, []);
   const canSeeStock = me?.role === "mgmt" || me?.role === "purch";
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
   const [stockValue,   setStockValue]   = useState(null);
@@ -1879,6 +1910,10 @@ export default function EcommerceDashboard({ section = "overview" }) {
     }
     loadingRef.current[key] = false;
     forceUpdate();
+    // A saved copy (Odoo still reading): ask again in a minute and swap in the new figures.
+    if (cacheRef.current[key]?.stale) {
+      setTimeout(() => { if (cacheRef.current[key]?.stale) { delete cacheRef.current[key]; fetchOdooWeeks(storeId, monthKey); } }, 60000);
+    }
   };
 
   const fetchFY = async (year) => {
@@ -2224,6 +2259,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     aov:               m.aov,
     started:           m.started,
     complete:          m.complete,
+    through:           m.through,
     priorComparable:   m.priorComparable !== false,
     daysElapsed:       m.daysElapsed,
     daysInMonth:       m.daysInMonth,
@@ -2958,6 +2994,14 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const axisTick = { fontSize: 11, fill: COLORS.mute };
   // Sales by month for the year on screen, months that have not started left out. The latest month is the accent.
   const monthBars = momData.filter(r => !r.notStarted).map(r => ({ label: r.month, value: r.revenue || 0 }));
+  /* The month still running is drawn as part of a month ("to 26"), so it is not read as a drop. The year payload says
+     whether a month is complete and how far it runs; the calendar-year companies use today's NZ date. */
+  const lastMonthRow = [...momData].reverse().find(r => !r.notStarted);
+  const nzTodayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
+  const barsPartialTo = !lastMonthRow ? null
+    : onFYView() ? (lastMonthRow.complete === false ? (lastMonthRow.through || nzTodayIso) : null)
+    : (isCurrentYear && momData.indexOf(lastMonthRow) === nowRef.getMonth() ? nzTodayIso : null);
+  const partialMonth = barsPartialTo ? { label: lastMonthRow.month, to: barsPartialTo } : null;
   const initials = (me?.label || "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "W";
 
   return (
@@ -2990,10 +3034,15 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {anyLoading && <Pill>Loading</Pill>}
             {(() => {
               /* Say when these figures were read, so nobody has to wonder how fresh they are. */
-              const at = fyPayload(selectedYear)?.generatedAt;
+              const fp = fyPayload(selectedYear), at = fp?.generatedAt;
               if (!at || activeStore.id === "luxe" || section !== "overview") return null;
               const t = new Date(at).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
-              return <span>· Odoo figures as of {t} NZ, refreshed every few minutes</span>;
+              // The last good copy (Odoo slow) or figures over 15 minutes old: say so in the accent, one line.
+              const old = fp.stale || (clock > 0 && clock - Date.parse(at) > 15 * 60000);
+              return (<>
+                <span>· Odoo figures as of {t} NZ, refreshed every few minutes</span>
+                {old && <span style={{ color: "var(--orange)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon n="hourglass" size={12} />{fp.stale ? `Odoo is slow: figures from ${t}, updating` : `Figures from ${t}, over 15 minutes old`}</span>}
+              </>);
             })()}
           </div>
         </div>
@@ -3126,7 +3175,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         <div className={ui.grid} style={{ marginBottom: 14 }}>
           <Card>
             <CardHead icon="bars" title={`Sales by month, ${onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}><RangeTag text={yearRange()} /></CardHead>
-            {monthBars.length > 0 ? <MonthBars rows={monthBars} fmt={moneyShort} /> : <div className={ui.empty}>{anyLoading ? "Loading" : "No sales recorded yet"}</div>}
+            {monthBars.length > 0 ? <MonthBars rows={monthBars} fmt={moneyShort} partialTo={barsPartialTo} /> : <div className={ui.empty}>{anyLoading ? "Loading" : "No sales recorded yet"}</div>}
           </Card>
           <Card className={st.chainFit}>
             <CardHead icon="flow" title={isMgmt ? "From orders to profit" : "From orders to sales"} />
@@ -3490,7 +3539,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {section === "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <div style={{ marginTop: 14 }}>
             {activeStore.id === "worthy" && <SalesVsTargetTable payload={fyPayload(selectedYear)} />}
-            <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
+            <SalesRepBreakdown partialMonth={partialMonth} weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
               salespeople={getOdooSalespeople()}
               salespeopleMonthly={getOdooSalespeopleMonthly()}
               salespeopleWeekly={getOdooSalespeopleWeekly()}
@@ -3520,7 +3569,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {section === "overview" && activeStore.id === "luxe" && (
           <div style={{ marginTop: 14 }}>
             <SalesVsTargetTable payload={fyPayload(selectedYear)} company="south" />
-            <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
+            <SalesRepBreakdown partialMonth={partialMonth} weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
               salespeople={getSalespeople()}
               salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
               salespeopleWeekly={getLuxeSalespeopleWeekly()}
@@ -3546,7 +3595,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               <>
                 {/* KPI targets: North only, same targets as the Odoo KPI scheduled actions */}
                 {activeStore.id === "worthy" && <SalesVsTargetTable payload={fyPayload(selectedYear)} />}
-                <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
+                <SalesRepBreakdown partialMonth={partialMonth} weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
                   salespeople={getOdooSalespeople()}
                   salespeopleMonthly={getOdooSalespeopleMonthly()}
                   salespeopleWeekly={getOdooSalespeopleWeekly()}
@@ -3718,7 +3767,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               activeStore.id === "luxe" ? (
                 <>
                 <SalesVsTargetTable payload={fyPayload(selectedYear)} company="south" />
-                <SalesRepBreakdown weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
+                <SalesRepBreakdown partialMonth={partialMonth} weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
                   salespeople={getSalespeople()}
                   salespeopleMonthly={getLuxeSalespeopleMonthlyFY()}
                   salespeopleWeekly={getLuxeSalespeopleWeekly()}
