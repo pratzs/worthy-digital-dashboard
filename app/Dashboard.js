@@ -3205,7 +3205,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                   <thead>
                     <tr>
-                      {["Month","Revenue","Bank Target","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"].map(h => (
+                      {/* Year views: Sales with a cost, minus Cost (the cost of those sales), equals Gross Profit on every row and in
+                          the total, so the table adds up for whoever reads it. Sales without a sound cost are the gap between Revenue
+                          and Sales with a cost (26 Nov 2026). */}
+                      {(onFYView() ? ["Month","Revenue","Bank Target","Sales with a cost","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"]
+                                   : ["Month","Revenue","Bank Target","Cost","Gross Profit","Margin","Orders","AOV","New Cust.","Returns","YoY"]).map(h => (
                         <th key={h} style={thStyle("left")}>{h}</th>
                       ))}
                     </tr>
@@ -3231,7 +3235,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
                               </>
                             ) : none}
                           </td>
-                          <td style={{ ...c, color: COLORS.ink2 }}>{has && row.totalCost != null ? (exactAmounts ? fmtExact(row.totalCost, activeStore.currency) : fmtK(row.totalCost, activeStore.currency)) : none}</td>
+                          {onFYView() && <td style={{ ...c, color: COLORS.ink2 }}>{has && (row.marginableRevenue || 0) > 0 ? (exactAmounts ? fmtExact(row.marginableRevenue, activeStore.currency) : fmtK(row.marginableRevenue, activeStore.currency)) : none}</td>}
+                          <td style={{ ...c, color: COLORS.ink2 }}>{(() => { const cv = onFYView() ? (row.marginCost ?? row.totalCost) : row.totalCost; return has && cv != null && (!onFYView() || (row.marginableRevenue || 0) > 0) ? (exactAmounts ? fmtExact(cv, activeStore.currency) : fmtK(cv, activeStore.currency)) : none; })()}</td>
                           <td style={c}>{has && row.grossProfit != null ? (exactAmounts ? fmtExact(row.grossProfit, activeStore.currency) : fmtK(row.grossProfit, activeStore.currency)) : none}</td>
                           <td style={c}>{has ? <MarginBar value={row.marginPct} /> : none}</td>
                           <td style={{ ...c, color: COLORS.ink2 }}>{has ? row.orders : none}</td>
@@ -3256,7 +3261,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
                           return totalTarget > 0 ? (exactAmounts ? fmtExact(totalTarget, activeStore.currency) : fmtK(totalTarget, activeStore.currency)) : "-";
                         })()}
                       </td>
-                      <td style={{ ...footStyle("left"), color: COLORS.ink2 }}>{hasCost ? (exactAmounts ? fmtExact(totalCost, activeStore.currency) : fmtK(totalCost, activeStore.currency)) : "-"}</td>
+                      {onFYView() && <td style={{ ...footStyle("left"), color: COLORS.ink2 }}>{totalMargRev > 0 ? (exactAmounts ? fmtExact(totalMargRev, activeStore.currency) : fmtK(totalMargRev, activeStore.currency)) : "-"}</td>}
+                      <td style={{ ...footStyle("left"), color: COLORS.ink2 }}>{hasCost ? (() => { const cv = onFYView() ? totalMarginCost : totalCost; return exactAmounts ? fmtExact(cv, activeStore.currency) : fmtK(cv, activeStore.currency); })() : "-"}</td>
                       <td style={footStyle("left")}>{gp !== null ? (exactAmounts ? fmtExact(gp, activeStore.currency) : fmtK(gp, activeStore.currency)) : "-"}</td>
                       <td style={footStyle("left")}><MarginBar value={gpMargin} /></td>
                       <td style={footStyle("left")}>{totalOrd}</td>
