@@ -105,6 +105,7 @@
   .grid3 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
+  .seg { flex-wrap: wrap; overflow: visible; }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .kpi { padding: 16px; }
   .kpiNum { font-size: 32px; }
