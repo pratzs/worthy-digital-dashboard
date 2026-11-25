@@ -330,3 +330,32 @@ button.check:hover { border-color: var(--green); }
 .monthBars b { font-size: 9.5px; font-weight: 400; color: var(--ink2); white-space: nowrap; }
 .monthBars span { font-size: 10px; color: var(--mute); white-space: nowrap; }
 @media (max-width: 420px) { .monthBars b { display: none; } .monthBars { gap: 3px; } }
+
+/* Social & Web: three colours only (page off-white, ink, orange accent) */
+.trend { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.trendDown { color: var(--orange); }
+.was { font-size: 11px; color: var(--mute); }
+.titleIcon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: rgba(20,22,20,.05); color: var(--ink); margin-right: 10px; vertical-align: middle; flex: none; }
+.cardTitle .titleIcon { margin-top: -3px; }
+.miniHead { display: flex; align-items: center; gap: 7px; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); margin-bottom: 12px; }
+.barInk { height: 100%; border-radius: 999px; background: var(--ink); opacity: .78; }
+.barAccent { background: var(--orange); opacity: 1; }
+.ringWrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.ring { width: 120px; height: 120px; flex: none; }
+.ringLegend { display: grid; gap: 8px; font-size: 13px; min-width: 140px; flex: 1; }
+.ringLegend > div { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; }
+.ringLegend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+.ringLegend b { font-weight: 400; font-variant-numeric: tabular-nums; }
+.chain { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; row-gap: 12px; margin-top: 6px; }
+.chainStep { display: flex; align-items: center; flex: 1 1 150px; min-width: 0; }
+.chainLink { flex: none; display: flex; flex-direction: column; align-items: center; padding: 0 10px; color: var(--mute); font-size: 11px; text-align: center; max-width: 110px; }
+.chainLink::after { content: '→'; font-size: 18px; color: var(--ink); line-height: 1; margin-top: 4px; }
+.chainBox { flex: 1; min-width: 0; background: rgba(255,255,255,.75); border: 1px solid rgba(40,32,20,.06); border-radius: 18px; padding: 14px 16px; }
+.chainNum { font-size: 30px; font-weight: 300; letter-spacing: -0.02em; line-height: 1.1; }
+.shareBar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.05); gap: 2px; }
+.shareBar i { display: block; height: 100%; }
+.shareLegend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12.5px; color: var(--ink2); }
+.shareLegend span { display: inline-flex; align-items: center; gap: 7px; }
+.shareLegend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+@media (max-width: 760px) { .chainNum { font-size: 24px; } .chainLink { max-width: 80px; padding: 0 6px; } }
+@media (max-width: 420px) { .chain { flex-direction: column; } .chainStep { flex-direction: column; align-items: stretch; } .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; } .chainLink::after { content: '↓'; margin-top: 0; } }
