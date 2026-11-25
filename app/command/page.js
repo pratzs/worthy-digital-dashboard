@@ -1283,7 +1283,7 @@ function EventsModal({ ev, onClose }) {
                 {entries.length > 0 && (
                   <div className={s.tableWrap}>
                     <table className={s.table}>
-                      <thead><tr><th>When</th><th>Form</th><th>Name</th><th className={s.hideSm}>Business</th><th>Email</th><th className={s.hideSm}>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th><th className={s.hideSm}>Emailed to</th></tr></thead>
+                      <thead><tr><th>When</th><th>Person</th><th>Form</th><th className={s.hideSm}>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town, device</th><th className={s.hideSm}>Emailed to</th></tr></thead>
                       <tbody>{entries.map((e) => {
                         const g = match.byEntry.get(e.id);
                         const open = openEntry === e.id;
@@ -1291,18 +1291,19 @@ function EventsModal({ ev, onClose }) {
                           <Fragment key={e.id}>
                             <tr style={{ cursor: "pointer" }} onClick={() => setOpenEntry(open ? null : e.id)} aria-expanded={open}>
                               <td style={{ whiteSpace: "nowrap" }}>{when(e.at.replace(" ", "T"))}</td>
-                              <td>{e.form}</td>
-                              <td>{e.name || "-"}</td>
-                              <td className={s.hideSm}>{e.business || "-"}</td>
-                              <td style={{ overflowWrap: "anywhere" }}>{e.email ? <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ color: "var(--ink)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3 }}>{e.email}</a> : "-"}</td>
-                              <td className={s.hideSm} style={{ overflowWrap: "anywhere" }}>{g ? g.page : "-"}</td>
+                              <td style={{ minWidth: 190 }}>
+                                <div style={{ fontWeight: 500 }}>{e.name || "-"}</div>
+                                {e.business && <div className={s.rowMeta} style={{ marginTop: 2 }}>{e.business}</div>}
+                                {e.email && <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ fontSize: 12, color: "var(--ink2)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3, wordBreak: "break-all" }}>{e.email}</a>}
+                              </td>
+                              <td style={{ minWidth: 130 }}>{e.form}</td>
+                              <td className={s.hideSm} style={{ whiteSpace: "nowrap" }}>{g ? g.page : "-"}</td>
                               <td className={s.hideSm}>{g ? g.source : "-"}</td>
-                              <td className={s.hideSm}>{g && g.city !== "(not set)" ? g.city : "-"}</td>
-                              <td className={s.hideSm}>{g ? cap(g.device) : "-"}</td>
+                              <td className={s.hideSm} style={{ whiteSpace: "nowrap" }}>{g ? [g.city !== "(not set)" ? g.city : "", cap(g.device)].filter(Boolean).join(", ") : "-"}</td>
                               <td className={s.hideSm} style={{ fontSize: 12, color: "var(--ink2)" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
                             </tr>
                             {open && (
-                              <tr><td colSpan={10} style={{ paddingTop: 0 }}>
+                              <tr><td colSpan={7} style={{ paddingTop: 0 }}>
                                 <div className={s.entryBox}>{Object.entries(e.fields).map(([k, v]) => <div key={k}><b>{cap(k.replace(/[-_]/g, " "))}</b> {String(v)}</div>)}</div>
                               </td></tr>
                             )}
