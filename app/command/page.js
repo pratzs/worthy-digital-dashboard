@@ -1236,6 +1236,28 @@ function EventsModal({ ev, onClose }) {
       .map((r) => ({ ...r, left: (r.count || 1) - (used.get(ev.rows.indexOf(r)) || 0) }));
     return { byEntry, leftover };
   })();
+  /* Why the two counts differ, worked out every time (Pratham, 26 Nov 2026: "it should automatically explain what and
+     why and what to do"). An entry is called likely spam only when Google Analytics saw no visit for it AND it carries a
+     clear sign (mostly non-Latin script, the same text in name, surname and company, or several links), so a real
+     person is never marked as spam. */
+  const spamSigns = (e) => {
+    const f = e.fields || {};
+    const text = Object.values(f).map(String).join(" ");
+    const letters = text.replace(/[^A-Za-z\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF]/g, "");
+    const foreign = letters ? letters.replace(/[A-Za-z]/g, "").length / letters.length : 0;
+    const names = [f["first-name"], f["last-name"], f["company-name"]].filter(Boolean).map((x) => String(x).trim().toLowerCase());
+    const links = (text.match(/https?:\/\//gi) || []).length;
+    const signs = [];
+    if (foreign > 0.3) signs.push("written mostly in another script");
+    if (names.length >= 3 && new Set(names).size === 1) signs.push("same text in name, surname and company");
+    if (links >= 2) signs.push(`${links} links in the message`);
+    return signs;
+  };
+  const unmatched = entries.filter((e) => !match.byEntry.has(e.id)).map((e) => ({ e, signs: spamSigns(e) }));
+  const spamIds = new Set(unmatched.filter((x) => x.signs.length).map((x) => x.e.id));
+  const missed = unmatched.filter((x) => !x.signs.length);
+  const extraGa = match.leftover.reduce((t, r) => t + (r.left || 1), 0);
+  const realCount = entries.length - spamIds.size;
   const showGaTable = !showForms || ev.site === "all";
   const gaRowsShown = ev.site === "all" ? rows.filter((r) => r.site !== "worthy") : rows;
 
@@ -1253,7 +1275,10 @@ function EventsModal({ ev, onClose }) {
             <div className={s.grid2} style={{ marginBottom: 22, alignItems: "start" }}>
               <div className={s.statLine}>
                 {showForms && ev.forms?.status === "ok" && (
-                  <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`} style={{ fontSize: 40 }}>{n0(entries.length)}</div><div className={s.statLabel}>Form entries on worthy.nz</div></div>
+                  <>
+                    <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`} style={{ fontSize: 40 }}>{n0(realCount)}</div><div className={s.statLabel}>Real enquiries</div></div>
+                    <div className={s.stat}><div className={s.statNum}>{n0(entries.length)}</div><div className={s.statLabel}>Form entries{spamIds.size ? `, ${spamIds.size} likely spam` : ""}</div></div>
+                  </>
                 )}
                 <div className={s.stat}><div className={s.statNum} style={showForms && ev.forms?.status === "ok" ? undefined : { fontSize: 40, color: "var(--orange)" }}>{n0(gaTotal)}</div><div className={s.statLabel}>{ev.site === "worthy" ? "Recorded by Google Analytics" : "Conversions recorded by Google Analytics"}</div></div>
               </div>
@@ -1280,6 +1305,30 @@ function EventsModal({ ev, onClose }) {
                   {ev.forms?.status !== "ok" && <span className={`${s.pill} ${s.pillGrey}`}>{ev.forms?.status === "not_connected" ? "Not connected yet" : "worthy.nz offline"}</span>}
                 </div>
                 {ev.forms?.status === "ok" && entries.length === 0 && <div className={s.empty}>None in this period</div>}
+                {ev.forms?.status === "ok" && (unmatched.length > 0 || extraGa > 0) && (
+                  <div className={s.explain}>
+                    <div className={s.explainHead}><Icon n="alert" size={15} />Why the counts differ: {n0(entries.length)} form entries, {n0(gaTotal)} in Google Analytics</div>
+                    {spamIds.size > 0 && (
+                      <div className={s.explainItem}>
+                        <b>{spamIds.size} likely spam</b> ({unmatched.filter((x) => x.signs.length).map((x) => `${x.e.name || x.e.email}, ${when(x.e.at.replace(" ", "T"))}: ${x.signs.join(", ")}`).join("; ")}).
+                        {" "}Bots post straight to the form without opening the page, so Google Analytics never sees them, and they are not counted as real enquiries.
+                        <div className={s.explainDo}><Icon n="check" size={12} />To stop them: add a spam check to the worthy.nz forms (a hidden honeypot field or Cloudflare Turnstile).</div>
+                      </div>
+                    )}
+                    {missed.length > 0 && (
+                      <div className={s.explainItem}>
+                        <b>{missed.length} real {missed.length === 1 ? "person" : "people"} Google Analytics missed</b> ({missed.map((x) => `${x.e.name || x.e.email}, ${when(x.e.at.replace(" ", "T"))}`).join("; ")}). Usually the browser blocked Google Analytics: an ad blocker, private browsing, or cookies declined.
+                        <div className={s.explainDo}><Icon n="check" size={12} />To record every enquiry: send it to Google Analytics from the website when the form is saved (server side), not from the visitor&apos;s browser.</div>
+                      </div>
+                    )}
+                    {extraGa > 0 && (
+                      <div className={s.explainItem}>
+                        <b>{extraGa} in Google Analytics with no saved form entry</b> (listed below the table). The form may have failed to save, or it was a test.
+                        <div className={s.explainDo}><Icon n="check" size={12} />Check the worthy.nz form log for those times.</div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {entries.length > 0 && (
                   <div className={s.tableWrap}>
                     <table className={s.table}>
@@ -1289,10 +1338,10 @@ function EventsModal({ ev, onClose }) {
                         const open = openEntry === e.id;
                         return (
                           <Fragment key={e.id}>
-                            <tr style={{ cursor: "pointer" }} onClick={() => setOpenEntry(open ? null : e.id)} aria-expanded={open}>
+                            <tr style={{ cursor: "pointer", opacity: spamIds.has(e.id) ? 0.55 : 1 }} onClick={() => setOpenEntry(open ? null : e.id)} aria-expanded={open}>
                               <td style={{ whiteSpace: "nowrap" }}>{when(e.at.replace(" ", "T"))}</td>
                               <td style={{ minWidth: 190 }}>
-                                <div style={{ fontWeight: 500 }}>{e.name || "-"}</div>
+                                <div style={{ fontWeight: 500 }}>{e.name || "-"}{spamIds.has(e.id) && <span className={`${s.pill} ${s.pillGrey}`} style={{ marginLeft: 8 }}>Likely spam</span>}</div>
                                 {e.business && <div className={s.rowMeta} style={{ marginTop: 2 }}>{e.business}</div>}
                                 {e.email && <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ fontSize: 12, color: "var(--ink2)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3, wordBreak: "break-all" }}>{e.email}</a>}
                               </td>
