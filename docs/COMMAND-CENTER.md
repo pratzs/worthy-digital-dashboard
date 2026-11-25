@@ -91,3 +91,14 @@ Kept in the browser (`cache` helper in app/command/page.js), so a refresh loses 
 | `cc-draft-v1` | an editor with unsaved text | reopens after refresh until saved or cancelled |
 
 Saved work (pipeline, outreach, listings, Asana, ClickUp) lives on the server.
+
+## Meeting notes (Ecom x Marketing tab, 26 Nov 2026)
+
+`MeetingNotes` in app/command/page.js, `lib/meeting.js`, store key `cc:meet:v1`.
+- Type during the meeting as normal. Notes save as you type (1.2 s after the last key; unsaved text also kept in the browser) and every meeting's notes stay on record (pick an earlier meeting from the list to read it). The meeting is today if it is Thursday in NZ, otherwise the next Thursday.
+- "Read notes into actions": Claude (claude-sonnet-5-5) pulls out discussion points and actions with an owner (only people in the Worthy Asana workspace) and a due date (relative days turned into dates from the meeting day). It never invents owners or dates.
+- Check the list (rename, change owner or due date, remove), then "Send to Asana": after a confirm, each task is created in the Ecom x Marketing project and assigned; Asana tells the person. Each send is in the activity log.
+- Next meeting: open discussion points (tick when discussed) and the open actions sent from here, with live Asana status; anything marked done in Asana moves to "Done since" the last meeting.
+- Trial read without saving: POST `{ action: 'meeting-read', date, trialText }`.
+- Asana workspace people on 26 Nov: Anu Shah, Isabel Brooks, Nilam Patel, Pratham Jani, Vishva (shown by email). Kishan is not in Asana, so he cannot be an owner.
+- One shared record: if two people type in the notes at the same moment, the last save wins. One person should take the notes.
