@@ -275,11 +275,11 @@ function TrafficChart({ rows, mode, lead }) {
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
           <g key={f}>
             <line x1={padL} x2={padL + iw} y1={padT + ih - f * ih} y2={padT + ih - f * ih} stroke="rgba(20,22,20,.16)" strokeDasharray="5 5" />
-            <text x={padL - 8} y={padT + ih - f * ih + 4} textAnchor="end" fontSize="11" fill="#8b918c">{axisNum(maxA * f)}</text>
+            <text x={padL - 8} y={padT + ih - f * ih + 4} textAnchor="end" fontSize="11" fill="#676d68">{axisNum(maxA * f)}</text>
             <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#f2892a" opacity=".85">{f ? `${lead ? "" : "$"}${axisNum(maxB * f)}` : ""}</text>
           </g>
         ))}
-        {rows.map((r, i) => (i % every === 0 || i === rows.length - 1) && (i === rows.length - 1 || rows.length - 1 - i >= every / 2) ? <text key={`l${i}`} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="#8b918c">{r.label}</text> : null)}
+        {rows.map((r, i) => (i % every === 0 || i === rows.length - 1) && (i === rows.length - 1 || rows.length - 1 - i >= every / 2) ? <text key={`l${i}`} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="#676d68">{r.label}</text> : null)}
         {hover !== null && <rect x={x(hover) - Math.max(step, 14) / 2} y={padT} width={Math.max(step, 14)} height={ih} fill="url(#cc-hatch)" rx="4" />}
         <path d={`${smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} L${x(rows.length - 1)},${padT + ih} L${x(0)},${padT + ih} Z`} fill="url(#cc-fadeA)" />
         <path d={smoothPath(rows.map((r, i) => (r.c === null ? null : [x(i), yA(r.c)])))} stroke="#141614" strokeOpacity=".22" strokeWidth="1.6" strokeDasharray="4 4" fill="none" />
