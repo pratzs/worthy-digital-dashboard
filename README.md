@@ -35,6 +35,8 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+**Start here:** [docs/STATUS.md](docs/STATUS.md) is the current state of everything on the dashboard, who uses what, how to work on it and what is open.
+
 ## Pages and department logins
 
 Each table group is its own page (Categories & Products, Fast & Slow Movers and Customers share one "Analytics" tab with sub-pills): `/` (Overview), `/reps`, `/products`, `/movers`, `/customers`, `/credits`, `/debtors`. One shared password per department, set as Vercel environment variables:
