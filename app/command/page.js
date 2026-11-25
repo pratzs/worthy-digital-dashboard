@@ -6,7 +6,7 @@
  * dutchrusk.co.nz. Data: app/api/command (lib/command.js).
  */
 import SiteNav from "@/app/design/SiteNav";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import s from "./command.module.css";
 import { Icon } from "../design/icons";
@@ -1206,18 +1206,42 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
 const EVENT_LABEL = { contact: "Contact form", purchase: "Order", generate_lead: "Enquiry", form_submit: "Form", shop_click: "Shop click", sign_up: "Sign-up", phone_click: "Phone call", email_click: "Email click" };
 function EventsModal({ ev, onClose }) {
   const [kind, setKind] = useState("all");
+  const [openEntry, setOpenEntry] = useState(null);
   const kinds = [...new Set(ev.rows.map((r) => r.event))];
   const rows = ev.rows.filter((r) => kind === "all" || r.event === kind);
   const when = (at) => { const d = d0(at.slice(0, 10)); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${at.slice(11, 16)}`; };
   const pages = Object.entries(rows.reduce((m, r) => ({ ...m, [r.page]: (m[r.page] || 0) + r.count }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  // worthy.nz form entries (name, email, who it was emailed to), matched to the analytics row within 3 minutes
+  const gaTotal = rows.reduce((a, r) => a + r.count, 0);
+  const label = (e) => EVENT_LABEL[e] || cap(String(e).replace(/_/g, " "));
+
+  /* worthy.nz: the form entries are the record of who enquired. Each entry is paired with the nearest Google Analytics
+     event within 3 minutes, one to one (closest pairs first), so two people a few minutes apart are never given the same
+     visit and no visit is used twice (26 Nov 2026: the old first-match rule showed one person against another's entry). */
   const entries = ev.forms?.status === "ok" ? ev.forms.entries : [];
-  const mins = (t) => Date.parse(`${t.replace(" ", "T").slice(0, 16)}:00Z`) / 60000;
-  const whoFor = (r) => (r.site === "worthy" ? entries.find((e) => Math.abs(mins(e.at) - mins(r.at)) <= 3) : null);
-  const [openEntry, setOpenEntry] = useState(null);
+  const showForms = ev.site === "worthy" || ev.site === "all";
+  const mins = (t) => Date.parse(`${String(t).replace(" ", "T").slice(0, 16)}:00Z`) / 60000;
+  const match = (() => {
+    const gaRows = ev.rows.map((r, i) => ({ ...r, i })).filter((r) => r.site === "worthy");
+    const pairs = [];
+    entries.forEach((e) => gaRows.forEach((r) => { const gap = Math.abs(mins(e.at) - mins(r.at)); if (gap <= 3) pairs.push({ e: e.id, r: r.i, gap }); }));
+    pairs.sort((a, b) => a.gap - b.gap);
+    const byEntry = new Map(), used = new Map();
+    for (const p of pairs) {
+      if (byEntry.has(p.e)) continue;
+      const cap1 = ev.rows[p.r].count || 1;
+      if ((used.get(p.r) || 0) >= cap1) continue;
+      byEntry.set(p.e, ev.rows[p.r]); used.set(p.r, (used.get(p.r) || 0) + 1);
+    }
+    const leftover = ev.rows.filter((r, i) => r.site === "worthy" && (used.get(i) || 0) < (r.count || 1))
+      .map((r) => ({ ...r, left: (r.count || 1) - (used.get(ev.rows.indexOf(r)) || 0) }));
+    return { byEntry, leftover };
+  })();
+  const showGaTable = !showForms || ev.site === "all";
+  const gaRowsShown = ev.site === "all" ? rows.filter((r) => r.site !== "worthy") : rows;
+
   return (
     <div className={s.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`${s.modal} ${s.modalWide} ${s.fade}`}>
+      <div className={`${s.modal} ${s.modalWide} ${s.fade}`} role="dialog" aria-modal="true" aria-label={ev.site === "worthy" ? "Enquiries" : "Conversions"}>
         <div className={s.cardHead}>
           <Title as="h3" className={s.modalTitle} style={{ margin: 0 }} icon={ev.site === "worthy" ? "mail" : "target"}>{ev.site === "worthy" ? "Enquiries" : "Conversions"} · {siteName(ev.site)}</Title>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Range>{`${dShort(ev.start)} to ${dLong(ev.end)}`}</Range><button type="button" className={s.iconBtn} onClick={onClose} aria-label="Close" style={{ width: 34, height: 34 }}><Icon n="close" size={16} /></button></div>
@@ -1225,11 +1249,17 @@ function EventsModal({ ev, onClose }) {
         {ev.loading && <div className={s.skeleton} style={{ height: 160 }} />}
         {!ev.loading && (
           <>
-            <div className={s.grid2} style={{ marginBottom: 18, alignItems: "start" }}>
-              <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`} style={{ fontSize: 40 }}>{n0(rows.reduce((a, r) => a + r.count, 0))}</div><div className={s.statLabel}>Total</div></div>
+            {/* headline: the record first, Google Analytics beside it, then the pages */}
+            <div className={s.grid2} style={{ marginBottom: 22, alignItems: "start" }}>
+              <div className={s.statLine}>
+                {showForms && ev.forms?.status === "ok" && (
+                  <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`} style={{ fontSize: 40 }}>{n0(entries.length)}</div><div className={s.statLabel}>Form entries on worthy.nz</div></div>
+                )}
+                <div className={s.stat}><div className={s.statNum} style={showForms && ev.forms?.status === "ok" ? undefined : { fontSize: 40, color: "var(--orange)" }}>{n0(gaTotal)}</div><div className={s.statLabel}>{ev.site === "worthy" ? "Recorded by Google Analytics" : "Conversions recorded by Google Analytics"}</div></div>
+              </div>
               {pages.length > 0 && (
                 <div>
-                  <div className={s.miniHead}><Icon n="star" size={13} />Top pages</div>
+                  <div className={s.miniHead}><Icon n="eye" size={13} />Pages they used</div>
                   <div className={s.bars}>
                     {pages.map(([pg, n], i) => (
                       <div key={pg} className={s.barRow}>
@@ -1242,56 +1272,88 @@ function EventsModal({ ev, onClose }) {
                 </div>
               )}
             </div>
-            {(ev.site === "worthy" || ev.site === "all") && (
-              <div style={{ marginBottom: 18 }}>
+
+            {showForms && (
+              <section style={{ marginBottom: 22 }}>
                 <div className={s.cardHead} style={{ marginBottom: 8 }}>
-                  <Title as="h3" icon="users">Who filled in the worthy.nz forms</Title>
+                  <Title as="h3" icon="users">Enquiries, one row per person</Title>
                   {ev.forms?.status !== "ok" && <span className={`${s.pill} ${s.pillGrey}`}>{ev.forms?.status === "not_connected" ? "Not connected yet" : "worthy.nz offline"}</span>}
                 </div>
                 {ev.forms?.status === "ok" && entries.length === 0 && <div className={s.empty}>None in this period</div>}
                 {entries.length > 0 && (
-                  <div className={s.tableWrap} style={{ maxHeight: "40vh", overflowY: "auto" }}>
+                  <div className={s.tableWrap}>
                     <table className={s.table}>
-                      <thead><tr><th>When</th><th>Form</th><th>Name</th><th className={s.hideSm}>Business</th><th>Email</th><th className={s.hideSm}>Emailed to</th></tr></thead>
-                      <tbody>{entries.map((e) => (
-                        <tr key={e.id} style={{ cursor: "pointer" }} onClick={() => setOpenEntry(openEntry === e.id ? null : e.id)}>
-                          <td style={{ whiteSpace: "nowrap" }}>{when(e.at.replace(" ", "T"))}</td>
-                          <td>{e.form}</td>
-                          <td>{e.name || "-"}</td>
-                          <td className={s.hideSm}>{e.business || "-"}</td>
-                          <td style={{ overflowWrap: "anywhere" }}>{e.email ? <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ color: "var(--ink)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3 }}>
-{e.email}</a> : "-"}</td>
-                          <td className={s.hideSm} style={{ fontSize: 12, color: "#4a4f4b" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
+                      <thead><tr><th>When</th><th>Form</th><th>Name</th><th className={s.hideSm}>Business</th><th>Email</th><th className={s.hideSm}>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th><th className={s.hideSm}>Emailed to</th></tr></thead>
+                      <tbody>{entries.map((e) => {
+                        const g = match.byEntry.get(e.id);
+                        const open = openEntry === e.id;
+                        return (
+                          <Fragment key={e.id}>
+                            <tr style={{ cursor: "pointer" }} onClick={() => setOpenEntry(open ? null : e.id)} aria-expanded={open}>
+                              <td style={{ whiteSpace: "nowrap" }}>{when(e.at.replace(" ", "T"))}</td>
+                              <td>{e.form}</td>
+                              <td>{e.name || "-"}</td>
+                              <td className={s.hideSm}>{e.business || "-"}</td>
+                              <td style={{ overflowWrap: "anywhere" }}>{e.email ? <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ color: "var(--ink)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3 }}>{e.email}</a> : "-"}</td>
+                              <td className={s.hideSm} style={{ overflowWrap: "anywhere" }}>{g ? g.page : "-"}</td>
+                              <td className={s.hideSm}>{g ? g.source : "-"}</td>
+                              <td className={s.hideSm}>{g && g.city !== "(not set)" ? g.city : "-"}</td>
+                              <td className={s.hideSm}>{g ? cap(g.device) : "-"}</td>
+                              <td className={s.hideSm} style={{ fontSize: 12, color: "var(--ink2)" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
+                            </tr>
+                            {open && (
+                              <tr><td colSpan={10} style={{ paddingTop: 0 }}>
+                                <div className={s.entryBox}>{Object.entries(e.fields).map(([k, v]) => <div key={k}><b>{cap(k.replace(/[-_]/g, " "))}</b> {String(v)}</div>)}</div>
+                              </td></tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                )}
+                {ev.forms?.status === "ok" && match.leftover.length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <div className={s.miniHead}><Icon n="alert" size={13} />In Google Analytics, no form entry</div>
+                    <div className={s.tableWrap}>
+                      <table className={s.table}>
+                        <thead><tr><th>When</th><th>What</th><th>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th></tr></thead>
+                        <tbody>{match.leftover.map((r, i) => (
+                          <tr key={i}><td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td><td>{label(r.event)}{r.left > 1 ? ` x${r.left}` : ""}</td><td style={{ overflowWrap: "anywhere" }}>{r.page}</td><td className={s.hideSm}>{r.source}</td><td className={s.hideSm}>{r.city === "(not set)" ? "-" : r.city}</td><td className={s.hideSm}>{cap(r.device)}</td></tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {showGaTable && (
+              <section>
+                <div className={s.cardHead} style={{ marginBottom: 8 }}>
+                  <Title as="h3" icon="target">{ev.site === "all" ? "Shop conversions recorded by Google Analytics" : "Conversions recorded by Google Analytics"}</Title>
+                </div>
+                {kinds.length > 1 && <div className={s.seg} style={{ marginBottom: 10 }}>{[["all", "All"], ...kinds.map((k) => [k, label(k)])].map(([id, l]) => <button key={id} type="button" className={kind === id ? s.segOn : ""} onClick={() => setKind(id)}>{l}</button>)}</div>}
+                {gaRowsShown.length === 0 && <div className={s.empty}>None in this period</div>}
+                {gaRowsShown.length > 0 && (
+                  <div className={s.tableWrap}>
+                    <table className={s.table}>
+                      <thead><tr><th>When</th><th>What</th>{ev.site === "all" && <th>Site</th>}<th>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th></tr></thead>
+                      <tbody>{gaRowsShown.map((r, i) => (
+                        <tr key={i}>
+                          <td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td>
+                          <td>{label(r.event)}{r.count > 1 ? ` x${r.count}` : ""}</td>
+                          {ev.site === "all" && <td><span className={s.siteTag}>{siteName(r.site)}</span></td>}
+                          <td style={{ overflowWrap: "anywhere" }}>{r.page}</td>
+                          <td className={s.hideSm}>{r.source}</td>
+                          <td className={s.hideSm}>{r.city === "(not set)" ? "-" : r.city}</td>
+                          <td className={s.hideSm}>{cap(r.device)}</td>
                         </tr>
                       ))}</tbody>
                     </table>
-                    {openEntry && (() => { const e = entries.find((x) => x.id === openEntry); return e ? (
-                      <div className={s.entryBox}>{Object.entries(e.fields).map(([k, v]) => <div key={k}><b>{cap(k.replace(/[-_]/g, " "))}</b> {String(v)}</div>)}</div>
-                    ) : null; })()}
                   </div>
                 )}
-              </div>
-            )}
-            {kinds.length > 1 && <div className={s.seg} style={{ marginBottom: 10 }}>{[["all", "All"], ...kinds.map((k) => [k, EVENT_LABEL[k] || cap(k.replace(/_/g, " "))])].map(([id, l]) => <button key={id} type="button" className={kind === id ? s.segOn : ""} onClick={() => setKind(id)}>{l}</button>)}</div>}
-            {rows.length === 0 && <div className={s.empty}>None in this period</div>}
-            {rows.length > 0 && (
-              <div className={s.tableWrap} style={{ maxHeight: "55vh", overflowY: "auto" }}>
-                <table className={s.table}>
-                  <thead><tr><th>When</th><th>What</th>{entries.length > 0 && <th>Who</th>}{ev.site === "all" && <th>Site</th>}<th>Page</th><th className={s.hideSm}>Came from</th><th className={s.hideSm}>Town</th><th className={s.hideSm}>Device</th></tr></thead>
-                  <tbody>{rows.map((r, i) => (
-                    <tr key={i}>
-                      <td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td>
-                      <td>{EVENT_LABEL[r.event] || cap(r.event.replace(/_/g, " "))}{r.count > 1 ? ` x${r.count}` : ""}</td>
-                      {entries.length > 0 && <td>{(() => { const w = whoFor(r); return w ? `${w.name || w.email}${w.business ? `, ${w.business}` : ""}` : "-"; })()}</td>}
-                      {ev.site === "all" && <td><span className={s.siteTag}>{siteName(r.site)}</span></td>}
-                      <td style={{ overflowWrap: "anywhere" }}>{r.page}</td>
-                      <td className={s.hideSm}>{r.source}</td>
-                      <td className={s.hideSm}>{r.city === "(not set)" ? "-" : r.city}</td>
-                      <td className={s.hideSm}>{cap(r.device)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
+              </section>
             )}
           </>
         )}
