@@ -156,7 +156,7 @@ const KPICard = ({ label, value, growth, icon, sub, animated, currency = "NZD", 
         </div>
         <div className={ui.chip}><Icon n={icon} size={15} /></div>
       </div>
-      <div className={ui.kpiLabel}>{label} {growth === null ? <span className={ui.was}>No prior yr</span> : <Delta value={growth} unit={growthUnit} />}</div>
+      <div className={ui.kpiLabel}>{label} {value === null ? null : growth === null ? <span className={ui.was}>No prior yr</span> : <Delta value={growth} unit={growthUnit} />}</div>
       {compareText && <div className={ui.statLabel} style={{ marginTop: 8 }}>{compareText}</div>}
     </div>
   );
@@ -2544,6 +2544,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
     return activeStore.id !== "worthy" || !!cacheRef.current[activeStore.id + ":" + year];
   };
   const anyLoading = isLoading(selectedYear) || isLoading(selectedYear - 1);
+  // While this year's figures load, show a dash, never a zero that reads as no sales (26 Nov 2026).
+  const curLoading = isLoading(selectedYear);
 
   /* Years worth offering. For South this is derived from the data itself, so
    * financial years that pre-date the first invoice in Ostendo are never shown
@@ -3114,8 +3116,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
         {/* 1. HEADLINE FIGURES */}
         <section className={`${ui.kpis} ${isMgmt ? "" : st.kpis2}`}>
-          <KPICard label="Total Revenue"  value={kpiRev} growth={kpiGrowth}    icon="dollar"  sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
-          <KPICard label="Total Orders"   value={kpiOrd} growth={kpiOrdGrowth} icon="bag"     sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
+          <KPICard label="Total Revenue"  value={curLoading && !kpiRev ? null : kpiRev} growth={kpiGrowth}    icon="dollar"  sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpRev} />
+          <KPICard label="Total Orders"   value={curLoading && !kpiOrd ? null : kpiOrd} growth={kpiOrdGrowth} icon="bag"     sub="count"    animated={animated} currency={activeStore.currency} compareText={cmpOrd} />
           {isMgmt && <KPICard label="Gross Margin %" value={kpiGPMargin} growth={kpiMarginGrowth} growthUnit=" pts" icon="percent" sub="pct" animated={animated} currency={activeStore.currency} compareText={cmpMgn} />}
           {isMgmt && <KPICard label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
         </section>
@@ -3130,7 +3132,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             <CardHead icon="flow" title={isMgmt ? "From orders to profit" : "From orders to sales"} />
             <Chain compact steps={[
               { label: "Orders", value: kpiOrd ? kpiOrd.toLocaleString() : "-" },
-              { label: "Sales", value: money0(kpiRev), link: kpiOrd ? `${money0(kpiAOV)} an order` : "", accent: !isMgmt },
+              { label: "Sales", value: curLoading && !kpiRev ? "-" : money0(kpiRev), link: kpiOrd ? `${money0(kpiAOV)} an order` : "", accent: !isMgmt },
               ...(isMgmt ? [{ label: "Gross profit", value: (kpiHasCost || partCost) && kpiGP !== null ? money0(kpiGP) : "-", link: kpiGPMargin !== null ? `${kpiGPMargin}% margin` : "", accent: true }] : []),
             ]} />
           </Card>
