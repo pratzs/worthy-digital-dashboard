@@ -501,7 +501,6 @@ export default function CommandCenter() {
     ]);
     setEvents({ loading: false, site: siteId, start: a, end: b, rows: parts.flat().sort((a, b) => b.at.localeCompare(a.at)), forms });
   };
-  const w7 = useMemo(() => windowed(daily, yesterday, 7), [daily, yesterday]);
   const searchSites = pick(rangeSearch || data?.search, site);
   const liveSites = (live || []).filter((x) => x.status === "ok" && (site === "all" || x.id === site));
   const liveNow = liveSites.length ? liveSites.reduce((a, x) => a + x.now, 0) : null;
@@ -706,7 +705,7 @@ export default function CommandCenter() {
                   const sr = (data?.search || []).find((r) => r.id === x.id);
                   const lv = (live || []).find((r) => r.id === x.id);
                   const tr = (data?.traffic || []).find((r) => r.id === x.id);
-                  const tw = tr?.status === "ok" ? windowed(tr.daily || [], yesterday, 30).cur : [];
+                  const tw = tr?.status === "ok" ? rangeWin(tr.daily || [], rStart, rEnd).cur : [];
                   const ts = sumOf(tw, "sessions"), tc = sumOf(tw, "conversions");
                   const okS = sr?.status === "ok";
                   const p1 = okS && sr.totals.queries[0] ? sr.totals.pageOne[0] / sr.totals.queries[0] : 0;
@@ -746,7 +745,7 @@ export default function CommandCenter() {
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "meeting" && (
-          <MeetingTab todayNow={todayNow} data={data} onEvents={openEvents} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w7={w7} w30={w30} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
+          <MeetingTab todayNow={todayNow} data={data} onEvents={openEvents} onExt={ext} external={external} asanaTasks={asanaTasks} asana={asana} site={site} items={items} today={today} w30={w30} start={rStart} end={rEnd} daily={daily} nbClicks={nbClicks} searchRange={searchRange} liveNow={liveNow}
             onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onDone={(x) => quickStatus(x, "done")} saving={saving} />
         )}
 
@@ -975,7 +974,7 @@ function BoardTab({ kind, items, site, today, onEdit, onAdd, onMove, onExt }) {
 }
 
 // ── Thursday meeting ────────────────────────────────────────────────────────────────────────────────
-function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, external, site, items, today, w7, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving }) {
+function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, external, site, items, today, w30, daily, nbClicks, searchRange, liveNow, onEdit, onAdd, onDone, saving, start, end }) {
   const t = d0(today); const wd = t.getUTCDay();
   const nextThu = addDays(today, (4 - wd + 7) % 7);
   const lastThu = addDays(nextThu, -7);
@@ -985,14 +984,15 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
   const doneSince = [...asanaDone].sort((a, b) => b.doneAt.localeCompare(a.doneAt));
   const nextUp = [...items.filter((x) => x.kind === "pipeline" && x.status !== "done" && inSite(x)), ...external.filter((x) => x.source === "ClickUp" && x.status !== "done")]
     .sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999"))).slice(0, 8);
-  const v = [sumOf(w7.cur, "sessions"), sumOf(w7.prev, "sessions")];
-  const r = [sumOf(w7.cur, "revenue"), sumOf(w7.prev, "revenue")];
+  // Every figure follows the page's date range, compared with the same number of days just before it.
+  const v = [sumOf(w30.cur, "sessions"), sumOf(w30.prev, "sessions")];
+  const r = [sumOf(w30.cur, "revenue"), sumOf(w30.prev, "revenue")];
   const lead = site === "worthy";
   const sd = site === "all" ? combineTraffic(data?.traffic, site, SHOPS) : daily;
-  const sw = windowed(sd, addDays(today, -1), 7);
+  const sw = rangeWin(sd, start, end);
   const c = [sumOf(sw.cur, "conversions"), sumOf(sw.prev, "conversions")];
   const sv = [sumOf(sw.cur, "sessions"), sumOf(sw.prev, "sessions")];
-  const ew = windowed(combineTraffic(data?.traffic, "worthy"), addDays(today, -1), 7);
+  const ew = rangeWin(combineTraffic(data?.traffic, "worthy"), start, end);
   const e = [sumOf(ew.cur, "conversions"), sumOf(ew.prev, "conversions")];
   // spend and return by month
   const spend = items.filter((x) => x.kind === "spend" && (site === "all" || x.site === site));
@@ -1010,19 +1010,19 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
       <section className={s.card} style={{ marginBottom: 14 }}>
         <div className={s.cardHead}>
           <Title icon="calendar">Ecom x Marketing, {DAYS_LONG[d0(nextThu).getUTCDay()]} {dLong(nextThu)}</Title>
-          <Range>{`${dShort(addDays(today, -7))} to ${dShort(addDays(today, -1))}`}</Range>
+          <Range>{`${dShort(start)} to ${dShort(end)}`}</Range>
         </div>
-        <div className={s.miniHead}><Icon n="funnel" size={13} />Last 7 days, visit to sale</div>
+        <div className={s.miniHead}><Icon n="funnel" size={13} />Visit to sale</div>
         <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(v[0])}</div><div className={s.statLabel}>Visits <Delta now={v[0]} before={v[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
-          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, addDays(today, -7), addDays(today, -1))}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
+          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, start, end)}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
           {!lead && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
         </div>
         <div className={s.miniHead} style={{ marginTop: 20 }}><Icon n="globe" size={13} />Search, enquiries and live</div>
         <div className={s.statLine}>
           <div className={s.stat}><div className={s.statNum}>{n0(nbClicks[0])}</div><div className={s.statLabel}>Non-branded clicks <Delta now={nbClicks[0]} before={nbClicks[1]} /></div></div>
-          {site === "all" && <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents("worthy", addDays(today, -7), addDays(today, -1))}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
+          {site === "all" && <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents("worthy", start, end)}><div className={s.statNum}>{n0(e[0])}</div><div className={s.statLabel}>worthy.nz enquiries <Delta now={e[0]} before={e[1]} /></div></div>}
           <div className={s.stat}><div className={s.statNum}>{n0(liveNow)}</div><div className={s.statLabel}>Live now</div></div>
         </div>
         <TodaySoFar todayNow={todayNow} site={site} />
