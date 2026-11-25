@@ -3,7 +3,7 @@
 Management only (`/command`, section `command` in `lib/auth.js`). The API (`/api/command`) checks the role itself as well. Built for the Thursday Ecom x Marketing meeting, 24 Nov 2026.
 
 Two halves:
-- **E-commerce department** (Pratham's): Dashboard, Search, Outreach, Listings, Pipeline (own items plus relevant ClickUp cards).
+- **E-commerce department** (Pratham's): Dashboard, Search, Social & Web, Outreach, Listings, Pipeline (own items plus relevant ClickUp cards).
 - **Ecom x Marketing** tab: the Thursday meeting. Week numbers, live Asana tasks, done this week, spend and return, where visits come from.
 
 A site picker and a date range picker (7, 30, 90 days, this month, last month, 12 months, custom) drive every number and the chart. Search Console periods end 3 days ago at the latest. Clicking enquiries or conversion rate opens every key event GA4 recorded in that period: when, what (contact form, order), page, where the visitor came from, town, device. GA4 holds no names.
@@ -69,3 +69,25 @@ Without a token that card shows "not connected" and the rest of the page still w
   - GA4 Organic Shopping (free listings) and Paid Shopping.
   - Product landing pages.
   - Search Console search appearances (Product snippets, Merchant listings) and the searches behind them.
+
+## Social & Web tab (26 Nov 2026)
+
+The Social and Web page's figures inside the Command Center, for the page's own date range and site (`SocialTab`, data from `/api/social-web?from=&to=`).
+- Order: headline (online sales, shop visits, worthy.nz visitors, social views), then "From visit to sale" (NZ visits, orders, online sales, with the conversion rate and average order on the links, plus sales by month) and "Social at a glance" (views, engagements, views by account), then each site, then each Facebook and Instagram account, then LinkedIn and TikTok.
+- Shop figures are Shopify's (New Zealand sessions, Online Store sales). worthy.nz is Google Analytics. The two are never added together. A site still on Google Analytics is not counted as a shop.
+- Meta figures for any period: page insights in 90-day windows, Instagram in 30-day windows, added up; Instagram reach and accounts engaged are left out for periods over 30 days because they count people once.
+- When the earlier period has no data (tracking started later) the card says "none recorded before", not "was 0".
+- Design rules for this tab and, over time, the whole dashboard: three colours (off-white page, ink, orange accent), infographics with the numbers beside them, icons that fit each title. See the memory note `feedback-dashboard-design-language`.
+
+## Browser cache
+
+Kept in the browser (`cache` helper in app/command/page.js), so a refresh loses nothing:
+
+| Key | What | How long |
+|---|---|---|
+| `cc-view-v1` | tab, date range, site, chart mode, feed filter | until changed |
+| `cc-data-v1` | last Command Center data, shown at once while fresh figures load | up to 24 h, then refreshed |
+| `cc-social-v1:<from>\|<to>` | Social & Web figures for that period | 30 min (the server's cache), Refresh always asks again |
+| `cc-draft-v1` | an editor with unsaved text | reopens after refresh until saved or cancelled |
+
+Saved work (pipeline, outreach, listings, Asana, ClickUp) lives on the server.

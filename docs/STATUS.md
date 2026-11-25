@@ -13,7 +13,7 @@ Live at `worthy-digital-dashboard.vercel.app`. Repo `pratzs/worthy-digital-dashb
 | Management connector (`/api/mcp`) in each person's own Claude or ChatGPT | Management, Hari (Purchasing) | [REP-MCP.md](REP-MCP.md) |
 | My Account (`/my-sales`) and rep connector (`/api/rep-mcp`) | Team leads Michelle (Team 2) and Naitik (Team 1); Vishva on the Marketing login | [REP-MCP.md](REP-MCP.md) |
 | Social and Web (`/social-web`) and `get_web_and_social` in chat and connector | Management | [SOCIAL-WEB.md](SOCIAL-WEB.md) |
-| Command Center (`/command`) | Management; built for the Thursday Ecom x Marketing meeting | [COMMAND-CENTER.md](COMMAND-CENTER.md) |
+| Command Center (`/command`), including a Social & Web tab | Management; built for the Thursday Ecom x Marketing meeting. Its design is the direction for the whole dashboard | [COMMAND-CENTER.md](COMMAND-CENTER.md) |
 | Rep assistant usage (`/rep-usage`) | Management: questions, sign-ins, AI cost per person | [AI-COST.md](AI-COST.md) |
 
 People: Management = Kishan, Jainesh, Lakmal, Hetal, Jiten, Pratham (`lib/people.js`, sign-in is work email + department password). Purchasing = Kylie (dashboard and chat only), Hari (dashboard, chat and connector). AI allowance is 60 questions a day with a 30-day rollover (`lib/repStore.js`).
@@ -74,4 +74,5 @@ One rule everywhere: dashboard, chat, connectors and the Odoo Sunday emails.
 - 19 Nov: Social and Web page (keyless GA4 through Vercel OIDC); selling prices and price tools for Vishva.
 - 20 Nov: `get_web_and_social` in chat and the management connector.
 - 24 Nov: Command Center (search, AI search, Google Shopping, traffic vs sales, listings, outreach, pipeline, live Asana and ClickUp, worthy.nz enquiries).
+- 26 Nov: Facebook and Instagram live; Command Center Social & Web tab in the new design language (infographics, three colours, matching icons) and a browser cache across the Command Center.
 - 25 Nov: one sales basis across dashboard, chat, connectors and the Odoo emails; freight never counted; sister company section; Oceania on the same basis; product-table cost and Oceania unit fixes.
