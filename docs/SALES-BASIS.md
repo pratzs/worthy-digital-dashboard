@@ -23,7 +23,7 @@ Code: `lib/salesTool.js` `resolveBusinesses` (management) and `lib/systemNames.j
 
 ## Worthy Oceania (Odoo company 1), same basis since 25 Nov 2026
 
-Product sales only (it used to count management fees, interest and other non-product lines as revenue, about $600K FY26), booked cost, no freight. Its sister / related companies are Worthy Products Ltd (partner 9271), Dutch Rusk (32462), Worthy Enterprises (7397) and Worthy Properties (7391): kept out and shown separately (`SISTER_SETS` in `lib/salesBasis.js`). The four fabric variants Odoo cannot name (28085, 28084, 6691, 7503) stay out of product groupings as before; their sales are reported separately on the page.
+Product sales only (it used to count management fees, interest and other non-product lines as revenue, about $600K FY26), booked cost, no freight. Its sister / related companies are Worthy Products Ltd (partner 9271), Dutch Rusk (32462), Worthy Enterprises (7397) and Worthy Properties (7391): kept out and shown separately (`SISTER_SETS` in `lib/salesBasis.js`). The four fabric variants Odoo cannot name (28085, 28084, 6691, 7503) stay out of product groupings as before (naming them makes Odoo fail); their sales and booked cost are read by month without naming a product and added to the month and year figures (one invoice this FY: INV/2026/0922, May, $1,521.67 sales, $834.05 cost). Booked-cost quantities are converted to the product's own unit (metres vs yards), the same as the invoice lines. Checked 25 Nov: every month's Oceania cost equals Odoo's booked cost, except August, which adds $13.80 standard cost for 12 units of product 58152 invoiced with no booked cost (the agreed rule).
 
 ## Where it lives
 
