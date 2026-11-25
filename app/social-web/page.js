@@ -206,8 +206,8 @@ export default function SocialWeb() {
   const range = p ? `${day(p.start)} to ${day(p.end)}, against ${day(p.prevStart)} to ${day(p.prevEnd)}` : "";
   return (
     <div className={css.page}>
-      <div className={css.wrap}>
-        <SiteNav current="socialweb" />
+      <SiteNav current="socialweb" />
+      <div className={css.wrap} style={{ marginTop: 14 }}>
         <div className={css.head} id="main" tabIndex={-1}>
           <h1 className={css.h1}><span className={css.chip}><Icon n="globe" size={18} /></span>Social and Web</h1>
           <span className={css.spacer} />

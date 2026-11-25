@@ -25,8 +25,8 @@ export default function RepUsage() {
   const count = (list, test) => list.filter(test).length;
   return (
     <div className={css.page}>
-      <div className={css.wrap}>
-        <SiteNav current="repusage" />
+      <SiteNav current="repusage" />
+      <div className={css.wrap} style={{ marginTop: 14 }}>
         <div className={css.head} id="main" tabIndex={-1}>
           <span className={css.chip}><Icon n="sparkle" size={18} /></span>
           <h1 className={css.h1}>AI assistant usage and cost</h1>

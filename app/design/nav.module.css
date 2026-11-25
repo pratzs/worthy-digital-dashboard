@@ -4,7 +4,7 @@
 .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand nav tools"; align-items: center; gap: 16px; }
 .brand { grid-area: brand; display: inline-flex; align-items: center; border-radius: 12px; }
 .logo { height: 44px; width: auto; display: block; }
-.nav { grid-area: nav; justify-self: center; display: flex; gap: 4px; padding: 5px; background: rgba(255,255,255,.6); border-radius: 999px; border: 1px solid rgba(255,255,255,.95); overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.nav { grid-area: nav; justify-self: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 5px; background: rgba(255,255,255,.6); border-radius: 26px; border: 1px solid rgba(255,255,255,.95); max-width: 100%; }
 .nav::-webkit-scrollbar { display: none; }
 .btn { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; color: var(--ink2); font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; padding: 10px 16px; border-radius: 999px; white-space: nowrap; text-decoration: none; transition: background .2s, color .2s; }
 .btn:hover { background: rgba(255,255,255,.9); color: var(--ink); }
@@ -30,6 +30,7 @@
   .nav { justify-self: stretch; }
 }
 @media (max-width: 760px) {
+  .nav { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; border-radius: 999px; }
   .meLabel { display: none; }
   .logo { height: 36px; }
 }
