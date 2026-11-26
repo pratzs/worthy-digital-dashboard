@@ -58,7 +58,7 @@ export default function StockStates({ store = "worthy" }) {
                 ))}
                 <tr><td><strong>Whole warehouse</strong></td><td /><td /><td className={u.num}><strong>{n0(n?.total?.units)}</strong></td><td className={u.num}><strong>{money(n?.total?.value)}</strong></td></tr>
                 <tr>
-                  <td>Worthy Products South (Dutch Rusk)<div className={u.was}>Ostendo keeps no best-before dates or clearance location, so only the total</div></td>
+                  <td>Worthy Products South (Dutch Rusk), whole warehouse</td>
                   <td /><td className={u.num}>{n0(s?.total?.products)}</td><td className={u.num}>{n0(s?.total?.units)}</td><td className={u.num}>{money(s?.total?.value)}</td>
                 </tr>
               </tbody>

@@ -109,7 +109,9 @@
   .grid3 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  .seg { flex-wrap: wrap; overflow: visible; }
+  /* One swipeable row on a phone instead of three stacked rows of buttons, so the numbers come up sooner */
+  .seg { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; max-width: 100%; padding-bottom: 2px; }
+  .seg > * { flex: none; scroll-snap-align: start; }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .kpi { padding: 16px; }
   .kpiNum { font-size: 32px; }

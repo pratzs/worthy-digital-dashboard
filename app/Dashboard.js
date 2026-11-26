@@ -1229,12 +1229,10 @@ const ForecastCard = ({ cur, prior, currency, fyLabel }) => {
               ]} />
             </div>
           </div>
-          <StatLine>
-            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(done)}</div><div className={ui.statLabel}>Sales to date</div><div className={ui.was} style={{ marginTop: 4 }}>{fmtDay(cur.range.start)} to {fmtDay(cur.range.end)}</div></div>
-            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(sameSpan)}</div><div className={ui.statLabel}>Same days last year</div><div style={{ marginTop: 4 }}>{onLast(pace)}</div></div>
-            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(full)}</div><div className={ui.statLabel}>Last year, full year</div><div className={ui.was} style={{ marginTop: 4 }}>Actual, finished</div></div>
-            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 22 }}>{money(flat)}</div><div className={ui.statLabel}>If the rest matches last year</div><div style={{ marginTop: 4 }}>{onLast(flat / full)}</div></div>
-          </StatLine>
+          {/* Only what the bars above do not already show (27 Nov 2026: the four figures were printed twice) */}
+          <div>
+            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 24 }}>{money(sameSpan)}</div><div className={ui.statLabel}>Same days last year, {fmtDay(cur.range.start)} to {fmtDay(cur.range.end)}</div><div style={{ marginTop: 6 }}>{onLast(pace)}</div></div>
+          </div>
         </div>
       )}
     </Card>
@@ -3164,15 +3162,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         <div className={st.channelRow}>
           {/* North is Odoo sales only for now: the Online and POS channels are not shown. Their
               code is still here, switched off, in case they come back. */}
-          <div className={ui.seg}>
-            {[
-              { id: "odoo",   label: "Odoo Sales",   icon: "cloud" },
-            ].map(tab => (
-              <button type="button" key={tab.id} onClick={() => setChannelTab(tab.id)} className={channelTab === tab.id ? ui.segOn : ""} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                <Icon n={tab.icon} size={14} />{tab.label}
-              </button>
-            ))}
-          </div>
+          {/* One channel only (Odoo), so no button to press: just say where the figures come from */}
           <span className={st.channelNote}>
             {channelTab === "odoo"   ? "Odoo ERP invoices · ex-tax revenue" :
              channelTab === "pos"    ? "In-person POS orders only" :
