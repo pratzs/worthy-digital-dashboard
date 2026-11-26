@@ -2313,13 +2313,14 @@ export default function EcommerceDashboard({ section = "overview" }) {
     });
     (async () => {
       await settled(fyKey(activeStore.id, selectedYear));
+      /* Last year for the business on screen first: the year summary and forecast need it, and the other businesses'
+         years (for the summary row) can follow. Same reads as before, in a better order (27 Nov 2026). */
+      if (live && !customOn) { await fetchFYFor(activeStore.id, selectedYear - 1); await settled(fyKey(activeStore.id, selectedYear - 1)); }
       for (const st of STORES) {
         if (!live || customOn) return;   // chosen dates: only the business on screen is read, gentle on Odoo
         await fetchFYFor(st.id, selectedYear);
         await settled(fyKey(st.id, selectedYear));
       }
-      if (!live || customOn) return;
-      await fetchFYFor(activeStore.id, selectedYear - 1);
     })();
     return () => { live = false; };
   }, [restored, activeStore.id, selectedYear, customOn, period.from, period.to]); // eslint-disable-line
@@ -3640,20 +3641,26 @@ export default function EcommerceDashboard({ section = "overview" }) {
               <div className={st.yearGrid}>
                 {yoyData.map((yr, i) => {
                   const p   = yoyData[i - 1];
-                  const rg  = p ? calcGrowth(yr.revenue, p.revenue) : null;
-                  const og  = p ? calcGrowth(yr.orders,  p.orders)  : null;
                   const isCur = yr.year === String(selectedYear);
+                  /* A year still running is compared with the SAME dates a year earlier, never with last year's full twelve
+                     months (27 Nov 2026: FY26 to date read as a 9% fall against all of FY25). */
+                  const curP = isCur && onFYView() ? fyPayload(selectedYear) : null;
+                  const partYear = Boolean(curP?.range && !curP.range.complete);
+                  const sameT = curP?.totals;
+                  const rg  = partYear ? (sameT?.growthPct ?? null) : p ? calcGrowth(yr.revenue, p.revenue) : null;
+                  const og  = partYear ? (sameT?.prior?.invoices > 0 ? calcGrowth(sameT.invoices, sameT.prior.invoices) : null) : p ? calcGrowth(yr.orders, p.orders) : null;
+                  const vsTxt = partYear ? `vs the same dates ${p?.year || selectedYear - 1}` : `vs ${p?.year}`;
                   const lab = { fontSize: 12.5, color: COLORS.mute, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 };
                   return (
                     <div key={yr.year} className={st.yearTile} style={{ borderColor: isCur ? INK : undefined, opacity: yr.loaded ? 1 : 0.35 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <div style={{ fontSize: 20, fontWeight: 300, color: isCur ? ORANGE : INK }}>{yr.year}</div>
+                        <div style={{ fontSize: 20, fontWeight: 300, color: isCur ? ORANGE : INK }}>{yr.year}{partYear && <span className={ui.was} style={{ marginLeft: 8 }}>to {fmtDay(curP.range.end)}</span>}</div>
                         {isLoading(parseInt(yr.year)) && <Pill>Loading</Pill>}
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <div style={lab}>Revenue</div>
                         <div style={{ fontSize: 15, fontWeight: 500 }}>{fmt(yr.revenue, activeStore.currency)}</div>
-                        {rg !== null && <div style={{ marginTop: 2 }}><Delta value={rg} /> <span className={ui.was}>vs {p.year}</span></div>}
+                        {rg !== null && <div style={{ marginTop: 2 }}><Delta value={rg} /> <span className={ui.was}>{vsTxt}</span></div>}
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <div style={lab}>Gross Profit</div>
@@ -3665,7 +3672,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                       <div>
                         <div style={lab}>Orders</div>
                         <div style={{ fontSize: 15, color: COLORS.ink2 }}>{yr.orders.toLocaleString()}</div>
-                        {og !== null && <div style={{ marginTop: 2 }}><Delta value={og} /> <span className={ui.was}>vs {p.year}</span></div>}
+                        {og !== null && <div style={{ marginTop: 2 }}><Delta value={og} /> <span className={ui.was}>{vsTxt}</span></div>}
                       </div>
                     </div>
                   );
