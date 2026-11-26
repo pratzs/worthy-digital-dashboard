@@ -631,6 +631,7 @@ export default function CommandCenter() {
               </div>
             </section>
             {todayNow && <section className={`${s.card} ${s.todayCard}`}><TodaySoFar todayNow={todayNow} site={site} bar /></section>}
+            <WeeklySummary />
 
             <div className={s.grid}>
               <div className={s.stack}>
@@ -2257,6 +2258,72 @@ function SocialTab({ site, start, end, nonce = 0 }) {
 }
 
 // ── Today so far (since midnight NZ) ────────────────────────────────────────────────────────────────
+// ── Monday summary: a draft for management (lib/weeklySummary.js). Copy or open as an email; nothing is sent from here ──
+function WeeklySummary() {
+  const [d, setD] = useState(() => cache.get("cc-summary-v1", 10 * 60 * 1000));
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let stop = false;
+    fetch("/api/summary", { cache: "no-store" }).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; })
+      .then((j) => { if (!stop) { setD(j); cache.set("cc-summary-v1", j); } }).catch((e) => { if (!stop) setErr(String(e.message || e)); });
+    return () => { stop = true; };
+  }, []);
+  const money = (v) => (v == null ? "-" : `$${Math.round(v).toLocaleString("en-NZ")}`);
+  const pctT = (v) => (v == null ? "-" : `${Number(v).toFixed(1)}%`);
+  if (err && !d) return <section className={s.card}><div className={s.err}>Weekly summary could not load: {err}</div></section>;
+  if (!d) return <section className={s.card}><div className={s.skeleton} style={{ height: 140 }} /></section>;
+  const subject = `Weekly summary, ${d.week.start} to ${d.week.end}`;
+  return (
+    <section className={s.card}>
+      <div className={s.cardHead}>
+        <Title icon="mail">Weekly summary</Title>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Range>{d.week.start} to {d.week.end}</Range>
+          <button type="button" className={s.btn} onClick={() => setOpen((o) => !o)} aria-expanded={open}><Icon n="eye" size={14} />{open ? "Hide draft" : "Show draft"}</button>
+          <button type="button" className={s.btn} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : "Copy"}</button>
+          <a className={`${s.btn} ${s.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} />Open as email draft</a>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 18 }}>
+        {d.business.map((b) => (
+          <div key={b.name}>
+            <Mini icon="building">{b.name}</Mini>
+            <div style={{ fontSize: 26, letterSpacing: "-.02em" }}>{money(b.week?.sales ?? b.month?.sales)}</div>
+            <div className={s.rowMeta}>{b.week ? `Last week at ${pctT(b.week.margin)}` : b.month ? `${b.month.label} so far at ${pctT(b.month.margin)}` : "-"}</div>
+            {b.week && b.month && <div className={s.rowMeta}>{b.month.label} so far {money(b.month.sales)} at {pctT(b.month.margin)}</div>}
+            {b.lastMonth && <div className={s.rowMeta}>{b.lastMonth.label} {money(b.lastMonth.sales)} at {pctT(b.lastMonth.margin)}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 18, marginTop: 18 }}>
+        <div>
+          <Mini icon="alert">Margin watch</Mini>
+          {d.pulls?.length > 0 && <div className={s.rowMeta} style={{ marginBottom: 8 }}>Worthy Products last week, biggest pulls: {d.pulls.map((g) => `${g.label.toLowerCase()} ${g.pts.toFixed(1)} pts`).join(", ")}</div>}
+          {!d.watch.length ? <div className={s.empty}>No salesperson is 2 points or more under their usual margin</div> : d.watch.slice(0, 8).map((w) => (
+            <div key={`${w.business}|${w.rep}|${w.month}`} className={s.row}>
+              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{w.rep}</div><div className={s.rowMeta}>{w.business} · {w.month}{w.through ? " so far" : ""} · {money(w.sales)}</div></div>
+              <span style={{ color: "var(--orange)", fontSize: 13, whiteSpace: "nowrap" }}>{pctT(w.margin)} <span className={s.rowMeta}>vs {pctT(w.usual)}</span></span>
+            </div>
+          ))}
+        </div>
+        <div>
+          <Mini icon="hourglass">Short-dated stock, Worthy Products</Mini>
+          {d.shortDated ? (
+            <>
+              <div className={s.row}><div className={s.rowTitle}>Past best-before</div><span>{money(d.shortDated.past?.cost)} <span className={s.rowMeta}>· {d.shortDated.past?.lots || 0} lots</span></span></div>
+              <div className={s.row}><div className={s.rowTitle}>Won&apos;t sell in time</div><span>{money(d.shortDated.wontSellCost)} <span className={s.rowMeta}>· {d.shortDated.wontSellLots} lots</span></span></div>
+              <div className={s.row}><div className={s.rowTitle}>Within 90 days, all</div><span>{money(d.shortDated.cost)} <span className={s.rowMeta}>· {d.shortDated.lots} lots</span></span></div>
+            </>
+          ) : <div className={s.empty}>Not available</div>}
+        </div>
+      </div>
+      {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 13, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{d.text}</pre>}
+    </section>
+  );
+}
+
 function TodaySoFar({ todayNow, site, bar }) {
   if (!todayNow) return null;
   const rows = todayNow.sites.filter((x) => x.status === "ok" && (site === "all" || x.id === site));
