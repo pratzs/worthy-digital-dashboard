@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/api/cron/warm-reps', // reveals nothing and rate-limits itself, so the scheduled job needs no login
   '/api/cron/price-snapshot', // returns counts only and runs at most once in 20 hours
   '/api/cron/connector-health', // tool call counts and list-fetch times only, no names or figures
+  '/api/public/sell-with-us', // rounded customer counts for the worthy.nz form only, no names or amounts; one shared copy a day
   '/logo-black.png',
   '/logo-white.png',
   '/favicon.ico',
