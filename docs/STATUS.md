@@ -61,6 +61,10 @@ Kishan asked why Worthy Products' margin reads 15.7% (November). Two changes:
 - **Weekly summary** on the Command Center dashboard tab (`lib/weeklySummary.js`, `/api/summary`): last week and month so far for all three businesses, margin watch (anyone 2+ points under their own year margin on $10k+), last week's biggest margin pulls, short-dated stock, open meeting actions. A draft: Copy or Open as email draft. Nothing is sent from the dashboard.
 - Command Center 'Online sales' is net sales before GST, Online Store channel only. Shopify's Analytics dashboard shows gross and all channels (Worthy Products adds Point of Sale), so its headline is higher. Checked 19 to 25 Nov: Worthy Products $32,317.02 and Dutch Rusk $141,631.03, both equal to Shopify.
 
+## Public figures for worthy.nz (27 Nov 2026)
+
+`/api/public/sell-with-us` (lib/publicStats.js) feeds the step-by-step Sell With Us form on worthy.nz. Rounded customer counts only, no names or amounts: stores, petrol stations, dairies, grocers and convenience stores across both islands (Odoo company 4 plus Ostendo delivery stores), Worthy Oceania fabric metres, and which Pacific nations and Australia we already serve (24 months). Last 12 months, own companies, staff and cash sales out. One shared copy a day (`readWeeks('pub','sell-with-us-v2')`), so visitors never read Odoo or Ostendo. Figures under 100 are not sent; the form shows wording without a number. Public in middleware.js; CORS worthy.nz only. Rules and first count: Ecom X Marketing\Sell With Us form\Sell With Us form - figures and sources.md.
+
 ## Design and navigation (26 Nov 2026)
 
 Every page is built from the shared kit in `app/design/`: `ui.js` (cards, headline strip, trends, month bars, ranked bars, ring, chain, share bar, progress), `icons.js` (one icon set), `SiteNav.js` (top bar with the pages the department may open, Back button, Dashboard / page / part trail, Skip to content). Three colours only (`app/globals.css`: page off-white, ink, orange accent), Outfit font, no dark mode. While figures load the page shows a dash, never a zero.
