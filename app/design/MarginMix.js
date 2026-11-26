@@ -13,14 +13,14 @@ const pctTxt = (v) => (v === null || v === undefined ? "-" : `${v}%`);
 const pts = (v) => (v === null || v === undefined || v === 0 ? "-" : `${v > 0 ? "" : "+"}${(-v).toFixed(1)} pts`);   // what it does to the company margin
 
 /** month: "YYYY-MM" the dashboard has selected; fy: the financial year (April start). */
-export default function MarginMix({ month, fy }) {
+export default function MarginMix({ month, fy, company = 4 }) {
   const [mode, setMode] = useState("month");
   // Chosen dates are kept in this browser
   const [pick, setPick] = useState(() => { try { return JSON.parse(localStorage.getItem("wdd-mix-range-v1") || "null") || { from: "", to: "" }; } catch { return { from: "", to: "" }; } });
   useEffect(() => { try { localStorage.setItem("wdd-mix-range-v1", JSON.stringify(pick)); } catch { /* private window */ } }, [pick]);
   const rangeOk = pick.from && pick.to && pick.from <= pick.to;
   const period = mode === "month" ? month : mode === "fy" ? `fy:${fy}` : rangeOk ? `${pick.from}:${pick.to}` : null;
-  const ck = `wdd-mix-v1:${period}`;
+  const ck = `wdd-mix-v2:${company}:${period}`;
   const [d, setD] = useState(() => (typeof window !== "undefined" ? cacheGet(ck, 15 * 60000) : null));
   const [err, setErr] = useState("");
   const [hidden, setHidden] = useState(false);
@@ -29,12 +29,12 @@ export default function MarginMix({ month, fy }) {
     if (!period) { setD(null); setErr(""); return; }
     const cached = cacheGet(ck, 15 * 60000);
     setD(cached); setErr("");
-    fetch(`/api/margin-mix?period=${encodeURIComponent(period)}`, { cache: "no-store" })
+    fetch(`/api/margin-mix?company=${company}&period=${encodeURIComponent(period)}`, { cache: "no-store" })
       .then(async (r) => { if (r.status === 401 || r.status === 403) { if (!stop) setHidden(true); return null; } const j = await r.json(); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; })
       .then((j) => { if (!stop && j) { setD(j); cacheSet(ck, j); } })
       .catch((e) => { if (!stop) setErr(String(e.message || e)); });
     return () => { stop = true; };
-  }, [period]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [period, company]);   // eslint-disable-line react-hooks/exhaustive-deps
   if (hidden || !month) return null;
 
   const worst = d ? [...d.groups].filter((g) => g.revenue !== 0 && g.pullPts > 0).sort((a, b) => b.pullPts - a.pullPts) : [];
@@ -66,7 +66,7 @@ export default function MarginMix({ month, fy }) {
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{pctTxt(d.marginPct)}</div><div className={u.statLabel}>Company margin · {money(d.grossProfit)} on {money(d.revenue)}</div></div>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(d.discount)}</div><div className={u.statLabel}>Discount given on invoice lines</div></div>
             {worst[0] && <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange)" }}>{pts(worst[0].pullPts)}</div><div className={u.statLabel}>Biggest pull: {worst[0].label.toLowerCase()}</div></div>}
-            {d.sisters !== 0 && <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(d.sisters)}</div><div className={u.statLabel}>Sold to Dutch Rusk and Oceania, not in these figures</div></div>}
+            {d.sisters !== 0 && <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(d.sisters)}</div><div className={u.statLabel}>Sold to our sister companies, not in these figures</div></div>}
           </div>
 
           <Mini icon="pie">By kind of sale</Mini>
@@ -95,7 +95,7 @@ export default function MarginMix({ month, fy }) {
               <Mini icon="users">By person, everyone who sold</Mini>
               <div className={u.tableWrap}>
                 <table className={u.table}>
-                  <thead><tr><th scope="col">Person</th><th scope="col" className={u.num}>Sales</th><th scope="col" className={u.num}>Margin</th><th scope="col" className={u.num}>Clearance</th><th scope="col" className={u.num}>Lost below cost</th><th scope="col" className={u.num}>Effect</th></tr></thead>
+                  <thead><tr><th scope="col">Person</th><th scope="col" className={u.num}>Sales</th><th scope="col" className={u.num}>Margin</th><th scope="col" className={u.num}>Clearance</th><th scope="col" className={u.num}>Short-dated</th><th scope="col" className={u.num}>Lost below cost</th><th scope="col" className={u.num}>Effect</th></tr></thead>
                   <tbody>
                     {d.people.map((p) => (
                       <tr key={p.name}>
@@ -103,6 +103,7 @@ export default function MarginMix({ month, fy }) {
                         <td className={u.num}>{money(p.revenue)}</td>
                         <td className={u.num} style={{ color: (p.marginPct ?? 0) < 0 ? "var(--orange)" : undefined }}>{pctTxt(p.marginPct)}</td>
                         <td className={u.num}>{p.clearance ? money(p.clearance) : "-"}</td>
+                        <td className={u.num}>{p.shortDated ? money(p.shortDated) : "-"}</td>
                         <td className={u.num}>{p.belowCostLoss >= 1 ? money(p.belowCostLoss) : "-"}</td>
                         <td className={u.num} style={{ color: p.pullPts > 0.05 ? "var(--orange)" : COLORS.ink2 }}>{pts(p.pullPts)}</td>
                       </tr>
@@ -132,6 +133,30 @@ export default function MarginMix({ month, fy }) {
               )}
             </div>
           </div>
+          {(d.deepCustomers?.length > 0 || d.deepProducts?.length > 0) && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginTop: 24 }}>
+              {[["Who gets 20%+ discounts", "building", d.deepCustomers, "Customer"], ["Products sold at 20%+ discount", "bag", d.deepProducts, "Product"]].map(([t, ic, rows, col]) => (
+                <div key={t}>
+                  <Mini icon={ic}>{t}</Mini>
+                  <div className={u.tableWrap}>
+                    <table className={u.table}>
+                      <thead><tr><th scope="col">{col}</th><th scope="col" className={u.num}>Sales</th><th scope="col" className={u.num}>Discount given</th><th scope="col" className={u.num}>Margin</th></tr></thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={r.name}>
+                            <td style={{ maxWidth: 260 }}>{r.name}<div className={u.was}>{r.people.slice(0, 3).join(", ")}{r.people.length > 3 ? ` +${r.people.length - 3}` : ""}</div></td>
+                            <td className={u.num}>{money(r.revenue)}</td>
+                            <td className={u.num}>{money(r.discount)}</td>
+                            <td className={u.num} style={{ color: (r.marginPct ?? 0) < 12 ? "var(--orange)" : undefined }}>{pctTxt(r.marginPct)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className={u.was} style={{ marginTop: 14, display: "flex", gap: 6, alignItems: "center" }}>
             <Icon n="refresh" size={11} />Odoo read {new Date(d.generatedAt).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" })}{d.stale ? ", newer figures are being read" : ""}
           </div>

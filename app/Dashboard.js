@@ -1081,8 +1081,9 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
   // Margin to two decimals from the figures themselves, so it reads exactly like the Sunday email.
   const m2 = (costed, cost) => (costed > 0 && cost != null ? Math.round(((costed - cost) / costed) * 10000) / 100 : null);
   /* Any dates (Worthy Products only, management only: /api/sister-sales). The chosen dates are kept in this browser. */
-  const canPick = companyName === "Worthy Products";
-  const RKEY = "wdd-sister-range-v1";
+  const canPick = companyName === "Worthy Products" || companyName === "Worthy Oceania";
+  const pickCid = companyName === "Worthy Oceania" ? 1 : 4;
+  const RKEY = `wdd-sister-range-v1:${pickCid}`;
   const [pick, setPick] = useState(() => { try { return JSON.parse(localStorage.getItem(RKEY) || "null") || { from: "", to: "" }; } catch { return { from: "", to: "" }; } });
   const [picked, setPicked] = useState({ state: "idle" });
   useEffect(() => {
@@ -1091,12 +1092,12 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
     if (pick.from > pick.to) { setPicked({ state: "error", error: "Start date is after the end date" }); return; }
     let stop = false;
     setPicked({ state: "loading" });
-    fetch(`/api/sister-sales?from=${pick.from}&to=${pick.to}`, { cache: "no-store" })
+    fetch(pickCid === 4 ? `/api/sister-sales?from=${pick.from}&to=${pick.to}` : `/api/margin-mix?company=1&period=${pick.from}:${pick.to}`, { cache: "no-store" })
       .then(async (r) => { if (r.status === 401 || r.status === 403) return { hidden: true }; const j = await r.json(); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; })
       .then((j) => { if (!stop) setPicked(j.hidden ? { state: "hidden" } : { state: "ok", d: j }); })
       .catch((e) => { if (!stop) setPicked({ state: "error", error: String(e.message || e) }); });
     return () => { stop = true; };
-  }, [pick.from, pick.to, canPick]);
+  }, [pick.from, pick.to, canPick, pickCid]);
   if (!cur?.sisterSales) return null;
   const month = [...(cur.months || [])].reverse().find((m) => m.started && m.sisters);
   const cols = [
@@ -1104,7 +1105,14 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
     month ? { label: "Month to date", range: `${fmtDay(`${month.key}-01`)} to ${fmtDay(month.through)}`, s: month.sisters, wp: { sales: month.revenue, other: month.otherInvoicedLines, margin: m2(month.costedRevenue, month.cost) ?? month.marginPct, cost: month.cost, costed: month.costedRevenue } } : null,
     { label: "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: m2(cur.totals?.costedRevenue, cur.totals?.cost) ?? cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
   ].filter(Boolean);
-  if (canPick && picked.state === "ok") {
+  if (canPick && picked.state === "ok" && pickCid === 1) {
+    // Worthy Oceania: the margin reader's own sister split (lib/marginMix.js), same basis as the year figures
+    const d = picked.d, ss = d.sisterSales || {};
+    cols.push({ label: "Chosen dates", range: `${fmtDay(d.from)} to ${fmtDay(d.to)}`, chosen: true,
+      s: { ...Object.fromEntries(Object.entries(ss).filter(([k]) => k !== "total").map(([k, v]) => [k, { sales: v.sales, marginPct: v.marginPct }])),
+           total: { sales: ss.total?.sales || 0, marginPct: ss.total?.marginPct ?? null, costedSales: ss.total?.costedSales || 0, cost: ss.total?.cost || 0 } },
+      wp: { sales: d.revenue, margin: d.costedRevenue > 0 ? Math.round(((d.costedRevenue - d.cost) / d.costedRevenue) * 10000) / 100 : null, cost: d.cost, costed: d.costedRevenue } });
+  } else if (canPick && picked.state === "ok") {
     const d = picked.d, dr = d.sisterCompanies.dutchRusk, oc = d.sisterCompanies.worthyOceania, wp = d.worthyProducts;
     cols.push({ label: "Chosen dates", range: `${fmtDay(d.period.from)} to ${fmtDay(d.period.to)}`, chosen: true,
       s: { dutchRusk: { sales: dr.sales, marginPct: dr.marginPct }, oceania: { sales: oc.sales, marginPct: oc.marginPct },
@@ -3604,8 +3612,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
               T={T}
               exact={exactAmounts}
             />
-            {activeStore.id === "worthy" && (
-              <MarginMix fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+            {(activeStore.id === "worthy" || activeStore.id === "nova") && (
+              <MarginMix company={activeStore.id === "nova" ? 1 : 4} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
             )}
           </div>
         )}
@@ -3663,8 +3671,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   T={T}
                   exact={exactAmounts}
                 />
-                {activeStore.id === "worthy" && (
-                  <MarginMix fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+                {(activeStore.id === "worthy" || activeStore.id === "nova") && (
+                  <MarginMix company={activeStore.id === "nova" ? 1 : 4} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
                 )}
               </>
             )}
