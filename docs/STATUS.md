@@ -78,7 +78,7 @@ Year figures (`lib/odooFyCache.js`): one Odoo read per company and year at a tim
 - `lib/repTargets.js` (rep budgets) sits in the public repo; moving it to an env value or the store is recommended.
 - Oceania per-rep and weekly margins still leave out the four fabric variants Odoo cannot name (one invoice this year, May, $834.05 cost); month and year totals include them.
 - A stash in `C:\wdd` ("Debtors: add Over 60 days late tile", from before November) is unreviewed.
-- Command Center 'Online sales' and conversion add Google Analytics revenue for dutchrusk.co.nz (about 7% below Shopify's own figure, 27 Oct to 25 Nov: GA $710,312 vs Shopify $765,245). `DUTCHRUSK_REPORTS_KEY` is in Vercel and the Social and Web page uses it (26 Nov), so the Command Center can switch to the same Shopify figures (`shopifyql(q, 'dutchrusk')` in `lib/webStats.js`).
+- Command Center 'Online sales' and conversion use Shopify's own figures for both shops since 26 Nov (`shopifyql` with the Dutch Rusk reports key); GA4 is used only for worthy.nz.
 - ClickUp cards in review: 14yhc7kzutt (one sales basis, waiting on Kishan's retry), 14yhc7kzutu (Social and Web; Dutch Rusk on Shopify figures since 26 Nov), 14yhc7kyrn7 (named sign-in and AI allowance), 14yhc7kymta (departments), 14yhc7kymmw (Vishva's Marketing login).
 
 ## Improvements (edge cases found 26 Nov 2026)
@@ -100,7 +100,7 @@ Still to do:
 12. Management chat cost (about US$0.30 a question): trim `get_financial_year` and `get_debtors` payloads.
 13. Rep budgets in the public repo (`lib/repTargets.js`): move to an environment value or the store.
 - Spend and return reads ad spend automatically (`lib/adSpend.js`). Meta needs `ads_read` and the ad account on Worthydashboardreader (asked of Anu 26 Nov). Google Ads is read from Google Analytics' ad cost, but on 26 Nov none of the three GA4 properties had a Google Ads link with cost: link the Google Ads account in each GA4 property (Admin > Product links > Google Ads links) and cost appears in the card.
-- worthy.nz Code Snippet #13 (bot spam) is created but switched off: Pratham to activate it in wp-admin > Snippets.
+- worthy.nz Code Snippet #13 (bot spam) is ACTIVE since 26 Nov; two test submissions to the Contact Page form came back as spam with nothing emailed.
 
 ## History in short
 
