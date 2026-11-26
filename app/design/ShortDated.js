@@ -48,9 +48,9 @@ export default function ShortDated() {
           <div style={{ display: "grid", gap: 10, marginBottom: 22 }}>
             {d.bands.map((b, i) => (
               <div key={b.label} style={{ display: "grid", gridTemplateColumns: "150px 1fr 110px", gap: 12, alignItems: "center" }}>
-                <span style={{ fontSize: 13 }}>{b.label}</span>
+                <span style={{ fontSize: 14.5 }}>{b.label}</span>
                 <div className={u.barTrack}><div className={`${u.barInk} ${i < 2 ? u.barAccent : ""}`} style={{ width: `${(b.cost / maxBand) * 100}%` }} /></div>
-                <span className={u.num} style={{ fontSize: 13 }}>{money(b.cost)} <span className={u.was}>· {b.lots}</span></span>
+                <span className={u.num} style={{ fontSize: 14.5 }}>{money(b.cost)} <span className={u.was}>· {b.lots}</span></span>
               </div>
             ))}
           </div>

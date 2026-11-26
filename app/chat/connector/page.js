@@ -24,7 +24,7 @@ function CopyButton({ text, label = "Copy" }) {
         setTimeout(() => setCopied(false), 1500);
       }}
       style={{
-        fontSize: 11, fontWeight: 700, padding: "6px 11px", borderRadius: 7, cursor: "pointer",
+        fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 7, cursor: "pointer",
         border: "1px solid #e4e0da", background: copied ? "#eaf7ee" : "#fff",
         color: copied ? "#2a7a46" : "#5a524a", whiteSpace: "nowrap",
       }}
@@ -35,8 +35,8 @@ function CopyButton({ text, label = "Copy" }) {
 function CompanyBox({ company }) {
   return (
     <div style={{ border: "1px solid #e4e0da", borderRadius: 12, padding: 16, background: company.light }}>
-      <div style={{ fontWeight: 700, fontSize: 13.5, color: company.color, marginBottom: 8 }}>{company.name}</div>
-      <div style={{ fontSize: 12, color: "#5a524a", lineHeight: 1.5, marginBottom: 10 }}>{company.question}</div>
+      <div style={{ fontWeight: 700, fontSize: 15, color: company.color, marginBottom: 8 }}>{company.name}</div>
+      <div style={{ fontSize: 13.5, color: "#5a524a", lineHeight: 1.5, marginBottom: 10 }}>{company.question}</div>
       <CopyButton text={company.question} label="Copy question" />
     </div>
   );
@@ -52,26 +52,26 @@ function ConnectorSetup({ platform, mcpUrl }) {
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#b13924", color: "#fff",
-            fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>1</span>
-          <div style={{ fontSize: 12.5, flex: 1 }}>Copy this connector URL</div>
+            fontSize: 12.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>1</span>
+          <div style={{ fontSize: 14, flex: 1 }}>Copy this connector URL</div>
           <CopyButton text={mcpUrl} />
         </div>
-        <div style={{ fontSize: 11.5, fontFamily: "monospace", color: "#8a8178", paddingLeft: 30, wordBreak: "break-all" }}>{mcpUrl}</div>
+        <div style={{ fontSize: 13, fontFamily: "monospace", color: "#8a8178", paddingLeft: 30, wordBreak: "break-all" }}>{mcpUrl}</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#b13924", color: "#fff",
-            fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>2</span>
-          <div style={{ fontSize: 12.5, flex: 1 }}>Go to <b>{where}</b> and paste the URL above</div>
+            fontSize: 12.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>2</span>
+          <div style={{ fontSize: 14, flex: 1 }}>Go to <b>{where}</b> and paste the URL above</div>
           <a href={appUrl} target="_blank" rel="noopener noreferrer" style={{
-            fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 7, textDecoration: "none",
+            fontSize: 12.5, fontWeight: 700, padding: "6px 12px", borderRadius: 7, textDecoration: "none",
             border: "1px solid #b13924", background: "#fff", color: "#b13924", whiteSpace: "nowrap",
           }}>Open {platform === "claude" ? "Claude" : "ChatGPT"} ↗</a>
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
           <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#b13924", color: "#fff",
-            fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>3</span>
-          <div style={{ fontSize: 12.5 }}>It&apos;ll ask for the <b>Management password</b> — one time only. After that it&apos;s connected under your own account, every time, on any device you sign into.</div>
+            fontSize: 12.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>3</span>
+          <div style={{ fontSize: 14 }}>It&apos;ll ask for the <b>Management password</b> — one time only. After that it&apos;s connected under your own account, every time, on any device you sign into.</div>
         </div>
       </div>
     </div>
@@ -97,12 +97,12 @@ export default function ConnectorPage() {
           <img src="/logo-black.png" alt="Worthy" style={{ height: 32 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Use your own Claude or ChatGPT app</div>
-            <div style={{ fontSize: 11.5, color: "#8a8178" }}>No API key needed, but you&apos;ll leave this page to chat</div>
+            <div style={{ fontSize: 13, color: "#8a8178" }}>No API key needed, but you&apos;ll leave this page to chat</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Link href="/chat" style={{ fontSize: 12, fontWeight: 700, color: "#8a8178", textDecoration: "none" }}>← Back to Ask a Question</Link>
-          {me && <span style={{ fontSize: 11, color: "#b7afa4" }}>{me.label}</span>}
+          <Link href="/chat" style={{ fontSize: 13.5, fontWeight: 700, color: "#8a8178", textDecoration: "none" }}>← Back to Ask a Question</Link>
+          {me && <span style={{ fontSize: 12.5, color: "#b7afa4" }}>{me.label}</span>}
         </div>
       </div>
 
@@ -120,7 +120,7 @@ export default function ConnectorPage() {
 
         {platform && <ConnectorSetup platform={platform} mcpUrl={mcpUrl} />}
 
-        <div style={{ marginTop: 28, marginBottom: 10, fontSize: 12.5, fontWeight: 700, color: "#5a524a" }}>
+        <div style={{ marginTop: 28, marginBottom: 10, fontSize: 14, fontWeight: 700, color: "#5a524a" }}>
           Starter questions — copy one, paste it once you&apos;re connected
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>

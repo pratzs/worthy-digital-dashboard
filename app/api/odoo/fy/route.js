@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { withRoleFilter } from '@/lib/roleResponse';
 import { nzFinancialYear } from '@/lib/ostendo';
-import { readFY } from '@/lib/odooFyCache';
+import { readFY, readCustom } from '@/lib/odooFyCache';
+import { customOf } from '@/lib/ostendo';
 
 export const dynamic = 'force-dynamic';
 /* A cold read of North takes 35-45s against Odoo (more when it is busy). Almost
@@ -14,6 +15,15 @@ async function handler(request) {
   const cid = parseInt(searchParams.get('company') || '4', 10);
   const fy = parseInt(searchParams.get('fy') || '', 10) || nzFinancialYear();
   const fresh = searchParams.get('fresh') === '1';
+  const custom = customOf(searchParams);   // the dashboard's Chosen dates
+  if (custom) {
+    try {
+      const { payload, cached } = await readCustom(cid, custom);
+      return NextResponse.json(payload, { headers: { 'X-Figures-Cache': cached === 'stale' ? 'stale' : cached ? 'slot' : 'live' } });
+    } catch (err) {
+      return NextResponse.json({ fy, company: cid, custom, error: err.message, months: [], reps: [], totals: null }, { status: 502 });
+    }
+  }
   try {
     const { payload, cached } = await readFY(cid, fy, { fresh });
     return NextResponse.json(payload, { headers: { 'X-Figures-Cache': cached === 'stale' ? 'stale' : cached ? 'slot' : 'live' } });

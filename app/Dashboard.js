@@ -109,7 +109,7 @@ const MarginBar = ({ value }) => {
       <div style={{ width: 34, height: 5, borderRadius: 999, background: inkA(0.08), overflow: "hidden" }}>
         <div style={{ width: `${Math.min(Math.max(value, 0), 100)}%`, height: "100%", background: low ? ORANGE : INK, opacity: low ? 1 : 0.78, borderRadius: 999 }} />
       </div>
-      <span style={{ color: low ? ORANGE : INK, fontWeight: 500, fontSize: 11.5 }}>{value}%</span>
+      <span style={{ color: low ? ORANGE : INK, fontWeight: 500, fontSize: 13 }}>{value}%</span>
     </div>
   );
 };
@@ -118,8 +118,8 @@ const MarginBar = ({ value }) => {
 const CustomTooltip = ({ active, payload, label, currency = "NZD" }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: "10px 14px", fontSize: 12, color: INK, boxShadow: "0 12px 30px -18px rgba(40,32,20,0.45)" }}>
-      <div style={{ marginBottom: 6, fontSize: 12.5, fontWeight: 500 }}>{label}</div>
+    <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: "10px 14px", fontSize: 13.5, color: INK, boxShadow: "0 12px 30px -18px rgba(40,32,20,0.45)" }}>
+      <div style={{ marginBottom: 6, fontSize: 14, fontWeight: 500 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3 }}>
           <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color, display: "inline-block" }} />
@@ -179,11 +179,11 @@ const Notice = ({ tone = "info", icon = "alert", role, children, style }) => (
 );
 
 // Shared table look: uppercase muted headers, hairline rows, tabular numbers.
-const thStyle = (align = "right") => ({ padding: "8px 10px", textAlign: align, color: COLORS.mute, fontSize: 11, fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", borderBottom: `1px solid ${COLORS.line}` });
-const tdStyle = { padding: "10px 10px", fontSize: 12.5, color: INK, borderBottom: `1px solid ${COLORS.line}`, fontVariantNumeric: "tabular-nums" };
+const thStyle = (align = "right") => ({ padding: "8px 10px", textAlign: align, color: COLORS.mute, fontSize: 12.5, fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", borderBottom: `1px solid ${COLORS.line}` });
+const tdStyle = { padding: "10px 10px", fontSize: 14, color: INK, borderBottom: `1px solid ${COLORS.line}`, fontVariantNumeric: "tabular-nums" };
 const footStyle = (align = "right") => ({ ...tdStyle, textAlign: align, fontWeight: 500, borderBottom: 0, borderTop: `1px solid ${inkA(0.18)}` });
 // Inputs and selects in the filter rows.
-const SELECT_STYLE = { font: "inherit", fontSize: 13, padding: "9px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.95)", background: "rgba(255,255,255,0.75)", color: INK, maxWidth: "100%" };
+const SELECT_STYLE = { font: "inherit", fontSize: 14.5, padding: "9px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.95)", background: "rgba(255,255,255,0.75)", color: INK, maxWidth: "100%" };
 
 const WORTHY_CONTEXT = `
 You are a senior business analyst embedded at Worthy Products NZ, a wholesale confectionery and beverages distributor based in Auckland.
@@ -281,12 +281,12 @@ No generic advice. Every point must reference something specific in the data.`;
         <Icon n="sparkle" size={13} />{loading ? "Analysing…" : open ? "Hide AI Insights" : "AI Insights"}
       </button>
       {open && !loading && insight && (
-        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,0.75)", border: `1px solid ${COLORS.line}`, fontSize: 12.5, color: COLORS.ink2, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,0.75)", border: `1px solid ${COLORS.line}`, fontSize: 14, color: COLORS.ink2, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
           {insight}
         </div>
       )}
       {open && loading && (
-        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 16, background: "rgba(255,255,255,0.75)", border: `1px solid ${COLORS.line}`, fontSize: 12, color: COLORS.mute, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ marginTop: 10, padding: "12px 16px", borderRadius: 16, background: "rgba(255,255,255,0.75)", border: `1px solid ${COLORS.line}`, fontSize: 13.5, color: COLORS.mute, display: "flex", alignItems: "center", gap: 6 }}>
           <Icon n="sparkle" size={13} />Analysing Worthy Products data…
         </div>
       )}
@@ -308,7 +308,7 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
           <div>
             <h2 className={ui.cardTitle}><span className={ui.titleIcon}><Icon n="folder" size={15} /></span>{category}</h2>
-            <div style={{ fontSize: 12, color: COLORS.mute, marginTop: 6 }}>{(products||[]).length} products · click outside to close</div>
+            <div style={{ fontSize: 13.5, color: COLORS.mute, marginTop: 6 }}>{(products||[]).length} products · click outside to close</div>
           </div>
           <button type="button" onClick={onClose} className={ui.chip} style={{ border: 0, cursor: "pointer" }} aria-label="Close"><Icon n="close" size={16} /></button>
         </div>
@@ -318,8 +318,8 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
             <Mini icon="award">Top Performers</Mini>
             {top.map((p, i) => (
               <div key={i} style={row}>
-                <div style={{ fontSize: 13, color: INK, flex: 1, minWidth: 160 }}>{p.name}</div>
-                <div style={{ display: "flex", gap: 16, fontSize: 12, alignItems: "center" }}>
+                <div style={{ fontSize: 14.5, color: INK, flex: 1, minWidth: 160 }}>{p.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 13.5, alignItems: "center" }}>
                   <span style={{ color: INK, fontWeight: 500 }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "-"}</span>
                   <span style={{ color: COLORS.mute }}>{p.qtySold} units</span>
                   {p.yoyChange !== null && <span><Delta value={p.yoyChange} /> <span className={ui.was}>YoY</span></span>}
@@ -334,7 +334,7 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
             <Mini icon="trending">Growing Fast</Mini>
             {rising.map((p, i) => (
               <div key={i} style={row}>
-                <div style={{ fontSize: 13, color: INK }}>{p.name}</div>
+                <div style={{ fontSize: 14.5, color: INK }}>{p.name}</div>
                 <span><Delta value={p.yoyChange} /> <span className={ui.was}>YoY</span></span>
               </div>
             ))}
@@ -346,8 +346,8 @@ const CategoryModal = ({ category, products, currency, onClose }) => {
             <Mini icon="alert">Declining in This Category</Mini>
             {declining.map((p, i) => (
               <div key={i} style={row}>
-                <div style={{ fontSize: 13, color: INK, flex: 1, minWidth: 160 }}>{p.name}</div>
-                <div style={{ display: "flex", gap: 16, fontSize: 12, alignItems: "center" }}>
+                <div style={{ fontSize: 14.5, color: INK, flex: 1, minWidth: 160 }}>{p.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 13.5, alignItems: "center" }}>
                   <span style={{ color: COLORS.ink2 }}>{p.revenue > 0 ? `NZ$${(p.revenue/1000).toFixed(1)}k` : "NZ$0"}</span>
                   <span><Delta value={-Math.abs(p.yoyChange)} /> <span className={ui.was}>YoY</span></span>
                 </div>
@@ -411,10 +411,10 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
     <CardHead icon={icon || "grid"} title={<>{title}{loading && <span style={{ marginLeft: 10, verticalAlign: "middle" }}><Pill>Loading</Pill></span>}</>}>
       {headerExtra}<RangeTag text={range} /><ExportButton title={title} range={range} columns={columns} data={data} />
     </CardHead>
-    {subtitle && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{subtitle}</div>}
+    {subtitle && <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>{subtitle}</div>}
     {visual && !loading && data?.length > 0 && <div style={{ marginBottom: 18 }}>{visual}</div>}
     <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
         <thead style={{ position: "sticky", top: 0, background: COLORS.card, zIndex: 1 }}>
           <tr>
             {columns.map((col, i) => (
@@ -486,7 +486,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
   const title = (icon, text, sub, extra) => (
     <>
       <CardHead icon={icon} title={text}>{extra}</CardHead>
-      {sub && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>{sub}</div>}
     </>);
   const sel = SELECT_STYLE;
 
@@ -561,7 +561,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
           </div>
           <div style={{ display: "grid", gap: 8, marginTop: 16 }}>
             {bands.map(([k, label, col]) => (
-              <div key={k} style={{ display: "grid", gridTemplateColumns: "10px minmax(0,1fr) auto auto", gap: 10, alignItems: "center", fontSize: 13 }}>
+              <div key={k} style={{ display: "grid", gridTemplateColumns: "10px minmax(0,1fr) auto auto", gap: 10, alignItems: "center", fontSize: 14.5 }}>
                 <i style={{ width: 10, height: 10, borderRadius: 3, background: col, display: "block" }} />
                 <span style={{ color: COLORS.ink2 }}>{label}</span>
                 <span style={{ fontVariantNumeric: "tabular-nums", color: k === "over90" && t[k] > 0 ? ORANGE : INK }}>{money(t[k])}</span>
@@ -613,7 +613,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
                 <td style={{ ...cell, textAlign: "right" }}>{dash(r.over90)}</td>
               </tr>))}</tbody>
             <tfoot><tr>
-              <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+              <td style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
               <td style={footStyle()}>{d.customerCount.toLocaleString()}</td>
               <td style={footStyle()}>{money(t.outstanding)}</td>
               <td style={{ ...footStyle(), color: red }}>{money(t.overdue)}</td>
@@ -641,14 +641,14 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
             <option value="overdue">Sort: most overdue</option><option value="total">Sort: largest balance</option>
             <option value="oldest">Sort: oldest late</option><option value="name">Sort: name</option>
           </select>
-          <label style={{ fontSize: 12.5, color: COLORS.ink2, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <label style={{ fontSize: 14, color: COLORS.ink2, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
             <input type="checkbox" checked={hideIC} onChange={e => setHideIC(e.target.checked)} style={{ accentColor: INK }} /> Hide inter-company
           </label>
           <span style={{ flex: 1 }} />
           <button type="button" onClick={csvCustomers} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download customers CSV</button>
           <button type="button" onClick={csvInvoices} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download all open invoices CSV</button>
         </div>
-        <div style={{ fontSize: 12, color: COLORS.mute, marginBottom: 10 }}>
+        <div style={{ fontSize: 13.5, color: COLORS.mute, marginBottom: 10 }}>
           Showing {shownRows.length.toLocaleString()} of {rows.length.toLocaleString()} customers{filtered ? ` (filtered from ${d.customerCount.toLocaleString()})` : ""}.
         </div>
         <div style={{ overflow: "auto", maxHeight: 640 }}>
@@ -696,7 +696,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
               })}
             </tbody>
             <tfoot><tr>
-              <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }} colSpan={2}>{filtered ? "TOTAL OF THESE CUSTOMERS" : "TOTAL"}</td>
+              <td style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }} colSpan={2}>{filtered ? "TOTAL OF THESE CUSTOMERS" : "TOTAL"}</td>
               {["current", "d1to30", "d31to60", "d61to90", "over90"].map(k => <td key={k} style={footStyle()}>{money(sum(k))}</td>)}
               <td style={footStyle()} />
               <td style={footStyle()}>{money(sum("total"))}</td>
@@ -775,7 +775,7 @@ const DebtorsPanel = ({ source, currency = "NZD" }) => {
         />
       </div>
       {d && d.customerCount > d.customers.length && (
-        <div style={{ fontSize: 12, color: COLORS.mute, marginTop: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13.5, color: COLORS.mute, marginTop: 10, lineHeight: 1.5 }}>
           Showing the {d.customers.length} customers with the most overdue, of {d.customerCount.toLocaleString()} who owe us money. The tiles above cover all of them.
         </div>
       )}
@@ -828,7 +828,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
   const summary = (label, list, keyOf, labelOf, visual) => (
     <Card style={{ ...card, overflowX: "auto" }}>
       {title(label[0], label[1], <RangeTag text={rangeLabel} />)}
-      {label[3] && <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{label[3]}</div>}
+      {label[3] && <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>{label[3]}</div>}
       {visual && list.length > 0 && <div style={{ marginBottom: 18 }}>{visual}</div>}
       <Paged rows={list}>{(shownList) => (
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -847,7 +847,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
             </tr>))}
         </tbody>
         <tfoot><tr>
-          <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+          <td style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
           <td style={footStyle()}>{d.totals.count.toLocaleString()}</td>
           <td style={footStyle()}>{money(d.totals.productValue)}</td>
           <td style={footStyle()}>{money(d.totals.otherValue)}</td>
@@ -933,7 +933,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
           <span style={{ flex: 1 }} />
           <button type="button" onClick={csv} className={`${ui.btn} ${ui.btnSmall}`}><Icon n="download" size={13} />Download CSV</button>
         </div>
-        <div style={{ fontSize: 12, color: COLORS.mute, marginBottom: 10 }}>
+        <div style={{ fontSize: 13.5, color: COLORS.mute, marginBottom: 10 }}>
           {filtered ? `${rows.length.toLocaleString()} of ${d.notes.length.toLocaleString()} credit notes match · ${money(shown)} of ${money(d.totals.value)}` : `${d.notes.length.toLocaleString()} credit notes`}. Click a row to read the whole reason.
         </div>
         <div style={{ overflow: "auto", maxHeight: 620 }}>
@@ -959,7 +959,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
                     <td style={{ ...cell, whiteSpace: "nowrap", color: COLORS.ink2 }}>{n.kind}</td>
                     <td style={{ ...cell, minWidth: 260, maxWidth: 420, color: n.reason ? COLORS.ink2 : COLORS.mute, lineHeight: 1.45 }}>
                       {isOpen ? text : (text.length > 120 ? `${text.slice(0, 120)}…` : text)}
-                      {isOpen && n.reasonBy && <div style={{ fontSize: 11, color: COLORS.mute, marginTop: 4 }}>Logged by {n.reasonBy}{n.about ? ` · ${n.about}` : ""}{n.creditedInvoice ? ` · against ${n.creditedInvoice}` : ""}</div>}
+                      {isOpen && n.reasonBy && <div style={{ fontSize: 12.5, color: COLORS.mute, marginTop: 4 }}>Logged by {n.reasonBy}{n.about ? ` · ${n.about}` : ""}{n.creditedInvoice ? ` · against ${n.creditedInvoice}` : ""}</div>}
                     </td>
                     <td style={{ ...cell, textAlign: "right", fontWeight: 500, whiteSpace: "nowrap" }}>{money(n.amount)}</td>
                   </tr>);
@@ -968,7 +968,7 @@ const CreditsOdoo = ({ d, currency = "NZD", rangeLabel = null }) => {
           </table>
         </div>
         {notePg.bar}
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>
           {filtered ? "MATCHING" : "TOTAL"}&nbsp;CREDITED<span style={{ color: red, fontSize: 18, fontWeight: 400, letterSpacing: 0 }}>{money(shown)}</span>
         </div>
       </Card>
@@ -1019,7 +1019,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
         {d?.reps?.length > 0 && <div style={{ marginBottom: 18 }}><BarList rows={d.reps.map(r => ({ name: r.rep, value: r.value }))} fmt={(v) => fmtExact(v, currency)} limit={6} /></div>}
         <div style={{ overflowX: "auto" }}>
           <Paged rows={d?.reps || []}>{(shownReps) => (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
                 <th style={headStyle("left")}>Sales Rep</th>
@@ -1043,7 +1043,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
             {d?.reps?.length > 0 && (
               <tfoot>
                 <tr>
-                  <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+                  <td style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
                   <td style={footStyle()}>{d.totals.count.toLocaleString()}</td>
                   <td style={{ ...footStyle(), color: ORANGE }}>{fmtExact(d.totals.value, currency)}</td>
                 </tr>
@@ -1065,7 +1065,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
         ]}
       />
       {d?.notes?.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>
           TOTAL&nbsp;CREDITED<span style={{ color: ORANGE, fontSize: 18, letterSpacing: 0 }}>{fmtExact(d.totals.value, currency)}</span>
         </div>
       )}
@@ -1078,12 +1078,12 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
    projection from last year's shape, not a budget. */
 /* Worthy Products only: sales to the sister companies (Dutch Rusk, Worthy Oceania), kept out of every figure above and
    reconciled back to everything invoiced. Same basis as the Sunday email and the chat (docs/SALES-BASIS.md). */
-const dateInputStyle = { font: "inherit", fontSize: 12.5, padding: "6px 9px", borderRadius: 10, border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.ink };
+const dateInputStyle = { font: "inherit", fontSize: 14, padding: "6px 9px", borderRadius: 10, border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.ink };
 const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Products" }) => {
   // Margin to two decimals from the figures themselves, so it reads exactly like the Sunday email.
   const m2 = (costed, cost) => (costed > 0 && cost != null ? Math.round(((costed - cost) / costed) * 10000) / 100 : null);
   /* Any dates (Worthy Products only, management only: /api/sister-sales). The chosen dates are kept in this browser. */
-  const canPick = companyName === "Worthy Products" || companyName === "Worthy Oceania";
+  const canPick = (companyName === "Worthy Products" || companyName === "Worthy Oceania") && !cur?.custom;   // the page's chosen dates already set the period
   const pickCid = companyName === "Worthy Oceania" ? 1 : 4;
   const RKEY = `wdd-sister-range-v1:${pickCid}`;
   const [pick, setPick] = useState(() => { try { return JSON.parse(localStorage.getItem(RKEY) || "null") || { from: "", to: "" }; } catch { return { from: "", to: "" }; } });
@@ -1105,7 +1105,7 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
   const cols = [
     week && week.sisters ? { label: "Week", range: `${fmtDay(week.start)} to ${fmtDay(week.end)}`, s: week.sisters, wp: { sales: week.revenue, other: week.otherInvoicedLines, margin: weekWp?.margin ?? null, cost: weekWp?.cost, costed: weekWp?.costed } } : null,
     month ? { label: "Month to date", range: `${fmtDay(`${month.key}-01`)} to ${fmtDay(month.through)}`, s: month.sisters, wp: { sales: month.revenue, other: month.otherInvoicedLines, margin: m2(month.costedRevenue, month.cost) ?? month.marginPct, cost: month.cost, costed: month.costedRevenue } } : null,
-    { label: "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: m2(cur.totals?.costedRevenue, cur.totals?.cost) ?? cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
+    { label: cur.custom ? "Chosen dates" : "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: m2(cur.totals?.costedRevenue, cur.totals?.cost) ?? cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
   ].filter(Boolean);
   if (canPick && picked.state === "ok" && pickCid === 1) {
     // Worthy Oceania: the margin reader's own sister split (lib/marginMix.js), same basis as the year figures
@@ -1125,7 +1125,7 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
   const money = (v) => (v == null ? "-" : fmtExact(v, currency));
   const pctTxt = (v) => (v == null ? "-" : `${Number(v).toFixed(2)}%`);
   const th = { ...thStyle("right") };
-  const td = { ...tdStyle, textAlign: "right", fontSize: 13, whiteSpace: "nowrap" };
+  const td = { ...tdStyle, textAlign: "right", fontSize: 14.5, whiteSpace: "nowrap" };
   const name = { ...td, textAlign: "left", fontWeight: 500 };
   // Whichever sister companies this business has (lib/salesBasis.js SISTER_SETS), in that order.
   const sisterKeys = Object.keys(cur.sisterSales).filter((k) => cur.sisterSales[k] && cur.sisterSales[k].name);
@@ -1139,7 +1139,7 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
     }, true],
   ];
   // The share of all product sales, financial year to date: this company first, then each sister.
-  const fy = cols.find((c) => c.label === "Financial year to date");
+  const fy = cols.find((c) => c.label === "Financial year to date" || c.label === "Chosen dates");
   const parts = [{ name: companyName, value: fy.wp.sales ?? 0 }, ...sisterKeys.map((k) => ({ name: cur.sisterSales[k].name, value: fy.s[k]?.sales ?? 0 }))];
   return (
     <Card style={{ marginBottom: 14 }}>
@@ -1147,16 +1147,16 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
         {canPick && picked.state !== "hidden" && (
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }} role="group" aria-label="Chosen dates">
             <input type="date" value={pick.from} max={pick.to || undefined} aria-label="From" onChange={(e) => setPick((p) => ({ ...p, from: e.target.value }))} style={dateInputStyle} />
-            <span style={{ color: COLORS.mute, fontSize: 12 }}>to</span>
+            <span style={{ color: COLORS.mute, fontSize: 13.5 }}>to</span>
             <input type="date" value={pick.to} min={pick.from || undefined} aria-label="To" onChange={(e) => setPick((p) => ({ ...p, to: e.target.value }))} style={dateInputStyle} />
             {(pick.from || pick.to) && <button type="button" onClick={() => setPick({ from: "", to: "" })} aria-label="Clear the chosen dates" title="Clear" style={{ ...dateInputStyle, cursor: "pointer", display: "inline-flex", alignItems: "center" }}><Icon n="close" size={12} /></button>}
-            {picked.state === "loading" && <span style={{ color: COLORS.mute, fontSize: 12 }}>Reading Odoo</span>}
-            {picked.state === "error" && <span style={{ color: ORANGE, fontSize: 12 }}>{picked.error}</span>}
+            {picked.state === "loading" && <span style={{ color: COLORS.mute, fontSize: 13.5 }}>Reading Odoo</span>}
+            {picked.state === "error" && <span style={{ color: ORANGE, fontSize: 13.5 }}>{picked.error}</span>}
           </div>
         )}
         <RangeTag text={fy.range} />
       </CardHead>
-      <Mini icon="pie">Share of all product sales, financial year to date</Mini>
+      <Mini icon="pie">Share of all product sales, {cur.custom ? "chosen dates" : "financial year to date"}</Mini>
       <ShareBar parts={parts} fmt={moneyShort} />
       <div style={{ overflowX: "auto", marginTop: 20 }}>
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 640 }}>
@@ -1213,7 +1213,7 @@ const ForecastCard = ({ cur, prior, currency, fyLabel }) => {
         <RangeTag text={`${fmtDay(cur.range.start)} to ${fmtDay(cur.range.lastDay)}`} />
       </CardHead>
       {!ready ? (
-        <div style={{ fontSize: 13, color: COLORS.mute, lineHeight: 1.6 }}>Reading last year&apos;s figures. This can take up to a minute the first time.</div>
+        <div style={{ fontSize: 14.5, color: COLORS.mute, lineHeight: 1.6 }}>Reading last year&apos;s figures. This can take up to a minute the first time.</div>
       ) : (
         <div className={st.forecast}>
           <div>
@@ -1338,7 +1338,7 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
           </div>) },
         { key: "remaining", label: "Remaining", align: "right", color: COLORS.ink2, format: v => (v == null ? "-" : v <= 0 ? "Target met" : KPI_CENTS(v)) },
         { key: "vsPace", label: "vs Budget to Date", align: "right", format: v => v == null ? "-" : (
-          <span className={`${ui.trend} ${v < 0 ? ui.trendDown : ""}`} style={{ fontSize: 12.5 }}><Icon n={v >= 0 ? "tri-up" : "tri-down"} size={8} />{v >= 0 ? "+" : "-"}{KPI_CENTS(Math.abs(v))}</span>) },
+          <span className={`${ui.trend} ${v < 0 ? ui.trendDown : ""}`} style={{ fontSize: 14 }}><Icon n={v >= 0 ? "tri-up" : "tri-down"} size={8} />{v >= 0 ? "+" : "-"}{KPI_CENTS(Math.abs(v))}</span>) },
         { key: "monthSales", label: "This Month", align: "right", color: INK, format: (v, _cur, row) => row.monthLabel
           ? (row.monthTarget == null ? KPI_CENTS(v) : <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>of {KPI_CENTS(row.monthTarget)}</span></span>) : "-" },
         { key: "gpPct", label: "GP % (target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
@@ -1375,12 +1375,12 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
   const money = exact ? fmtExact : fmtK;
   const keep  = (n) => exact ? n : Math.round(n);
 
-  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev < 0 ? ORANGE : rev > 0 ? INK : COLORS.mute, fontSize: 12.5, whiteSpace: "nowrap", fontWeight: 400, fontVariantNumeric: "tabular-nums" });
+  const cellStyle    = (rev) => ({ padding: "10px 12px", textAlign: "right", color: rev < 0 ? ORANGE : rev > 0 ? INK : COLORS.mute, fontSize: 14, whiteSpace: "nowrap", fontWeight: 400, fontVariantNumeric: "tabular-nums" });
   // Margin colour: below the 20% margin target is the accent, otherwise quiet ink.
   const mCol = (v) => (v == null ? COLORS.mute : v >= 20 ? COLORS.ink2 : ORANGE);
-  const repCellStyle = { padding: "10px 12px", color: INK, fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap" };
+  const repCellStyle = { padding: "10px 12px", color: INK, fontSize: 14, fontWeight: 500, whiteSpace: "nowrap" };
   const headStyle    = { ...thStyle(), padding: "10px 12px", background: COLORS.card };
-  const numStyle     = () => ({ padding: "10px 12px", textAlign: "right", color: COLORS.ink2, fontSize: 12.5, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
+  const numStyle     = () => ({ padding: "10px 12px", textAlign: "right", color: COLORS.ink2, fontSize: 14, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
 
   // Annual rows (summary) - merged with cost/margin when available
   const annualRows = (salespeople || []).map(s => {
@@ -1436,7 +1436,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
           <button type="button" onClick={() => setRepView("weekly")}  className={repView === "weekly" ? ui.segOn : ""}>Weekly</button>
         </div>
       </CardHead>
-      <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>
+      <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>
         {repView === "annual"  ? `${fyMonths ? "FY totals" : "Annual totals"} · ${currency}` :
          repView === "monthly" ? `${fyMonths ? "FY monthly" : "Monthly"} breakdown by rep · ${currency}` :
                                  `Weekly breakdown for ${MONTH_NAMES[weeklyMonth]} · ${currency}`}
@@ -1457,7 +1457,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
       {/* Annual view */}
       {repView === "annual" && (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Sales Rep</th>
@@ -1508,7 +1508,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
               return (
                 <tfoot>
                   <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                    <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
+                    <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 11.5 }}>TOTAL</td>
                     <td style={{ ...numStyle(), color: T.textHead, fontWeight: 500 }}>{orders.toLocaleString()}</td>
                     <td style={{ ...cellStyle(revenue), color: INK, fontWeight: 500 }}>{money(keep(revenue), currency)}</td>
                     <td style={{ ...cellStyle(1), fontWeight: 500 }}>{orders > 0 ? money(keep(revenue / orders), currency) : "-"}</td>
@@ -1526,7 +1526,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
       {/* Monthly view */}
       {repView === "monthly" && (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
@@ -1560,7 +1560,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                           {m.revenue !== 0 ? (
                             <>
                               <div>{money(m.revenue, currency)}</div>
-                              {mm?.marginPct != null && <div style={{ fontSize: 10.5, color: mColor, fontWeight: 500, marginTop: 2 }}>{mm.marginPct}%</div>}
+                              {mm?.marginPct != null && <div style={{ fontSize: 12, color: mColor, fontWeight: 500, marginTop: 2 }}>{mm.marginPct}%</div>}
                             </>
                           ) : <span style={{ color: T.textLabel }}>-</span>}
                         </td>
@@ -1584,7 +1584,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
             {monthlyPivot.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                  <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
+                  <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 11.5 }}>TOTAL</td>
                   {displayMonths.map((mn, fi) => {
                     const colTotal  = monthlyPivot.reduce((s, rep) => s + (monthAt(rep.months, fi)?.revenue || 0), 0);
                     /* Built from revenue and cost, never from the rows' gross profit.
@@ -1601,7 +1601,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                         {colTotal !== 0 ? (
                           <>
                             <div>{money(keep(colTotal), currency)}</div>
-                            {colMargin != null && <div style={{ fontSize: 10.5, color: mColor, fontWeight: 500, marginTop: 2 }}>{colMargin}%</div>}
+                            {colMargin != null && <div style={{ fontSize: 12, color: mColor, fontWeight: 500, marginTop: 2 }}>{colMargin}%</div>}
                           </>
                         ) : "-"}
                       </td>
@@ -1639,11 +1639,11 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
             ))}
           </div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
               <thead>
                 <tr>
                   <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
-                  {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}<div style={{ fontSize: 9, fontWeight: 500, letterSpacing: 0, textTransform: "none", color: T.textMuted, marginTop: 2 }}>{weekRangeOf(i + 1) || " "}</div></th>)}
+                  {Array.from({ length: maxWeeks }, (_, i) => <th key={i} style={headStyle}>Week {i + 1}<div style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: 0, textTransform: "none", color: T.textMuted, marginTop: 2 }}>{weekRangeOf(i + 1) || " "}</div></th>)}
                   <th style={{ ...headStyle, color: INK }}>Month Total</th>
                   {hasMargin && <th style={headStyle}>Gross Profit</th>}
                   {hasMargin && <th style={headStyle}>Margin</th>}
@@ -1673,7 +1673,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                             {w.revenue !== 0 ? (
                               <>
                                 <div>{money(w.revenue, currency)}</div>
-                                {wm?.marginPct != null && <div style={{ fontSize: 10.5, color: wColor, fontWeight: 500, marginTop: 2 }}>{wm.marginPct}%</div>}
+                                {wm?.marginPct != null && <div style={{ fontSize: 12, color: wColor, fontWeight: 500, marginTop: 2 }}>{wm.marginPct}%</div>}
                               </>
                             ) : <span style={{ color: T.textLabel }}>-</span>}
                           </td>
@@ -1683,7 +1683,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                         {rep.monthTotal !== 0 ? (
                           <>
                             <div>{money(rep.monthTotal, currency)}</div>
-                            {mo?.marginPct != null && <div style={{ fontSize: 10.5, color: mCol(mo.marginPct), fontWeight: 500, marginTop: 2 }}>{mo.marginPct}%</div>}
+                            {mo?.marginPct != null && <div style={{ fontSize: 12, color: mCol(mo.marginPct), fontWeight: 500, marginTop: 2 }}>{mo.marginPct}%</div>}
                           </>
                         ) : "-"}
                       </td>
@@ -1712,7 +1712,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                 return (
                   <tfoot>
                     <tr style={{ borderTop: `1px solid ${T.border}` }}>
-                      <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 10 }}>TOTAL</td>
+                      <td style={{ ...repCellStyle, color: T.textMuted, fontSize: 11.5 }}>TOTAL</td>
                       {Array.from({ length: maxWeeks }, (_, wi) => {
                         const rev = weeklyPivot.reduce((s, r) => s + (r.weeks[wi]?.revenue || 0), 0);
                         const withM = weeklyPivot.filter(r => weekOf(r, wi)?.grossProfit != null);
@@ -1724,7 +1724,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                             {rev !== 0 ? (
                               <>
                                 <div>{money(keep(rev), currency)}</div>
-                                {pct != null && <div style={{ fontSize: 10.5, color: colour(pct), fontWeight: 500, marginTop: 2 }}>{pct}%</div>}
+                                {pct != null && <div style={{ fontSize: 12, color: colour(pct), fontWeight: 500, marginTop: 2 }}>{pct}%</div>}
                               </>
                             ) : "-"}
                           </td>
@@ -1734,7 +1734,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
                         {monthRev !== 0 ? (
                           <>
                             <div>{money(keep(monthRev), currency)}</div>
-                            {mPct != null && <div style={{ fontSize: 10.5, color: colour(mPct), fontWeight: 500, marginTop: 2 }}>{mPct}%</div>}
+                            {mPct != null && <div style={{ fontSize: 12, color: colour(mPct), fontWeight: 500, marginTop: 2 }}>{mPct}%</div>}
                           </>
                         ) : "-"}
                       </td>
@@ -1792,6 +1792,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const [selectedYear, setSelectedYear] = useState(2026);
 
   const [view,         setView]         = useState("monthly");
+  /* Chosen dates (27 Nov 2026): any period the viewer picks. The Year view with a period set reads that period instead of
+     the financial year, so every card follows it (the readers take ?from=&to=, lib/odooFy.js and lib/ostendoFy.js). */
+  const [period,       setPeriod]       = useState({ from: "", to: "" });
+  const [pickOpen,     setPickOpen]     = useState(false);
+  const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "");
+  const customOn = view === "yoy" && isDay(period.from) && isDay(period.to) && period.from <= period.to;
   const [animated,     setAnimated]     = useState(true);
   const [activeMetric, setActiveMetric] = useState("revenue");
   const [hoveredMonth, setHoveredMonth] = useState(null);
@@ -1826,6 +1832,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
       const yr = parseInt(p.get("fy") || "", 10);
       if (ALL_YEARS.includes(yr)) setSelectedYear(yr);
       if (["monthly", "weekly", "yoy"].includes(p.get("view"))) setView(p.get("view"));
+      const pf = p.get("from") || "", pt = p.get("to") || "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(pf) && /^\d{4}-\d{2}-\d{2}$/.test(pt) && pf <= pt) { setPeriod({ from: pf, to: pt }); setPickOpen(true); }
       if (p.get("tab") === "odoo") setChannelTab("odoo"); // an old tab=pos / tab=online link lands on Odoo Sales
       const mo = parseInt(p.get("m") || "", 10);
       if (mo >= 0 && mo <= 11) setWeeklyMonth(mo);
@@ -1844,11 +1852,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
       tab:   channelTab,
       m:     String(weeklyMonth),
       w:     String(selectedWeek),
+      ...(customOn ? { from: period.from, to: period.to } : {}),
     });
     try {
       window.history.replaceState(null, "", `${window.location.pathname}#${p.toString()}`);
     } catch { /* replaceState can throw in embedded contexts; the view still works */ }
-  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek]);
+  }, [restored, activeStore.id, selectedYear, view, channelTab, weeklyMonth, selectedWeek, customOn, period.from, period.to]);
 
   // Advanced table dates auto-sync to the selected view + period
   const _thisYear    = new Date().getFullYear();
@@ -1917,7 +1926,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     worthy: (y) => `/api/odoo/fy?fy=${y}&company=4`,
     nova:   (y) => `/api/odoo/fy?fy=${y}&company=1`,
   };
-  const fyKey = (storeId, year) => `fy:${storeId}:${year}`;
+  const fyKey = (storeId, year) => (customOn && year === selectedYear ? `fy:${storeId}:${period.from}_${period.to}` : `fy:${storeId}:${year}`);
 
   const fetchFYFor = async (storeId, year, { fresh = false } = {}) => {
     const key = fyKey(storeId, year);
@@ -1930,7 +1939,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       try {
         /* A retry asks the shared copy again; only the "Try again" button goes to Odoo directly (fresh=1), so a busy
            Odoo never gets one heavy read per visitor (26 Nov 2026). */
-        const src = FY_SOURCE[storeId](year) + (fresh && storeId !== "luxe" ? "&fresh=1" : "");
+        const src = FY_SOURCE[storeId](year) + (customOn && year === selectedYear ? `&from=${period.from}&to=${period.to}` : "") + (fresh && storeId !== "luxe" ? "&fresh=1" : "");
         const r = await fetch(src, { cache: "no-store" });
         const json = await r.json();
         cacheRef.current[key] = json?.error ? { failed: json.error } : json;
@@ -2203,7 +2212,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       if (advStoreRef.current === storeId) setAdvLoading(false);
     };
     load();
-  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab]); // eslint-disable-line
+  }, [restored, activeStore.id, selectedYear, view, weeklyMonth, channelTab, customOn, period.from, period.to]); // eslint-disable-line
 
   /* Stock valuation is a footer figure. It is read after the year on screen has
      loaded rather than alongside it. */
@@ -2285,15 +2294,15 @@ export default function EcommerceDashboard({ section = "overview" }) {
     (async () => {
       await settled(fyKey(activeStore.id, selectedYear));
       for (const st of STORES) {
-        if (!live) return;
+        if (!live || customOn) return;   // chosen dates: only the business on screen is read, gentle on Odoo
         await fetchFYFor(st.id, selectedYear);
         await settled(fyKey(st.id, selectedYear));
       }
-      if (!live) return;
+      if (!live || customOn) return;
       await fetchFYFor(activeStore.id, selectedYear - 1);
     })();
     return () => { live = false; };
-  }, [restored, activeStore.id, selectedYear]); // eslint-disable-line
+  }, [restored, activeStore.id, selectedYear, customOn, period.from, period.to]); // eslint-disable-line
 
   /* One set of figures, exactly as Ostendo holds them. Revenue is the product
      lines, which is what Worthy's finance team reports; rebates are shown as
@@ -2657,7 +2666,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
   const curr       = getMonthly(selectedYear);
   const prev       = getMonthly(selectedYear - 1);
-  const prevLoaded = hasData(selectedYear - 1);
+  const prevLoaded = !customOn && hasData(selectedYear - 1);
   const hasCost    = curr.some(d => d.hasCostData);
 
   /* Has this month actually happened?
@@ -2835,7 +2844,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
     : kpiHasCost && kpiRev > 0
     ? marginPct1(kpiRev - kpiCost, kpiRev)
     : (view === "yoy" ? gpMargin : null);
-  const kpiGrowth    = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiRev, prevLatestRev) : null) : revG;
+  const kpiGrowth    = customOn ? (fyPayload(selectedYear)?.totals?.growthPct ?? null)
+                     : view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiRev, prevLatestRev) : null) : revG;
   const kpiOrdGrowth = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiOrd, prevLatestOrd) : null) : ordG;
   const kpiAovGrowth = view === "weekly" ? null : view === "monthly" ? null : aovG;
 
@@ -3050,7 +3060,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const SECTION_ICONS = { overview: "grid", analytics: "bars", credits: "receipt", debtors: "wallet", chat: "sparkle", repusage: "users", socialweb: "megaphone", command: "compass", reps: "users", products: "award", movers: "zap", customers: "trophy" };
   const money0 = (v) => (exactAmounts ? fmtExact(v, activeStore.currency) : fmtK(v, activeStore.currency));
   // Chart axes and grid in the design kit's ink.
-  const axisTick = { fontSize: 11, fill: COLORS.mute };
+  const axisTick = { fontSize: 12.5, fill: COLORS.mute };
   // Sales by month for the year on screen, months that have not started left out. The latest month is the accent.
   const monthBars = momData.filter(r => !r.notStarted).map(r => ({ label: r.month, value: r.revenue || 0 }));
   /* The month still running is drawn as part of a month ("to 26"), so it is not read as a drop. The year payload says
@@ -3154,10 +3164,45 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {/* View toggle, and the period the headline figures cover */}
         <div className={st.viewRow}>
           <div className={ui.seg} role="group" aria-label="View">
-            {[["monthly","Monthly Performance","calendar"],["weekly","Weekly Breakdown","bars"],["yoy","Yearly","chart"]].map(([v, lbl, ic]) => (
-              <button type="button" key={v} onClick={() => setView(v)} className={view === v ? ui.segOn : ""} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><Icon n={ic} size={14} />{lbl}</button>
-            ))}
+            {[["monthly","Month","calendar"],["weekly","Week","bars"],["yoy","Financial year","chart"],["custom","Chosen dates","calendar"]].map(([v, lbl, ic]) => {
+              const on = v === "custom" ? (view === "yoy" && pickOpen) : v === "yoy" ? (view === "yoy" && !pickOpen) : view === v;
+              return (
+                <button type="button" key={v} aria-pressed={on} className={on ? ui.segOn : ""} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
+                  onClick={() => {
+                    if (v === "custom") {
+                      setView("yoy"); setPickOpen(true);
+                      if (!customOn) { const t = _todayStr; setPeriod({ from: `${t.slice(0, 7)}-01`, to: t }); }
+                    } else { setView(v); setPickOpen(false); setPeriod({ from: "", to: "" }); }
+                  }}><Icon n={ic} size={15} />{lbl}</button>
+              );
+            })}
           </div>
+          {view === "yoy" && pickOpen && (() => {
+            const t = _todayStr; const y = Number(t.slice(0, 4)), mo = Number(t.slice(5, 7));
+            const ym = (yy, mm) => `${yy}-${String(mm).padStart(2, "0")}`;
+            const monthEnd = (yy, mm) => new Date(Date.UTC(yy, mm, 0)).toISOString().slice(0, 10);
+            const lm = mo === 1 ? [y - 1, 12] : [y, mo - 1];
+            const fyStart = mo >= 4 ? y : y - 1;
+            const three = mo > 2 ? [y, mo - 2] : [y - 1, mo + 10];
+            const presets = [
+              ["This month", `${ym(y, mo)}-01`, t],
+              ["Last month", `${ym(lm[0], lm[1])}-01`, monthEnd(lm[0], lm[1])],
+              ["Last 3 months", `${ym(three[0], three[1])}-01`, t],
+              ["Financial year to date", `${fyStart}-04-01`, t],
+              ["Last financial year", `${fyStart - 1}-04-01`, `${fyStart}-03-31`],
+            ];
+            return (
+              <div className={st.rangeBar} role="group" aria-label="Chosen dates">
+                <label className={st.rangeField}><span>From</span><input type="date" value={period.from} max={period.to || t} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} /></label>
+                <label className={st.rangeField}><span>To</span><input type="date" value={period.to} min={period.from || undefined} max={t} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} /></label>
+                <div className={st.presets}>
+                  {presets.map(([lbl, f, to]) => (
+                    <button type="button" key={lbl} aria-pressed={period.from === f && period.to === to} className={period.from === f && period.to === to ? st.presetOn : ""} onClick={() => setPeriod({ from: f, to })}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {view === "weekly" ? (() => {
             const allMonthWeeks = getWeekly().filter(w => w.month === weeklyMonth && w.revenue > 0);
             const weekNums = [...new Set(allMonthWeeks.map(w => w.week))].sort((a,b) => a-b);
@@ -3235,16 +3280,30 @@ export default function EcommerceDashboard({ section = "overview" }) {
         {/* 2. HOW THE HEADLINE FIGURES RELATE, and the year by month */}
         <div className={ui.grid} style={{ marginBottom: 14 }}>
           <Card>
-            <CardHead icon="bars" title={`Sales by month, ${onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}><RangeTag text={yearRange()} /></CardHead>
+            <CardHead icon="bars" title={customOn ? "Sales by month, chosen dates" : `Sales by month, ${onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}><RangeTag text={yearRange()} /></CardHead>
             {monthBars.length > 0 ? <MonthBars rows={monthBars} fmt={moneyShort} partialTo={barsPartialTo} /> : <div className={ui.empty}>{anyLoading ? "Loading" : "No sales recorded yet"}</div>}
           </Card>
           <Card className={st.chainFit}>
-            <CardHead icon="flow" title={isMgmt ? "From orders to profit" : "From orders to sales"} />
-            <Chain compact steps={[
-              { label: "Orders", value: kpiOrd ? kpiOrd.toLocaleString() : "-" },
-              { label: "Sales", value: curLoading && !kpiRev ? "-" : money0(kpiRev), link: kpiOrd ? `${money0(kpiAOV)} an order` : "", accent: !isMgmt },
-              ...(isMgmt ? [{ label: "Gross profit", value: (kpiHasCost || partCost) && kpiGP !== null ? money0(kpiGP) : "-", link: kpiGPMargin !== null ? `${kpiGPMargin}% margin` : "", accent: true }] : []),
-            ]} />
+            {/* Not a repeat of the headline strip: how the margin moved month by month (management), or orders by month */}
+            <CardHead icon={isMgmt ? "percent" : "bag"} title={isMgmt ? "Margin by month" : "Orders by month"} />
+            {(() => {
+              const ms = (fyPayload(selectedYear)?.months || []).filter((m) => m.started);
+              if (!ms.length) return <div className={ui.empty}>{anyLoading ? "Loading" : "No sales yet"}</div>;
+              const rows = isMgmt ? ms.filter((m) => m.marginPct != null).map((m) => ({ name: m.label, value: m.marginPct, extra: m.grossProfit }))
+                                  : ms.map((m) => ({ name: m.label, value: m.invoices || 0 }));
+              const max = Math.max(...rows.map((r) => r.value), 1), avg = rows.reduce((t, r) => t + r.value, 0) / (rows.length || 1);
+              return (
+                <div className={st.marginList}>
+                  {rows.map((r) => (
+                    <div key={r.name} className={st.marginRow}>
+                      <span className={st.marginName}>{r.name}</span>
+                      <div className={st.marginTrack}><i style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: isMgmt && r.value < avg - 1 ? "var(--orange)" : "var(--ink)" }} /></div>
+                      <span className={st.marginVal}>{isMgmt ? `${r.value.toFixed(1)}%` : r.value.toLocaleString("en-NZ")}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </Card>
         </div>
 
@@ -3284,7 +3343,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   <button type="button" key={m.id} onClick={() => setActiveMetric(m.id)} className={activeMetric === m.id ? ui.segOn : ""}>{m.label}</button>
                 ))}
               </div>
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: COLORS.mute, margin: "-4px 0 14px" }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13.5, color: COLORS.mute, margin: "-4px 0 14px" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 3, borderRadius: 2, background: INK, display: "inline-block" }} />{selectedYear}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 20, height: 0, borderTop: `2px dashed ${inkA(0.35)}`, display: "inline-block" }} />{prevLoaded ? `${selectedYear - 1}` : `Loading ${selectedYear - 1}…`}</span>
               </div>
@@ -3292,7 +3351,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 <ComposedChart data={momData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
                   <XAxis dataKey="month" interval={0} tick={axisTick} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false}
+                  <YAxis tick={{ fontSize: 11.5, fill: COLORS.mute }} axisLine={false} tickLine={false}
                     tickFormatter={activeMetric === "revenue" || activeMetric === "grossProfit" ? v => `$${(v/1000).toFixed(0)}k` : activeMetric === "marginPct" ? v => `${v}%` : v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
                   <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ stroke: inkA(0.15) }} />
                   <Area type="monotone" dataKey={activeMetric} name={metrics.find(m => m.id === activeMetric)?.label} stroke={INK} strokeWidth={2} fill={INK} fillOpacity={0.05} dot={false} connectNulls={false} activeDot={{ r: 5, fill: ORANGE, stroke: "#fff", strokeWidth: 2 }} />
@@ -3304,7 +3363,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {/* Monthly table */}
             <Card style={{ marginBottom: 14 }}>
               <CardHead icon="calendar" title="Monthly Breakdown"><RangeTag text={yearRange()} /></CardHead>
-              <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px", display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px", display: "flex", alignItems: "center", gap: 5 }}>
                 {activeStore.id === "luxe"
                   ? <><Icon n="sparkle" size={12} />Sales before rebates, as finance report them · cost as invoiced · {activeStore.currency}</>
                   : onFYView()
@@ -3312,7 +3371,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                     : <>{hasCost ? <><Icon n="sparkle" size={12} />Real cost from Shopify</> : "Add read_inventory scope for margin"} · {activeStore.currency}</>}
               </div>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr>
                       {/* Year views: Sales with a cost, minus Cost (the cost of those sales), equals Gross Profit on every row and in
@@ -3360,7 +3419,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
+                      <td style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
                       <td style={footStyle("left")}>{exactAmounts ? fmtExact(totalRev, activeStore.currency) : fmtK(totalRev, activeStore.currency)}</td>
                       <td style={{ ...footStyle("left"), color: COLORS.ink2 }}>
                         {(() => {
@@ -3420,7 +3479,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                     <RangeTag text={monthRange()} />
                   </CardHead>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap", margin: "-6px 0 12px" }}>
-                    <div style={{ fontSize: 12, color: COLORS.mute }}>Week-by-week sales breakdown</div>
+                    <div style={{ fontSize: 13.5, color: COLORS.mute }}>Week-by-week sales breakdown</div>
                     {wTotalRev > 0 && (
                       <div style={{ textAlign: "right" }}>
                         <div className={ui.statNum} style={{ fontSize: 24 }}>{fmtK(wTotalRev, activeStore.currency)}</div>
@@ -3433,7 +3492,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                       <BarChart data={weeklyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
                         <XAxis dataKey="label" interval={0} tick={axisTick} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false}
+                        <YAxis tick={{ fontSize: 11.5, fill: COLORS.mute }} axisLine={false} tickLine={false}
                           tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
                         <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ fill: inkA(0.04) }} />
                         <Bar dataKey="revenue" name="Revenue" fill={INK} radius={[6, 6, 0, 0]} maxBarSize={56}>
@@ -3442,7 +3501,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.mute, fontSize: 13 }}>
+                    <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.mute, fontSize: 14.5 }}>
                       {anyLoading ? "Loading weekly data…" : `No sales recorded in ${MONTH_NAMES[weeklyMonth]} ${selectedYear}`}
                     </div>
                   )}
@@ -3453,9 +3512,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   <CardHead icon="calendar" title={`Weekly Breakdown · ${MONTH_NAMES[weeklyMonth]} ${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}`}>
                     <RangeTag text={monthRange()} />
                   </CardHead>
-                  <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>{activeStore.currency}</div>
+                  <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>{activeStore.currency}</div>
                   <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                       <thead>
                         <tr>
                           {["Week","Date Range","Revenue","Gross Profit","Margin","Orders","AOV","Discounts","New Cust.","vs Prev Week"].map(h => (
@@ -3483,7 +3542,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                             <tr key={i} style={{ background: hoveredMonth === 100 + i ? inkA(0.035) : "transparent", transition: "background 0.15s" }}
                               onMouseEnter={() => setHoveredMonth(100 + i)} onMouseLeave={() => setHoveredMonth(null)}>
                               <td style={{ ...c, fontWeight: 500, color: row.week === selectedWeek ? ORANGE : INK }}>Week {row.week}</td>
-                              <td style={{ ...c, color: COLORS.mute, fontSize: 11.5 }}>{row.dateRange}</td>
+                              <td style={{ ...c, color: COLORS.mute, fontSize: 13 }}>{row.dateRange}</td>
                               <td style={{ ...c, fontWeight: 500 }}>{has ? fmtK(row.revenue, activeStore.currency) : none}</td>
                               <td style={c}>{has && row.grossProfit != null ? fmtK(row.grossProfit, activeStore.currency) : none}</td>
                               <td style={c}>{has && row.marginPct != null ? <MarginBar value={row.marginPct} /> : none}</td>
@@ -3499,7 +3558,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                       {weeklyData.length > 0 && wTotalRev > 0 && (
                         <tfoot>
                           <tr>
-                            <td colSpan={2} style={{ ...footStyle("left"), fontSize: 11, color: COLORS.mute, letterSpacing: "0.04em" }}>MONTH TOTAL</td>
+                            <td colSpan={2} style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>MONTH TOTAL</td>
                             <td style={footStyle("left")}>{fmtK(wTotalRev, activeStore.currency)}</td>
                             <td style={footStyle("left")}>{wTotalGP != null ? fmtK(wTotalGP, activeStore.currency) : "-"}</td>
                             <td style={footStyle("left")}>{wMarginPct != null ? <MarginBar value={wMarginPct} /> : <span style={{ color: COLORS.mute }}>-</span>}</td>
@@ -3512,7 +3571,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                         </tfoot>
                       )}
                     </table>
-                    <div style={{ marginTop: 10, fontSize: 11.5, color: COLORS.mute }}>Weeks run Monday to Sunday and the first and last are clipped to the month. Vs Prev Week compares revenue per day, so a short or unfinished week is not judged against a full one.</div>
+                    <div style={{ marginTop: 10, fontSize: 13, color: COLORS.mute }}>Weeks run Monday to Sunday and the first and last are clipped to the month. Vs Prev Week compares revenue per day, so a short or unfinished week is not judged against a full one.</div>
                   </div>
                 </Card>
               </>
@@ -3524,12 +3583,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
             <div className={ui.grid2} style={{ marginBottom: 14 }}>
               <Card>
                 <CardHead icon="bars" title="Annual Revenue" />
-                <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>Year-over-Year</div>
+                <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>Year-over-Year</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: COLORS.mute }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+                    <XAxis dataKey="year" tick={{ fontSize: 13.5, fill: COLORS.mute }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11.5, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
                     <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ fill: inkA(0.04) }} />
                     <Bar dataKey="revenue" name="Revenue" fill={INK} radius={[8, 8, 0, 0]} maxBarSize={64}>
                       {yoyData.map((yr) => <Cell key={yr.year} fill={yr.year === String(selectedYear) ? ORANGE : INK} fillOpacity={yr.year === String(selectedYear) ? 1 : 0.2} />)}
@@ -3539,13 +3598,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
               </Card>
               <Card>
                 <CardHead icon="trending" title="Orders & AOV Trend" />
-                <div style={{ fontSize: 12, color: COLORS.mute, margin: "-6px 0 14px" }}>Volume and value evolution</div>
+                <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>Volume and value evolution</div>
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={yoyData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: COLORS.mute }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="l" tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                    <XAxis dataKey="year" tick={{ fontSize: 13.5, fill: COLORS.mute }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 11.5, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11.5, fill: COLORS.mute }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
                     <Tooltip content={<CustomTooltip currency={activeStore.currency} />} cursor={{ fill: inkA(0.04) }} />
                     <Bar yAxisId="l" dataKey="orders" name="Orders" fill={inkA(0.18)} radius={[6, 6, 0, 0]} maxBarSize={56} />
                     <Line yAxisId="r" type="monotone" dataKey="aov" name="AOV" stroke={INK} strokeWidth={2} dot={{ fill: INK, r: 4, stroke: "#fff", strokeWidth: 2 }} />
@@ -3562,7 +3621,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   const rg  = p ? calcGrowth(yr.revenue, p.revenue) : null;
                   const og  = p ? calcGrowth(yr.orders,  p.orders)  : null;
                   const isCur = yr.year === String(selectedYear);
-                  const lab = { fontSize: 11, color: COLORS.mute, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 };
+                  const lab = { fontSize: 12.5, color: COLORS.mute, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 };
                   return (
                     <div key={yr.year} className={st.yearTile} style={{ borderColor: isCur ? INK : undefined, opacity: yr.loaded ? 1 : 0.35 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -3576,14 +3635,14 @@ export default function EcommerceDashboard({ section = "overview" }) {
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <div style={lab}>Gross Profit</div>
-                        <div style={{ fontSize: 13.5 }}>
+                        <div style={{ fontSize: 15 }}>
                           {yr.grossProfit !== null ? fmt(yr.grossProfit, activeStore.currency) : <span style={{ color: COLORS.mute }}>-</span>}
-                          {yr.margin !== null && <span style={{ fontSize: 11, color: COLORS.mute, marginLeft: 5 }}>{yr.margin}%</span>}
+                          {yr.margin !== null && <span style={{ fontSize: 12.5, color: COLORS.mute, marginLeft: 5 }}>{yr.margin}%</span>}
                         </div>
                       </div>
                       <div>
                         <div style={lab}>Orders</div>
-                        <div style={{ fontSize: 13.5, color: COLORS.ink2 }}>{yr.orders.toLocaleString()}</div>
+                        <div style={{ fontSize: 15, color: COLORS.ink2 }}>{yr.orders.toLocaleString()}</div>
                         {og !== null && <div style={{ marginTop: 2 }}><Delta value={og} /> <span className={ui.was}>vs {p.year}</span></div>}
                       </div>
                     </div>
@@ -3615,7 +3674,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               exact={exactAmounts}
             />
             {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-              <MarginMix company={activeStore.id === "nova" ? 1 : 4} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+              <MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
             )}
           </div>
         )}
@@ -3626,7 +3685,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area."
                 visual={<BarList rows={salespeople.map(s => ({ name: s.name, value: s.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} />} />
             ) : (
-              <div style={{ fontSize: 13, color: COLORS.mute, padding: "20px 0" }}>Online sales aren&apos;t broken down by rep - switch to the POS tab for rep figures.</div>
+              <div style={{ fontSize: 14.5, color: COLORS.mute, padding: "20px 0" }}>Online sales aren&apos;t broken down by rep - switch to the POS tab for rep figures.</div>
             )}
           </div>
         )}
@@ -3674,7 +3733,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   exact={exactAmounts}
                 />
                 {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-                  <MarginMix company={activeStore.id === "nova" ? 1 : 4} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+                  <MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
                 )}
               </>
             )}
@@ -3822,7 +3881,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   : `${selectedYear}`}>
                 <RangeTag text={tableRange()} />
               </CardHead>
-              <div style={{ fontSize: 12.5, color: COLORS.mute, marginTop: -6 }}>
+              <div style={{ fontSize: 14, color: COLORS.mute, marginTop: -6 }}>
                 {activeStore.id === "luxe" && view !== "weekly"
                   ? "Everything below covers the whole financial year so far, not just the latest month"
                   : "Analytics for the selected period"}
@@ -3855,7 +3914,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   aiExtra="Hari+Nayan=Auckland East/West/North Shore. Rubin=South Auckland (Pukekohe/Waiuku/Tuakau). Savan=Waikato+Hawke's Bay. Naitik=Northland/Whangārei. Flag underperformance vs territory size and whether any rep is losing ground to competitors in their area."
                   visual={<BarList rows={salespeople.map(s => ({ name: s.name, value: s.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} />} />
               ) : (
-                <div style={{ fontSize: 13, color: COLORS.mute, padding: "20px 0" }}>Online sales aren&apos;t broken down by rep - switch to the POS tab for rep figures.</div>
+                <div style={{ fontSize: 14.5, color: COLORS.mute, padding: "20px 0" }}>Online sales aren&apos;t broken down by rep - switch to the POS tab for rep figures.</div>
               )
             )}
 

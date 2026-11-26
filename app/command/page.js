@@ -676,7 +676,7 @@ export default function CommandCenter() {
 
                   <section className={s.card}>
                     <div className={s.cardHead}>
-                      <Title icon="hourglass">Next up{overdue > 0 && <span className={s.accentNum} style={{ fontSize: 13, marginLeft: 8 }}>{overdue} overdue</span>}</Title>
+                      <Title icon="hourglass">Next up{overdue > 0 && <span className={s.accentNum} style={{ fontSize: 14.5, marginLeft: 8 }}>{overdue} overdue</span>}</Title>
                       <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => go("pipeline")}>All work</button>
                     </div>
                     {upcomingAll.length === 0 && <div className={s.empty}>All clear</div>}
@@ -1539,13 +1539,13 @@ function EventsModal({ ev, onClose }) {
                               <td style={{ minWidth: 190 }}>
                                 <div style={{ fontWeight: 500 }}>{e.name || "-"}{spamIds.has(e.id) && <span className={`${s.pill} ${s.pillGrey}`} style={{ marginLeft: 8 }}>Likely spam</span>}</div>
                                 {e.business && <div className={s.rowMeta} style={{ marginTop: 2 }}>{e.business}</div>}
-                                {e.email && <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ fontSize: 12, color: "var(--ink2)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3, wordBreak: "break-all" }}>{e.email}</a>}
+                                {e.email && <a href={`mailto:${e.email}`} onClick={(x) => x.stopPropagation()} style={{ fontSize: 13.5, color: "var(--ink2)", textDecoration: "underline", textDecorationColor: "rgba(20,22,20,.3)", textUnderlineOffset: 3, wordBreak: "break-all" }}>{e.email}</a>}
                               </td>
                               <td style={{ minWidth: 130 }}>{e.form}</td>
                               <td className={s.hideSm} style={{ whiteSpace: "nowrap" }}>{g ? g.page : "-"}</td>
                               <td className={s.hideSm}>{g ? g.source : "-"}</td>
                               <td className={s.hideSm} style={{ whiteSpace: "nowrap" }}>{g ? [g.city !== "(not set)" ? g.city : "", cap(g.device)].filter(Boolean).join(", ") : "-"}</td>
-                              <td className={s.hideSm} style={{ fontSize: 12, color: "var(--ink2)" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
+                              <td className={s.hideSm} style={{ fontSize: 13.5, color: "var(--ink2)" }}>{e.to}{e.cc ? `, cc ${e.cc}` : ""}</td>
                             </tr>
                             {open && (
                               <tr><td colSpan={7} style={{ paddingTop: 0 }}>
@@ -1734,7 +1734,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
                       {site === "all" && <td className={s.hideSm}><span className={s.siteTag}>{siteName(x.site)}</span></td>}
                       {AI_ENGINES.filter(([id]) => id !== "copilot").map(([id, n]) => {
                         const r = x.engines?.[id]; const c = engCell(r);
-                        return <td key={id}><button type="button" className={`${s.pill} ${c.cls}`} style={{ border: 0, cursor: r?.status === "ok" ? "pointer" : "default", font: "inherit", fontSize: 11 }} onClick={() => r?.status === "ok" && setOpen({ q: x.q, site: x.site, engine: n, ...r })}>{c.t}</button>{r?.staleNelson && <span className={`${s.pill} ${s.pillAccent}`} style={{ marginLeft: 4 }}>Nelson</span>}</td>;
+                        return <td key={id}><button type="button" className={`${s.pill} ${c.cls}`} style={{ border: 0, cursor: r?.status === "ok" ? "pointer" : "default", font: "inherit", fontSize: 12.5 }} onClick={() => r?.status === "ok" && setOpen({ q: x.q, site: x.site, engine: n, ...r })}>{c.t}</button>{r?.staleNelson && <span className={`${s.pill} ${s.pillAccent}`} style={{ marginLeft: 4 }}>Nelson</span>}</td>;
                       })}
                     </tr>
                   ))}</tbody>
@@ -2304,7 +2304,7 @@ function WeeklySummary() {
           {!d.watch.length ? <div className={s.empty}>No salesperson is 2 points or more under their usual margin</div> : d.watch.slice(0, 8).map((w) => (
             <div key={`${w.business}|${w.rep}|${w.month}`} className={s.row}>
               <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{w.rep}</div><div className={s.rowMeta}>{w.business} · {w.month}{w.through ? " so far" : ""} · {money(w.sales)}</div></div>
-              <span style={{ color: "var(--orange)", fontSize: 13, whiteSpace: "nowrap" }}>{pctT(w.margin)} <span className={s.rowMeta}>vs {pctT(w.usual)}</span></span>
+              <span style={{ color: "var(--orange)", fontSize: 14.5, whiteSpace: "nowrap" }}>{pctT(w.margin)} <span className={s.rowMeta}>vs {pctT(w.usual)}</span></span>
             </div>
           ))}
         </div>
@@ -2319,7 +2319,7 @@ function WeeklySummary() {
           ) : <div className={s.empty}>Not available</div>}
         </div>
       </div>
-      {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 13, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{d.text}</pre>}
+      {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 14.5, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{d.text}</pre>}
     </section>
   );
 }

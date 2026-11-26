@@ -8,18 +8,19 @@ import { Icon } from "@/app/design/icons";
 
 const cacheGet = (k, maxMs) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v && Date.now() - v.t < maxMs ? v.d : null; } catch { return null; } };
 const cacheSet = (k, d) => { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), d })); } catch { /* private window */ } };
-const dateBox = { font: "inherit", fontSize: 12.5, padding: "7px 10px", borderRadius: 10, border: "1px solid rgba(30,25,15,0.12)", background: "#fff", color: "var(--ink)" };
+const dateBox = { font: "inherit", fontSize: 14, padding: "7px 10px", borderRadius: 10, border: "1px solid rgba(30,25,15,0.12)", background: "#fff", color: "var(--ink)" };
 const pctTxt = (v) => (v === null || v === undefined ? "-" : `${v}%`);
 const pts = (v) => (v === null || v === undefined || v === 0 ? "-" : `${v > 0 ? "" : "+"}${(-v).toFixed(1)} pts`);   // what it does to the company margin
 
 /** month: "YYYY-MM" the dashboard has selected; fy: the financial year (April start). */
-export default function MarginMix({ month, fy, company = 4 }) {
+export default function MarginMix({ month, fy, company = 4, range = null }) {
   const [mode, setMode] = useState("month");
   // Chosen dates are kept in this browser
   const [pick, setPick] = useState(() => { try { return JSON.parse(localStorage.getItem("wdd-mix-range-v1") || "null") || { from: "", to: "" }; } catch { return { from: "", to: "" }; } });
   useEffect(() => { try { localStorage.setItem("wdd-mix-range-v1", JSON.stringify(pick)); } catch { /* private window */ } }, [pick]);
   const rangeOk = pick.from && pick.to && pick.from <= pick.to;
-  const period = mode === "month" ? month : mode === "fy" ? `fy:${fy}` : rangeOk ? `${pick.from}:${pick.to}` : null;
+  // The dashboard's Chosen dates win: the panel then shows exactly the period at the top of the page
+  const period = range ? `${range.from}:${range.to}` : mode === "month" ? month : mode === "fy" ? `fy:${fy}` : rangeOk ? `${pick.from}:${pick.to}` : null;
   const ck = `wdd-mix-v2:${company}:${period}`;
   const [d, setD] = useState(() => (typeof window !== "undefined" ? cacheGet(ck, 15 * 60000) : null));
   const [err, setErr] = useState("");
@@ -42,12 +43,12 @@ export default function MarginMix({ month, fy, company = 4 }) {
   return (
     <Card style={{ marginTop: 16 }} aria-label="What sets the margin">
       <CardHead icon="percent" title="What sets the margin">
-        <div className={u.seg} role="group" aria-label="Period">
+        {!range && <div className={u.seg} role="group" aria-label="Period">
           <button type="button" className={mode === "month" ? u.segOn : ""} aria-pressed={mode === "month"} onClick={() => setMode("month")}>Selected month</button>
           <button type="button" className={mode === "fy" ? u.segOn : ""} aria-pressed={mode === "fy"} onClick={() => setMode("fy")}>Year so far</button>
           <button type="button" className={mode === "range" ? u.segOn : ""} aria-pressed={mode === "range"} onClick={() => setMode("range")}>Chosen dates</button>
-        </div>
-        {mode === "range" && (
+        </div>}
+        {!range && mode === "range" && (
           <div style={{ display: "flex", gap: 6, alignItems: "center" }} role="group" aria-label="Chosen dates">
             <input type="date" value={pick.from} max={pick.to || undefined} aria-label="From" onChange={(e) => setPick((p) => ({ ...p, from: e.target.value }))} style={dateBox} />
             <span className={u.was}>to</span>
@@ -57,7 +58,7 @@ export default function MarginMix({ month, fy, company = 4 }) {
         {d && <Range>{dLong(d.from)} to {dLong(d.to)}</Range>}
       </CardHead>
       {err && !d && <div className={u.empty}>Could not read Odoo: {err}</div>}
-      {mode === "range" && !rangeOk && <div className={u.empty}>Pick a start and end date</div>}
+      {!range && mode === "range" && !rangeOk && <div className={u.empty}>Pick a start and end date</div>}
       {!d && !err && period && <Skeleton height={220} />}
       {d && (
         <>

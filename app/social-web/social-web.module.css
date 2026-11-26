@@ -2,7 +2,7 @@
 .page { min-height: 100vh; min-height: 100dvh; background: var(--page); color: var(--ink); padding: clamp(16px, 2.4vw, 32px) 16px 40px; box-sizing: border-box; overflow-x: hidden; }
 .wrap { max-width: 1240px; margin: 0 auto; min-width: 0; }
 .head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 4px 4px 8px; }
-.crumb { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mute); text-decoration: none; }
+.crumb { display: inline-flex; align-items: center; gap: 6px; font-size: 14.5px; color: var(--mute); text-decoration: none; }
 .crumb:hover { color: var(--ink); }
 .slash { color: var(--mute); opacity: .5; }
 .h1 { display: flex; align-items: center; gap: 12px; font-size: 32px; font-weight: 300; letter-spacing: -0.02em; margin: 0; line-height: 1.15; }
@@ -11,8 +11,8 @@
 .section { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 300; letter-spacing: -0.01em; margin: 30px 4px 12px; }
 .sectionChip { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: rgba(20,22,20,.05); color: var(--ink); }
 .stack { display: grid; gap: 14px; min-width: 0; }
-.warn { display: flex; align-items: center; gap: 8px; color: var(--orange); font-size: 13.5px; }
-.ok { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; }
+.warn { display: flex; align-items: center; gap: 8px; color: var(--orange); font-size: 15px; }
+.ok { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14.5px; }
 .siteLink { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 .siteLink:hover { text-decoration: underline; }
 .block { margin-top: 24px; }
@@ -21,20 +21,20 @@
 .plain th { cursor: default; }
 .plain td { vertical-align: top; }
 .nameCell { max-width: 280px; overflow-wrap: anywhere; }
-.small { color: var(--mute); font-size: 12px; margin-top: 2px; }
+.small { color: var(--mute); font-size: 13.5px; margin-top: 2px; }
 .chg { margin-top: 2px; }
 .acctLink { color: var(--ink); font-weight: 500; text-decoration: none; }
 .acctLink:hover { text-decoration: underline; }
 .posts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; margin-top: 14px; }
 .post { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; padding: 12px 2px; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
 .post:last-child { border-bottom: 0; }
-.postText { font-size: 13.5px; overflow-wrap: anywhere; margin: 3px 0; }
-.postMeta { font-size: 11.5px; color: var(--mute); }
-.postStats { font-size: 12px; color: var(--ink2); }
+.postText { font-size: 15px; overflow-wrap: anywhere; margin: 3px 0; }
+.postMeta { font-size: 13px; color: var(--mute); }
+.postStats { font-size: 13.5px; color: var(--ink2); }
 .clickRow { cursor: pointer; }
 .clickRow:hover td { background: rgba(255,255,255,.6); }
 .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; align-items: end; margin-top: 18px; }
-.field { display: grid; gap: 6px; font-size: 12px; color: var(--ink2); min-width: 0; }
+.field { display: grid; gap: 6px; font-size: 13.5px; color: var(--ink2); min-width: 0; }
 .field input, .field select { font: inherit; font-size: 14px; padding: 11px 13px; border-radius: 13px; border: 1px solid var(--line); background: #fff; color: var(--ink); width: 100%; box-sizing: border-box; min-width: 0; }
 .field input:focus, .field select:focus { outline: none; border-color: var(--ink); }
 .save { justify-content: center; padding: 11px 16px; }
