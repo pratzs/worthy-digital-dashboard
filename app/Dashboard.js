@@ -1076,9 +1076,27 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
    projection from last year's shape, not a budget. */
 /* Worthy Products only: sales to the sister companies (Dutch Rusk, Worthy Oceania), kept out of every figure above and
    reconciled back to everything invoiced. Same basis as the Sunday email and the chat (docs/SALES-BASIS.md). */
+const dateInputStyle = { font: "inherit", fontSize: 12.5, padding: "6px 9px", borderRadius: 10, border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.ink };
 const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Products" }) => {
   // Margin to two decimals from the figures themselves, so it reads exactly like the Sunday email.
   const m2 = (costed, cost) => (costed > 0 && cost != null ? Math.round(((costed - cost) / costed) * 10000) / 100 : null);
+  /* Any dates (Worthy Products only, management only: /api/sister-sales). The chosen dates are kept in this browser. */
+  const canPick = companyName === "Worthy Products";
+  const RKEY = "wdd-sister-range-v1";
+  const [pick, setPick] = useState(() => { try { return JSON.parse(localStorage.getItem(RKEY) || "null") || { from: "", to: "" }; } catch { return { from: "", to: "" }; } });
+  const [picked, setPicked] = useState({ state: "idle" });
+  useEffect(() => {
+    try { localStorage.setItem(RKEY, JSON.stringify(pick)); } catch { /* private window */ }
+    if (!canPick || !pick.from || !pick.to) { setPicked({ state: "idle" }); return; }
+    if (pick.from > pick.to) { setPicked({ state: "error", error: "Start date is after the end date" }); return; }
+    let stop = false;
+    setPicked({ state: "loading" });
+    fetch(`/api/sister-sales?from=${pick.from}&to=${pick.to}`, { cache: "no-store" })
+      .then(async (r) => { if (r.status === 401 || r.status === 403) return { hidden: true }; const j = await r.json(); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; })
+      .then((j) => { if (!stop) setPicked(j.hidden ? { state: "hidden" } : { state: "ok", d: j }); })
+      .catch((e) => { if (!stop) setPicked({ state: "error", error: String(e.message || e) }); });
+    return () => { stop = true; };
+  }, [pick.from, pick.to, canPick]);
   if (!cur?.sisterSales) return null;
   const month = [...(cur.months || [])].reverse().find((m) => m.started && m.sisters);
   const cols = [
@@ -1086,6 +1104,14 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
     month ? { label: "Month to date", range: `${fmtDay(`${month.key}-01`)} to ${fmtDay(month.through)}`, s: month.sisters, wp: { sales: month.revenue, other: month.otherInvoicedLines, margin: m2(month.costedRevenue, month.cost) ?? month.marginPct, cost: month.cost, costed: month.costedRevenue } } : null,
     { label: "Financial year to date", range: `${fmtDay(cur.range?.start)} to ${fmtDay(cur.range?.end)}`, s: cur.sisterSales, wp: { sales: cur.totals?.revenue, other: cur.sisterSales.otherInvoicedLines, margin: m2(cur.totals?.costedRevenue, cur.totals?.cost) ?? cur.totals?.marginPct, cost: cur.totals?.cost, costed: cur.totals?.costedRevenue } },
   ].filter(Boolean);
+  if (canPick && picked.state === "ok") {
+    const d = picked.d, dr = d.sisterCompanies.dutchRusk, oc = d.sisterCompanies.worthyOceania, wp = d.worthyProducts;
+    cols.push({ label: "Chosen dates", range: `${fmtDay(d.period.from)} to ${fmtDay(d.period.to)}`, chosen: true,
+      s: { dutchRusk: { sales: dr.sales, marginPct: dr.marginPct }, oceania: { sales: oc.sales, marginPct: oc.marginPct },
+           total: { sales: d.sisterCompanies.total.sales, marginPct: d.sisterCompanies.total.marginPct,
+                    costedSales: dr.grossProfit + dr.cost + oc.grossProfit + oc.cost, cost: dr.cost + oc.cost } },
+      wp: { sales: wp.sales, margin: wp.marginPct, cost: wp.cost, costed: wp.grossProfit + wp.cost } });
+  }
   const money = (v) => (v == null ? "-" : fmtExact(v, currency));
   const pctTxt = (v) => (v == null ? "-" : `${Number(v).toFixed(2)}%`);
   const th = { ...thStyle("right") };
@@ -1102,12 +1128,24 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
       return c.wp.costed != null && costed > 0 ? Math.round(((costed - cost) / costed) * 10000) / 100 : null;
     }, true],
   ];
-  // The share of all product sales, financial year to date (the last column): this company first, then each sister.
-  const fy = cols[cols.length - 1];
+  // The share of all product sales, financial year to date: this company first, then each sister.
+  const fy = cols.find((c) => c.label === "Financial year to date");
   const parts = [{ name: companyName, value: fy.wp.sales ?? 0 }, ...sisterKeys.map((k) => ({ name: cur.sisterSales[k].name, value: fy.s[k]?.sales ?? 0 }))];
   return (
     <Card style={{ marginBottom: 14 }}>
-      <CardHead icon="building" title="Sister company sales"><RangeTag text={fy.range} /></CardHead>
+      <CardHead icon="building" title="Sister company sales">
+        {canPick && picked.state !== "hidden" && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }} role="group" aria-label="Chosen dates">
+            <input type="date" value={pick.from} max={pick.to || undefined} aria-label="From" onChange={(e) => setPick((p) => ({ ...p, from: e.target.value }))} style={dateInputStyle} />
+            <span style={{ color: COLORS.mute, fontSize: 12 }}>to</span>
+            <input type="date" value={pick.to} min={pick.from || undefined} aria-label="To" onChange={(e) => setPick((p) => ({ ...p, to: e.target.value }))} style={dateInputStyle} />
+            {(pick.from || pick.to) && <button type="button" onClick={() => setPick({ from: "", to: "" })} aria-label="Clear the chosen dates" title="Clear" style={{ ...dateInputStyle, cursor: "pointer", display: "inline-flex", alignItems: "center" }}><Icon n="close" size={12} /></button>}
+            {picked.state === "loading" && <span style={{ color: COLORS.mute, fontSize: 12 }}>Reading Odoo</span>}
+            {picked.state === "error" && <span style={{ color: ORANGE, fontSize: 12 }}>{picked.error}</span>}
+          </div>
+        )}
+        <RangeTag text={fy.range} />
+      </CardHead>
       <Mini icon="pie">Share of all product sales, financial year to date</Mini>
       <ShareBar parts={parts} fmt={moneyShort} />
       <div style={{ overflowX: "auto", marginTop: 20 }}>
@@ -1116,7 +1154,7 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
             <tr>
               <th style={{ ...th, textAlign: "left", borderBottom: 0 }}>Company</th>
               {cols.map((c) => (
-                <th key={c.label} colSpan={2} style={{ ...th, borderBottom: 0, verticalAlign: "bottom" }}>
+                <th key={c.label} colSpan={2} style={{ ...th, borderBottom: 0, verticalAlign: "bottom", ...(c.chosen ? { color: INK } : {}) }}>
                   <div>{c.label}</div>
                   <div style={{ marginTop: 6 }}><RangeTag text={c.range} /></div>
                 </th>
