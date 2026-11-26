@@ -1268,14 +1268,34 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
   const [allTargets, setAllTargets] = useState([]);
   useEffect(() => { fetch("/api/targets", { cache: "no-store" }).then(r => (r.ok ? r.json() : { targets: [] })).then(j => setAllTargets(Array.isArray(j.targets) ? j.targets : [])).catch(() => setAllTargets([])); }, []);
   const targets = allTargets.filter(t => t.fy === year && (t.company || "north") === company);
+  /* Chosen dates (27 Nov 2026): the target is the budget for THOSE dates (each month's budget, pro-rated to the days
+     chosen, from whichever financial year the month belongs to), never the whole year's. */
+  const custom = payload?.custom || null;
+  const dayN = (iso) => Date.parse(`${iso}T00:00:00Z`) / 86400000;
+  const budgetOf = (t, key) => {
+    if (!custom) return t.monthly[key] || 0;
+    const own = allTargets.find(x => x.rep === t.rep && (x.company || "north") === company && x.monthly && x.monthly[key] != null);
+    return own ? own.monthly[key] || 0 : 0;
+  };
   const rows = !payload ? [] : targets.map(t => {
     const rep = (payload.reps || []).find(r => r.name === t.rep);
-    const fyTarget = fyTargetOf(t);
+    let fyTarget = fyTargetOf(t);
     let pace = 0, monthTarget = 0, monthSales = 0, monthLabel = "";
+    if (custom) {
+      let period = 0;
+      for (const m of payload.months || []) {
+        const first = `${m.key}-01` < custom.from ? custom.from : `${m.key}-01`;
+        const mEnd = `${m.key}-${String(m.daysInMonth).padStart(2, "0")}`;
+        const last = mEnd > custom.to ? custom.to : mEnd;
+        period += budgetOf(t, m.key) * ((dayN(last) - dayN(first) + 1) / (m.daysInMonth || 30));
+      }
+      fyTarget = period;
+    }
     for (const m of payload.months || []) {
-      const bud = t.monthly[m.key] || 0;
+      const bud = budgetOf(t, m.key);
       if (!m.started) continue;
-      const frac = m.complete ? 1 : Math.min(1, (Number(String(m.through).slice(8, 10)) || 0) / (m.daysInMonth || 30));
+      const startDay = custom && `${m.key}-01` < custom.from ? Number(custom.from.slice(8, 10)) : 1;
+      const frac = m.complete && !custom ? 1 : Math.min(1, Math.max(0, ((Number(String(m.through).slice(8, 10)) || 0) - startDay + 1) / (m.daysInMonth || 30)));
       pace += bud * frac;
       if (!m.complete) {
         monthTarget = bud; monthLabel = m.label;
@@ -1288,7 +1308,7 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
       remaining: Math.max(0, fyTarget - ytd), vsPace: ytd - pace,
       monthLabel, monthTarget, monthSales,
       gpPct: rep?.marginPct ?? null, targetGpPct: t.targetGpPct,
-      gpYtd: rep?.grossProfit ?? null, gpTarget: t.sheetGp,
+      gpYtd: rep?.grossProfit ?? null, gpTarget: custom && fyTargetOf(t) ? t.sheetGp * (fyTarget / fyTargetOf(t)) : t.sheetGp,
     };
   });
   /* Everyone else who sold this year, so the table lists every salesperson (26 Nov 2026): their sales and margin,
@@ -1323,13 +1343,13 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
   );
   return (
     <AdvancedTable icon="target" title="Sales vs Target"
-      subtitle="Financial year targets (April to March), ex GST. Sales are the same figures as Sales by Rep." range={range}
+      subtitle={custom ? "Each month's budget, pro-rated to the dates chosen, ex GST. Sales are the same figures as Sales by Rep." : "Financial year targets (April to March), ex GST. Sales are the same figures as Sales by Rep."} range={range}
       loading={!payload} currency="NZD" data={allRows} visual={visual}
       columns={[
         { key: "rep", label: "Rep", color: INK },
-        { key: "fyTarget", label: "FY Target", align: "right", color: COLORS.ink2, format: v => (v == null ? <span style={{ color: COLORS.mute }}>No target</span> : KPI_CENTS(v)) },
-        { key: "ytd", label: "FY Sales to Date", align: "right", color: INK, format: v => <span style={{ fontWeight: 500 }}>{KPI_CENTS(v)}</span> },
-        { key: "pct", label: "% of FY Target", align: "left", format: (v, _cur, row) => v == null ? "-" : (
+        { key: "fyTarget", label: custom ? "Target, these dates" : "FY Target", align: "right", color: COLORS.ink2, format: v => (v == null ? <span style={{ color: COLORS.mute }}>No target</span> : KPI_CENTS(v)) },
+        { key: "ytd", label: custom ? "Sales, these dates" : "FY Sales to Date", align: "right", color: INK, format: v => <span style={{ fontWeight: 500 }}>{KPI_CENTS(v)}</span> },
+        { key: "pct", label: custom ? "% of target" : "% of FY Target", align: "left", format: (v, _cur, row) => v == null ? "-" : (
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
             <div style={{ flex: 1, height: 6, borderRadius: 999, background: inkA(0.07), overflow: "hidden" }}>
               <div style={{ width: `${Math.min(100, Math.max(0, v))}%`, height: "100%", borderRadius: 999, background: row.vsPace < 0 ? ORANGE : INK, opacity: row.vsPace < 0 ? 1 : 0.8 }} />
@@ -1344,7 +1364,7 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
         { key: "gpPct", label: "GP % (target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
           : row.targetGpPct == null ? <span style={{ fontWeight: 500, color: v < 0 ? ORANGE : INK }}>{v.toFixed(1)}%</span>
           : <span><span style={{ fontWeight: 500, color: v >= row.targetGpPct ? INK : ORANGE }}>{v.toFixed(1)}%</span> <span style={{ color: COLORS.mute }}>({row.targetGpPct.toFixed(1)}%)</span></span> },
-        { key: "gpYtd", label: "GP $ to Date (FY target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
+        { key: "gpYtd", label: custom ? "GP $ (target)" : "GP $ to Date (FY target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
           : row.gpTarget == null ? KPI_CENTS(v) : <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>({KPI_CENTS(row.gpTarget)})</span></span> },
       ]}
     />
