@@ -28,7 +28,7 @@ export async function OPTIONS(request) {
 
 export async function GET(request) {
   try {
-    const { payload } = await readWeeks('pub', 'sell-with-us-v1', () => computeSellWithUsStats(),
+    const { payload } = await readWeeks('pub', 'sell-with-us-v2', () => computeSellWithUsStats(),
       { freshMs: 24 * 60 * 60 * 1000, wait: 2500 });
     const { ok, window, shown, served, generatedAt, stale } = payload;
     return NextResponse.json({ ok, window, shown, served, generatedAt, ...(stale ? { stale: true } : {}) }, {
