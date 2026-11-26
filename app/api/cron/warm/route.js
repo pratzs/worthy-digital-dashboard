@@ -3,6 +3,7 @@ import { nzFinancialYear } from '@/lib/ostendo';
 import { readFY, slotOf } from '@/lib/odooFyCache';
 import { readDebtors } from '@/lib/odooDebtorsCache';
 import { readSouth } from '@/lib/ostendoCache';
+import { marginMix, fyMonths } from '@/lib/marginMix';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -55,6 +56,14 @@ export async function GET() {
       try { await readSouth(name, qs, { slot }); out.push({ slot: slot - now, south: name + qs, ms: Date.now() - t }); }
       catch (e) { out.push({ slot: slot - now, south: name + qs, ms: Date.now() - t, error: String(e.message).slice(0, 80) }); }
     }
+  }
+  // What sets the margin (North): each month of the year, one at a time, newest first. This month is kept fresh (15 minutes),
+  // a closed month is saved for 7 days, so a call usually costs Odoo one month's read or nothing.
+  for (const ym of fyMonths(fy).reverse()) {
+    if (Date.now() - began > BUDGET_MS) { out.push({ marginMix: ym, skipped: 'time budget used, next call continues' }); continue; }
+    const t = Date.now();
+    try { await marginMix(ym); out.push({ marginMix: ym, ms: Date.now() - t }); }
+    catch (e) { out.push({ marginMix: ym, ms: Date.now() - t, error: String(e.message).slice(0, 80) }); }
   }
   return NextResponse.json({
     ok: out.every((o) => !o.error), done: out.filter((o) => o.ms != null && !o.error).length,

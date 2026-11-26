@@ -1,6 +1,7 @@
 "use client";
 
 import SiteNav from "@/app/design/SiteNav";
+import MarginMix from "@/app/design/MarginMix";
 import { fyTargetOf } from "@/lib/repTargetMath";
 import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
@@ -592,7 +593,7 @@ const DebtorsOdoo = ({ d, currency = "NZD" }) => {
       )}
 
       <Card style={card}>
-        {title("users", "By Sales Rep", d.system === "Ostendo" ? "Each customer sits with the salesperson assigned to them in Ostendo" : "Each customer sits with the salesperson assigned to them in Odoo. Everyone else is Direct", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
+        {title("users", "By Sales Rep", d.system === "Ostendo" ? "Each customer sits with the salesperson assigned to them in Ostendo" : "Each customer sits with the salesperson assigned to them in Odoo", <RangeTag text={`As at ${fmtDay(d.asOf)}`} />)}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
@@ -1472,7 +1473,7 @@ const SalesRepBreakdown = ({ weekRangeOf = () => "", salespeople, salespeopleMon
               <tr>
                 <th style={{ ...headStyle, textAlign: "left" }}>Rep</th>
                 {displayMonths.map(m => <th key={m} style={headStyle}>{m}</th>)}
-                <th style={{ ...headStyle, color: INK }}>Total Rev</th>
+                <th style={{ ...headStyle, color: INK }}>Year so far</th>
                 {hasMargin && <th style={headStyle}>Gross Profit</th>}
                 {hasMargin && <th style={headStyle}>Margin</th>}
               </tr>
@@ -3611,6 +3612,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   T={T}
                   exact={exactAmounts}
                 />
+                {activeStore.id === "worthy" && (
+                  <MarginMix fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+                )}
               </>
             )}
 
