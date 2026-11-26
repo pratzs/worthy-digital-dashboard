@@ -3038,10 +3038,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
               if (!at || activeStore.id === "luxe" || section !== "overview") return null;
               const t = new Date(at).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
               // The last good copy (Odoo slow) or figures over 15 minutes old: say so in the accent, one line.
-              const old = fp.stale || (clock > 0 && clock - Date.parse(at) > 15 * 60000);
+              // Only figures over 15 minutes old are flagged: the copy refreshes every 5 minutes, so a younger one is normal.
+              const ageMin = clock > 0 ? (clock - Date.parse(at)) / 60000 : 0;
+              const old = ageMin > 15;
               return (<>
                 <span>· Odoo figures as of {t} NZ, refreshed every few minutes</span>
-                {old && <span style={{ color: "var(--orange)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon n="hourglass" size={12} />{fp.stale ? `Odoo is slow: figures from ${t}, updating` : `Figures from ${t}, over 15 minutes old`}</span>}
+                {old && <span style={{ color: "var(--orange)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon n="hourglass" size={12} />{fp.stale ? `Odoo is slow: figures from ${t}, updating` : `Figures from ${t}, over 15 minutes old, updating`}</span>}
               </>);
             })()}
           </div>
