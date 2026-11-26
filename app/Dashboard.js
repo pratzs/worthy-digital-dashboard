@@ -5,6 +5,7 @@ import MarginMix from "@/app/design/MarginMix";
 import ShortDated from "@/app/design/ShortDated";
 import StockStates from "@/app/design/StockStates";
 import CustomerMargin from "@/app/design/CustomerMargin";
+import WeeklySummary from "@/app/design/WeeklySummary";
 import { fyTargetOf } from "@/lib/repTargetMath";
 import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
@@ -3324,6 +3325,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
             })()}
           </Card>
         </div>
+
+        {/* Weekly summary for management, all three businesses (same card as the Command Center), 14px gap like its neighbours */}
+        {isMgmt && <WeeklySummary style={{ marginBottom: 14 }} />}
 
         {isMgmt && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && onFYView() && (() => {
           const cur = fyPayload(selectedYear);
