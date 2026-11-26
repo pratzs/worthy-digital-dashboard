@@ -1243,6 +1243,15 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
       gpYtd: rep?.grossProfit ?? null, gpTarget: t.sheetGp,
     };
   });
+  /* Everyone else who sold this year, so the table lists every salesperson (26 Nov 2026): their sales and margin,
+     with no target to measure against. */
+  const cur = (payload?.months || []).find(m => m.started && !m.complete);
+  const noTarget = !payload ? [] : (payload.reps || []).filter(r => r.revenue > 0 && !targets.some(t => t.rep === r.name)).map(r => ({
+    rep: r.name, fyTarget: null, ytd: r.revenue, pct: null, remaining: null, vsPace: null,
+    monthLabel: cur?.label || "", monthTarget: null, monthSales: r.months?.find(x => x.key === cur?.key)?.revenue || 0,
+    gpPct: r.marginPct ?? null, targetGpPct: null, gpYtd: r.grossProfit ?? null, gpTarget: null,
+  }));
+  const allRows = [...rows, ...noTarget];
   const range = payload?.range ? `${fmtDay(payload.range.start)} to ${fmtDay(payload.range.end)}` : null;
   // Progress to each rep's FY target. The fill is ink, or the accent when the rep is behind budget to date; the thin
   // mark is where the budget says they should be by now (sales less "vs budget to date").
@@ -1267,27 +1276,28 @@ const SalesVsTargetTable = ({ payload, company = "north" }) => {
   return (
     <AdvancedTable icon="target" title="Sales vs Target"
       subtitle="Financial year targets (April to March), ex GST. Sales are the same figures as Sales by Rep." range={range}
-      loading={!payload} currency="NZD" data={rows} visual={visual}
+      loading={!payload} currency="NZD" data={allRows} visual={visual}
       columns={[
         { key: "rep", label: "Rep", color: INK },
-        { key: "fyTarget", label: "FY Target", align: "right", color: COLORS.ink2, format: KPI_CENTS },
+        { key: "fyTarget", label: "FY Target", align: "right", color: COLORS.ink2, format: v => (v == null ? <span style={{ color: COLORS.mute }}>No target</span> : KPI_CENTS(v)) },
         { key: "ytd", label: "FY Sales to Date", align: "right", color: INK, format: v => <span style={{ fontWeight: 500 }}>{KPI_CENTS(v)}</span> },
-        { key: "pct", label: "% of FY Target", align: "left", format: (v, _cur, row) => (
+        { key: "pct", label: "% of FY Target", align: "left", format: (v, _cur, row) => v == null ? "-" : (
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 130 }}>
             <div style={{ flex: 1, height: 6, borderRadius: 999, background: inkA(0.07), overflow: "hidden" }}>
               <div style={{ width: `${Math.min(100, Math.max(0, v))}%`, height: "100%", borderRadius: 999, background: row.vsPace < 0 ? ORANGE : INK, opacity: row.vsPace < 0 ? 1 : 0.8 }} />
             </div>
             <span style={{ color: row.vsPace < 0 ? ORANGE : INK, fontWeight: 500, minWidth: 44, textAlign: "right" }}>{v.toFixed(1)}%</span>
           </div>) },
-        { key: "remaining", label: "Remaining", align: "right", color: COLORS.ink2, format: v => (v <= 0 ? "Target met" : KPI_CENTS(v)) },
-        { key: "vsPace", label: "vs Budget to Date", align: "right", format: v => (
+        { key: "remaining", label: "Remaining", align: "right", color: COLORS.ink2, format: v => (v == null ? "-" : v <= 0 ? "Target met" : KPI_CENTS(v)) },
+        { key: "vsPace", label: "vs Budget to Date", align: "right", format: v => v == null ? "-" : (
           <span className={`${ui.trend} ${v < 0 ? ui.trendDown : ""}`} style={{ fontSize: 12.5 }}><Icon n={v >= 0 ? "tri-up" : "tri-down"} size={8} />{v >= 0 ? "+" : "-"}{KPI_CENTS(Math.abs(v))}</span>) },
         { key: "monthSales", label: "This Month", align: "right", color: INK, format: (v, _cur, row) => row.monthLabel
-          ? <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>of {KPI_CENTS(row.monthTarget)}</span></span> : "-" },
+          ? (row.monthTarget == null ? KPI_CENTS(v) : <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>of {KPI_CENTS(row.monthTarget)}</span></span>) : "-" },
         { key: "gpPct", label: "GP % (target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
+          : row.targetGpPct == null ? <span style={{ fontWeight: 500, color: v < 0 ? ORANGE : INK }}>{v.toFixed(1)}%</span>
           : <span><span style={{ fontWeight: 500, color: v >= row.targetGpPct ? INK : ORANGE }}>{v.toFixed(1)}%</span> <span style={{ color: COLORS.mute }}>({row.targetGpPct.toFixed(1)}%)</span></span> },
         { key: "gpYtd", label: "GP $ to Date (FY target)", align: "right", color: INK, format: (v, _cur, row) => v == null ? "-"
-          : <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>({KPI_CENTS(row.gpTarget)})</span></span> },
+          : row.gpTarget == null ? KPI_CENTS(v) : <span>{KPI_CENTS(v)} <span style={{ color: COLORS.mute }}>({KPI_CENTS(row.gpTarget)})</span></span> },
       ]}
     />
   );
@@ -3556,6 +3566,9 @@ export default function EcommerceDashboard({ section = "overview" }) {
               T={T}
               exact={exactAmounts}
             />
+            {activeStore.id === "worthy" && (
+              <MarginMix fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+            )}
           </div>
         )}
         {section === "overview" && activeStore.id === "worthy" && channelTab !== "odoo" && (
