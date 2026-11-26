@@ -1231,7 +1231,7 @@ const ForecastCard = ({ cur, prior, currency, fyLabel }) => {
           </div>
           {/* Only what the bars above do not already show (27 Nov 2026: the four figures were printed twice) */}
           <div>
-            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 24 }}>{money(sameSpan)}</div><div className={ui.statLabel}>Same days last year, {fmtDay(cur.range.start)} to {fmtDay(cur.range.end)}</div><div style={{ marginTop: 6 }}>{onLast(pace)}</div></div>
+            <div className={ui.stat}><div className={ui.statNum} style={{ fontSize: 24 }}>{money(sameSpan)}</div><div className={ui.statLabel}>Same days last year, {fmtDay(`${Number(cur.range.start.slice(0, 4)) - 1}${cur.range.start.slice(4)}`)} to {fmtDay(`${Number(cur.range.end.slice(0, 4)) - 1}${cur.range.end.slice(4)}`)}</div></div>
           </div>
         </div>
       )}
