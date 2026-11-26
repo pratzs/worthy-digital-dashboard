@@ -1180,8 +1180,11 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
   const spendOf = (ym) => spend.filter((x) => x.month === ym).reduce((a, x) => a + (Number(x.amount) || 0), 0) + autoRows.filter((r) => r.month === ym).reduce((a, r) => a + r.amount, 0);
   const months = [...new Set([...spend.map((x) => x.month).filter(Boolean), ...autoRows.map((r) => r.month)])].sort().reverse().slice(0, 6);
   const byChannel = (() => { const m = new Map(); autoRows.filter((r) => r.month === months[0]).forEach((r) => m.set(r.channel, (m.get(r.channel) || 0) + r.amount)); return [...m.entries()]; })();
-  const revByMonth = (ym) => daily.filter((d) => d.date.startsWith(ym)).reduce((a, d) => a + d.revenue, 0);
-  const leadsByMonth = (ym) => daily.filter((d) => d.date.startsWith(ym)).reduce((a, d) => a + d.conversions, 0);
+  /* Only what the ads themselves delivered (27 Nov 2026). The card used to divide ALL online sales by ad spend, which
+     read as a $15 boosted post earning 45,470 times its cost. Visits and sales here are the ad platform's own counts. */
+  const adVisits = (ym) => { const rs = autoRows.filter((r) => r.month === ym && r.visits != null); return rs.length ? rs.reduce((a, r) => a + r.visits, 0) : null; };
+  const adSpendWithVisits = (ym) => autoRows.filter((r) => r.month === ym && r.visits != null).reduce((a, r) => a + r.amount, 0);
+  const adSales = (ym) => { const rs = autoRows.filter((r) => r.month === ym && r.sales != null); return rs.length ? rs.reduce((a, r) => a + r.sales, 0) : null; };
   const channels = (() => {
     const m = new Map();
     pick(data?.traffic, site).forEach((t2) => (t2.channels || []).forEach((ch) => { const o = m.get(ch.name) || { name: ch.name, sessions: 0 }; o.sessions += ch.sessions; m.set(ch.name, o); }));
@@ -1234,7 +1237,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
       <div className={s.grid2} style={{ marginTop: 14 }}>
         <section className={s.card}>
           <div className={s.cardHead}>
-            <Title icon="wallet">Spend and return</Title>
+            <Title icon="wallet">Ad spend and results</Title>
             <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("spend", { month: today.slice(0, 7) })}><Icon n="plus" size={13} />Add spend</button>
           </div>
           <div className={s.rowMeta} style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1246,13 +1249,19 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
           {months.length > 0 && (
             <div className={s.tableWrap}>
               <table className={s.table}>
-                <thead><tr><th>Month</th><th className={s.num}>Spend</th><th className={s.num}>{lead ? "Enquiries" : "Online sales"}</th><th className={s.num}>{lead ? "Cost each" : "Return"}</th></tr></thead>
+                <thead><tr><th>Month</th><th className={s.num}>Spend</th><th className={s.num}>Visits from ads</th><th className={s.num}>Cost a visit</th><th className={s.num}>Sales from ads</th></tr></thead>
                 <tbody>
                   {months.map((ym) => {
-                    const sp = spendOf(ym);
-                    if (lead) { const ld = leadsByMonth(ym); return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{n0(ld)}</td><td className={s.num}>{ld ? money(sp / ld) : "-"}</td></tr>; }
-                    const rv = revByMonth(ym);
-                    return <tr key={ym}><td>{monthLabel(ym)}</td><td className={s.num}>{money(sp)}</td><td className={s.num}>{money(rv)}</td><td className={`${s.num} ${ym === months[0] ? s.accentNum : ""}`}>{sp ? `${(rv / sp).toFixed(1)}x` : "-"}</td></tr>;
+                    const sp = spendOf(ym), vis = adVisits(ym), sw = adSpendWithVisits(ym), sl = adSales(ym);
+                    return (
+                      <tr key={ym}>
+                        <td>{monthLabel(ym)}</td>
+                        <td className={s.num}>{money(sp)}</td>
+                        <td className={s.num}>{vis != null ? n0(vis) : "-"}</td>
+                        <td className={s.num}>{vis ? `$${(sw / vis).toFixed(2)}` : "-"}</td>
+                        <td className={s.num}>{sl ? `${money(sl)} · ${(sl / sp).toFixed(1)}x` : "None tracked"}</td>
+                      </tr>
+                    );
                   })}
                 </tbody>
               </table>
