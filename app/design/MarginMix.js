@@ -8,19 +8,25 @@ import { Icon } from "@/app/design/icons";
 
 const cacheGet = (k, maxMs) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v && Date.now() - v.t < maxMs ? v.d : null; } catch { return null; } };
 const cacheSet = (k, d) => { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), d })); } catch { /* private window */ } };
+const dateBox = { font: "inherit", fontSize: 12.5, padding: "7px 10px", borderRadius: 10, border: "1px solid rgba(30,25,15,0.12)", background: "#fff", color: "var(--ink)" };
 const pctTxt = (v) => (v === null || v === undefined ? "-" : `${v}%`);
 const pts = (v) => (v === null || v === undefined || v === 0 ? "-" : `${v > 0 ? "" : "+"}${(-v).toFixed(1)} pts`);   // what it does to the company margin
 
 /** month: "YYYY-MM" the dashboard has selected; fy: the financial year (April start). */
 export default function MarginMix({ month, fy }) {
   const [mode, setMode] = useState("month");
-  const period = mode === "month" ? month : `fy:${fy}`;
+  // Chosen dates are kept in this browser
+  const [pick, setPick] = useState(() => { try { return JSON.parse(localStorage.getItem("wdd-mix-range-v1") || "null") || { from: "", to: "" }; } catch { return { from: "", to: "" }; } });
+  useEffect(() => { try { localStorage.setItem("wdd-mix-range-v1", JSON.stringify(pick)); } catch { /* private window */ } }, [pick]);
+  const rangeOk = pick.from && pick.to && pick.from <= pick.to;
+  const period = mode === "month" ? month : mode === "fy" ? `fy:${fy}` : rangeOk ? `${pick.from}:${pick.to}` : null;
   const ck = `wdd-mix-v1:${period}`;
   const [d, setD] = useState(() => (typeof window !== "undefined" ? cacheGet(ck, 15 * 60000) : null));
   const [err, setErr] = useState("");
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     let stop = false;
+    if (!period) { setD(null); setErr(""); return; }
     const cached = cacheGet(ck, 15 * 60000);
     setD(cached); setErr("");
     fetch(`/api/margin-mix?period=${encodeURIComponent(period)}`, { cache: "no-store" })
@@ -39,11 +45,20 @@ export default function MarginMix({ month, fy }) {
         <div className={u.seg} role="group" aria-label="Period">
           <button type="button" className={mode === "month" ? u.segOn : ""} aria-pressed={mode === "month"} onClick={() => setMode("month")}>Selected month</button>
           <button type="button" className={mode === "fy" ? u.segOn : ""} aria-pressed={mode === "fy"} onClick={() => setMode("fy")}>Year so far</button>
+          <button type="button" className={mode === "range" ? u.segOn : ""} aria-pressed={mode === "range"} onClick={() => setMode("range")}>Chosen dates</button>
         </div>
+        {mode === "range" && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }} role="group" aria-label="Chosen dates">
+            <input type="date" value={pick.from} max={pick.to || undefined} aria-label="From" onChange={(e) => setPick((p) => ({ ...p, from: e.target.value }))} style={dateBox} />
+            <span className={u.was}>to</span>
+            <input type="date" value={pick.to} min={pick.from || undefined} aria-label="To" onChange={(e) => setPick((p) => ({ ...p, to: e.target.value }))} style={dateBox} />
+          </div>
+        )}
         {d && <Range>{dLong(d.from)} to {dLong(d.to)}</Range>}
       </CardHead>
       {err && !d && <div className={u.empty}>Could not read Odoo: {err}</div>}
-      {!d && !err && <Skeleton height={220} />}
+      {mode === "range" && !rangeOk && <div className={u.empty}>Pick a start and end date</div>}
+      {!d && !err && period && <Skeleton height={220} />}
       {d && (
         <>
           {/* headline: same sales and cost as the top of the page */}
