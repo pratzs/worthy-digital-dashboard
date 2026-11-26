@@ -159,7 +159,7 @@ const KPICard = ({ label, value, growth, icon, sub, animated, currency = "NZD", 
         </div>
         <div className={ui.chip}><Icon n={icon} size={15} /></div>
       </div>
-      <div className={ui.kpiLabel}>{label} {value === null ? null : growth === null ? <span className={ui.was}>No prior yr</span> : <Delta value={growth} unit={growthUnit} />}</div>
+      <div className={ui.kpiLabel}>{label} {value === null ? null : growth === null ? <span className={ui.was}>No comparison</span> : <Delta value={growth} unit={growthUnit} />}</div>
       {compareText && <div className={ui.statLabel} style={{ marginTop: 8 }}>{compareText}</div>}
     </div>
   );
@@ -2866,7 +2866,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
     : (view === "yoy" ? gpMargin : null);
   const kpiGrowth    = customOn ? (fyPayload(selectedYear)?.totals?.growthPct ?? null)
                      : view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiRev, prevLatestRev) : null) : revG;
-  const kpiOrdGrowth = view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiOrd, prevLatestOrd) : null) : ordG;
+  const kpiOrdGrowth = customOn ? (() => { const t = fyPayload(selectedYear)?.totals; return t?.priorComparable !== false && t?.prior?.invoices > 0 ? calcGrowth(t.invoices, t.prior.invoices) : null; })()
+                     : view === "weekly" ? null : view === "monthly" ? (prevLoaded ? calcGrowth(kpiOrd, prevLatestOrd) : null) : ordG;
   const kpiAovGrowth = view === "weekly" ? null : view === "monthly" ? null : aovG;
 
   // Period-aware footer metrics
@@ -3241,7 +3242,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
             );
           })() : (
             <RangeTag text={
-              view === "yoy" && onFYView() && activeStore.id !== "luxe" && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete
+              customOn ? `${fmtDay(period.from)} to ${fmtDay(fyPayload(selectedYear)?.range?.end || period.to)} vs the same dates a year earlier`
+              : view === "yoy" && onFYView() && activeStore.id !== "luxe" && fyPayload(selectedYear)?.range && !fyPayload(selectedYear).range.complete
                 ? `FY${String(selectedYear).slice(2)} · 1 Apr to ${fmtDay(fyPayload(selectedYear).range.end)} vs same period FY${String(selectedYear - 1).slice(2)}`
               : view === "yoy" ? `${selectedYear} vs ${selectedYear - 1} · full year`
              : view === "monthly" && latestMonth ? `${latestMonth.month} ${activeStore.id === "luxe" && latestMonthIdx >= 9 ? selectedYear + 1 : selectedYear}`
