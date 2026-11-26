@@ -91,7 +91,8 @@ Still to do:
 9. Test the Purchasing (Kylie, Hari) and Business Development logins on production (needs the passwords typed by Pratham).
 12. Management chat cost (about US$0.30 a question): trim `get_financial_year` and `get_debtors` payloads.
 13. Rep budgets in the public repo (`lib/repTargets.js`): move to an environment value or the store.
-- Meta ad spend in the Command Center's Spend and return needs `ads_read` and the ad account on Worthydashboardreader (asked of Anu 26 Nov). Google Ads spend is read through Google Analytics (`lib/adSpend.js`) where an Ads account is linked.
+- Spend and return reads ad spend automatically (`lib/adSpend.js`). Meta needs `ads_read` and the ad account on Worthydashboardreader (asked of Anu 26 Nov). Google Ads is read from Google Analytics' ad cost, but on 26 Nov none of the three GA4 properties had a Google Ads link with cost: link the Google Ads account in each GA4 property (Admin > Product links > Google Ads links) and cost appears in the card.
+- worthy.nz Code Snippet #13 (bot spam) is created but switched off: Pratham to activate it in wp-admin > Snippets.
 
 ## History in short
 
