@@ -61,7 +61,7 @@ export default function ShortDated() {
                 <tbody>
                   {pg.shown.map((r) => (
                     <tr key={`${r.code}|${r.lot}`}>
-                      <td style={{ maxWidth: 300 }}>{r.product}<div className={u.was}>Lot {r.lot}{r.inClearance ? " · in Clearance" : ""}{r.reserved > 0 ? ` · ${r.reserved} reserved` : ""}</div></td>
+                      <td style={{ maxWidth: 300 }}>{r.product}<div className={u.was}>Lot {r.lot}{r.inClearance ? (r.locations.some((n) => /damaged/i.test(n)) ? " · in Damaged Goods" : " · in Clearance") : ""}{r.reserved > 0 ? ` · ${r.reserved} reserved` : ""}</div></td>
                       <td style={{ whiteSpace: "nowrap", color: r.daysLeft <= 30 ? "var(--orange)" : undefined }}>{dLong(r.bestBefore)}<div className={u.was}>{r.expired ? "Past date" : `${r.daysLeft} days left`}</div></td>
                       <td className={u.num}>{r.units.toLocaleString("en-NZ")}</td>
                       <td className={u.num}>{r.perDay ? r.perDay.toLocaleString("en-NZ") : "-"}<div className={u.was}>{r.sellsInTime ? "Sells in time" : r.daysToSell ? `${r.daysToSell} days to sell` : "Not selling"}</div></td>

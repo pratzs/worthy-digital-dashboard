@@ -3,6 +3,7 @@
 import SiteNav from "@/app/design/SiteNav";
 import MarginMix from "@/app/design/MarginMix";
 import ShortDated from "@/app/design/ShortDated";
+import StockStates from "@/app/design/StockStates";
 import { fyTargetOf } from "@/lib/repTargetMath";
 import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
@@ -3716,7 +3717,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             )}
 
             {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
-            {showGroup("movers") && activeStore.id === "worthy" && <ShortDated />}
+            {showGroup("movers") && activeStore.id === "worthy" && <><StockStates /><ShortDated /></>}
             {showGroup("movers") && (
               <div className={st.tableGrid}>
                 <AdvancedTable icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity, keep stocked & push wider"
@@ -3876,6 +3877,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             )}
 
             {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
+            {showGroup("movers") && activeStore.id === "luxe" && <StockStates />}
             {showGroup("movers") && (
               <div className={st.tableGrid}>
                 <AdvancedTable icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"
