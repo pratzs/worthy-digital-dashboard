@@ -28,6 +28,14 @@ One rule everywhere: dashboard, chat, connectors and the Odoo Sunday emails.
 - Checked 25 Nov to the cent across dashboard, chat tool, all 10 Odoo report emails and Odoo's ledger. Full detail and code map in [SALES-BASIS.md](SALES-BASIS.md).
 - Odoo scheduled report code (actions 103, 104, 105, 107, 108, 110, 111, 123, 137, 151) is kept in the catalog-manager repo `.scratch_docs/` with `_BACKUP_2026-11-25` copies of the old code.
 
+## Sales by rep and what sets the margin (26 Nov 2026)
+
+Kishan asked why Worthy Products' margin reads 15.7% (November). Two changes:
+- **Sales by rep lists every salesperson on their own line.** Until now everyone who is not one of the eight field reps sat in one "Direct" row ($818,937 this year at 1.6%). That row was mostly Kishan: the clearance and short-dated stock Bansri puts on his name, $625,523 this year at -4.5%. Adding up the non-field people still gives finance's Direct figure (`isFieldRep` in `lib/odooReps.js`). Applies to the year, weekly, credits and debtors tables.
+- **"What sets the margin" panel** under Sales by rep (Worthy Products only, management only: `/api/margin-mix`, `lib/marginMix.js`, `app/design/MarginMix.js`). The same sales and cost as the headline, split by kind of sale: clearance or damaged stock (picked from WPW01/PICK/Clearance or DG/Stock/DAMAGED GOODS), credit notes, given free, sold below cost, discount 20%+, discount under 20%, no discount, no cost in Odoo. Each invoice line falls in the first that fits, so the rows add up to the headline. Also by person and the products that lost the most, for the selected month or the year so far, with the "effect on company margin" (the margin without that row minus the margin with it). Checked 26 Nov: November $1,220,338.75 sales, $1,028,855.13 cost, $191,298.30 gross profit, 15.7%, all equal to the headline card.
+- Month results are saved in Upstash (`wk:last:v1:mix4b:<YYYY-MM>`): 15 minutes for the current month, 7 days for a closed month. The warm-up fills them one month at a time.
+- November's finding: the 15.7% is mostly discount depth across all reps (lines at 20%+ discount were 25% of sales at 13.9%). Clearance sold at about -96% against booked cost, but it's small ($4.8k). Kishan pulled the company margin down 0.5 points this month, and about 1.4 points over the year.
+
 ## Design and navigation (26 Nov 2026)
 
 Every page is built from the shared kit in `app/design/`: `ui.js` (cards, headline strip, trends, month bars, ranked bars, ring, chain, share bar, progress), `icons.js` (one icon set), `SiteNav.js` (top bar with the pages the department may open, Back button, Dashboard / page / part trail, Skip to content). Three colours only (`app/globals.css`: page off-white, ink, orange accent), Outfit font, no dark mode. While figures load the page shows a dash, never a zero.
