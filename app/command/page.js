@@ -2274,13 +2274,13 @@ function WeeklySummary() {
   const pctT = (v) => (v == null ? "-" : `${Number(v).toFixed(1)}%`);
   if (err && !d) return <section className={s.card}><div className={s.err}>Weekly summary could not load: {err}</div></section>;
   if (!d) return <section className={s.card}><div className={s.skeleton} style={{ height: 140 }} /></section>;
-  const subject = `Weekly summary, ${d.week.start} to ${d.week.end}`;
+  const subject = `Weekly summary, ${dShort(d.week.start)} to ${dLong(d.week.end)}`;
   return (
     <section className={s.card}>
       <div className={s.cardHead}>
         <Title icon="mail">Weekly summary</Title>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <Range>{d.week.start} to {d.week.end}</Range>
+          <Range>{dShort(d.week.start)} to {dLong(d.week.end)}</Range>
           <button type="button" className={s.btn} onClick={() => setOpen((o) => !o)} aria-expanded={open}><Icon n="eye" size={14} />{open ? "Hide draft" : "Show draft"}</button>
           <button type="button" className={s.btn} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : "Copy"}</button>
           <a className={`${s.btn} ${s.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} />Open as email draft</a>
