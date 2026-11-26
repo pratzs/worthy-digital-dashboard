@@ -41,7 +41,7 @@
 .notice { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border-radius: 18px; background: rgba(255,255,255,.7); border: 1px solid rgba(40,32,20,.06); font-size: 14px; line-height: 1.65; color: var(--ink2); }
 .noticeIcon { flex: none; display: inline-flex; margin-top: 2px; color: var(--ink); }
 .noticeWarn { background: #fff0e2; border-color: rgba(242,137,42,.25); color: var(--ink); }
-.noticeWarn .noticeIcon { color: var(--orange); }
+.noticeWarn .noticeIcon { color: var(--orange-ink); }
 
 /* ── section headings on Credits and Debtors ── */
 .sectionHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: 0 4px 14px; }

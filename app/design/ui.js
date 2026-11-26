@@ -79,7 +79,7 @@ export const KpiStrip = ({ items }) => (
   <section className={u.kpis}>
     {items.map((k) => (
       <div key={k.label} className={u.kpi} onClick={k.onClick} role={k.onClick ? "button" : undefined} style={k.onClick ? { cursor: "pointer" } : undefined}>
-        <div className={u.kpiTop}><div className={u.kpiNum} style={k.accent ? { color: "var(--orange)" } : undefined}>{k.value ?? "-"}</div>{k.icon && <div className={u.chip}><Icon n={k.icon} size={15} /></div>}</div>
+        <div className={u.kpiTop}><div className={u.kpiNum} style={k.accent ? { color: "var(--orange-ink)" } : undefined}>{k.value ?? "-"}</div>{k.icon && <div className={u.chip}><Icon n={k.icon} size={15} /></div>}</div>
         <div className={u.kpiLabel}>{k.label} {k.trend}</div>
         {k.foot && <div className={u.statLabel} style={{ marginTop: 10 }}>{k.foot}</div>}
       </div>
@@ -91,7 +91,7 @@ export const KpiStrip = ({ items }) => (
 export function Big({ value, label, pair, fmt = n0, points, accent, invert }) {
   return (
     <div className={u.stat}>
-      <div className={u.statNum} style={accent ? { color: "var(--orange)" } : undefined}>{value ?? (pair ? fmt(pair[0]) : "-")}</div>
+      <div className={u.statNum} style={accent ? { color: "var(--orange-ink)" } : undefined}>{value ?? (pair ? fmt(pair[0]) : "-")}</div>
       <div className={u.statLabel}>{label}</div>
       {pair && (pair[1] === 0 && pair[0] > 0
         ? <div style={{ marginTop: 4 }}><span className={u.was}>none recorded before</span></div>
@@ -108,19 +108,32 @@ export function MonthBars({ rows, k = "value", fmt = n0, labelOf, partialTo }) {
   if (!rows?.length) return null;
   const max = Math.max(1, ...rows.map((r) => Math.max(0, r[k] || 0)));
   const pm = /^(\d{4})-(\d{2})-(\d{2})/.exec(partialTo || "");
+  /* Tap (or click, or Tab + Enter) a month to read its exact value: on a phone the values above the bars do not fit
+     (27 Nov 2026). The last month is shown until another is picked. */
+  const [sel, setSel] = useState(null);
+  const labOf = (r) => (labelOf ? labelOf(r) : /^\d{4}-\d{2}/.test(String(r.month)) ? monthLabel(r.month).slice(0, 3) : String(r.month ?? r.label ?? ""));
+  const shown = sel != null && rows[sel] ? sel : rows.length - 1;
+  const sr = rows[shown];
+  const srPart = shown === rows.length - 1 && pm;
   return (
-    <div className={u.monthBars}>
-      {rows.map((r, i) => {
-        const lab = labelOf ? labelOf(r) : /^\d{4}-\d{2}/.test(String(r.month)) ? monthLabel(r.month).slice(0, 3) : String(r.month ?? r.label ?? "");
-        const last = i === rows.length - 1, part = last && pm;
-        return (
-          <div key={`${r.month ?? r.label}-${i}`} title={`${lab}${part ? `, 1 to ${Number(pm[3])} ${MONTHS[Number(pm[2]) - 1]}` : ""}: ${fmt(r[k])}`}>
-            <b>{fmt === money || fmt === moneyShort ? moneyShort(r[k]) : short(r[k])}</b>
-            <i className={`${last ? u.hot : ""} ${part ? u.part : ""}`} style={{ height: `${Math.max(3, (Math.max(0, r[k] || 0) / max) * 100)}%` }} />
-            <span>{lab}{part && <em>to {Number(pm[3])}</em>}</span>
-          </div>
-        );
-      })}
+    <div>
+      <div className={u.mbReadout} aria-live="polite">
+        <span>{labOf(sr)}{srPart ? `, 1 to ${Number(pm[3])} ${MONTHS[Number(pm[2]) - 1]}` : ""}</span><strong>{fmt === moneyShort ? money(sr[k]) : fmt(sr[k])}</strong>
+      </div>
+      <div className={u.monthBars} role="group" aria-label="Months">
+        {rows.map((r, i) => {
+          const lab = labOf(r);
+          const last = i === rows.length - 1, part = last && pm;
+          return (
+            <button type="button" key={`${r.month ?? r.label}-${i}`} aria-pressed={shown === i} className={shown === i ? u.mbOn : ""}
+              aria-label={`${lab}${part ? `, 1 to ${Number(pm[3])} ${MONTHS[Number(pm[2]) - 1]}` : ""}: ${fmt(r[k])}`} onClick={() => setSel(i)}>
+              <b>{fmt === money || fmt === moneyShort ? moneyShort(r[k]) : short(r[k])}</b>
+              <i className={`${last ? u.hot : ""} ${part ? u.part : ""}`} style={{ height: `${Math.max(3, (Math.max(0, r[k] || 0) / max) * 100)}%` }} />
+              <span>{lab}{part && <em>to {Number(pm[3])}</em>}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -210,7 +223,7 @@ export function Chain({ steps, compact = false }) {
         <div key={st.label} className={u.chainStep}>
           {i > 0 && <div className={u.chainLink}><span>{st.link}</span><span className={u.chainArrow}><Icon n="move" size={16} /></span></div>}
           <div className={u.chainBox}>
-            <div className={u.chainNum} style={st.accent ? { color: "var(--orange)" } : undefined}>{st.value}</div>
+            <div className={u.chainNum} style={st.accent ? { color: "var(--orange-ink)" } : undefined}>{st.value}</div>
             <div className={u.statLabel}>{st.label}</div>
             {st.pair && <div style={{ marginTop: 4 }}><Trend now={st.pair[0]} before={st.pair[1]} invert={st.invert} /></div>}
           </div>

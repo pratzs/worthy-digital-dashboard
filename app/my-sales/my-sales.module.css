@@ -11,7 +11,7 @@
 .signLogo { height: 52px; width: auto; display: block; margin-bottom: 18px; }
 .h1 { display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 300; letter-spacing: -0.02em; margin: 0 0 8px; }
 .lead { font-size: 16px; color: var(--ink2); margin: 0 0 18px; line-height: 1.45; }
-.alert { display: flex; gap: 8px; align-items: flex-start; color: var(--orange); font-size: 15px; margin-bottom: 12px; line-height: 1.4; }
+.alert { display: flex; gap: 8px; align-items: flex-start; color: var(--orange-ink); font-size: 15px; margin-bottom: 12px; line-height: 1.4; }
 .alert svg { margin-top: 2px; }
 .field { position: relative; margin-bottom: 12px; }
 .field svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--mute); pointer-events: none; }
@@ -57,7 +57,7 @@
 .bubble { max-width: 92%; min-width: 0; overflow-wrap: anywhere; padding: 11px 15px; border-radius: 18px; font-size: 16px; line-height: 1.5; }
 .bubbleUser { background: #1c1d1c; color: #fff; border-bottom-right-radius: 6px; }
 .bubbleBot { background: var(--card-solid); color: var(--ink); border: 1px solid rgba(40,32,20,.06); border-bottom-left-radius: 6px; box-shadow: 0 10px 30px -24px rgba(40,32,20,.3); }
-.bubbleErr { color: var(--orange); }
+.bubbleErr { color: var(--orange-ink); }
 .ansTable { overflow-x: auto; margin: 8px 0; }
 .ansTable table { border-collapse: collapse; font-size: 14px; min-width: 100%; }
 .ansTable th { text-align: left; font-weight: 400; font-size: 13.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--mute); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -93,7 +93,7 @@
 .askInput:disabled { background: rgba(255,255,255,.6); }
 .meta { max-width: 760px; margin: 8px auto 0; font-size: 14.5px; color: var(--mute); display: flex; justify-content: space-between; align-items: center; gap: 6px 12px; flex-wrap: wrap; }
 .left { display: inline-flex; align-items: center; gap: 8px; }
-.leftWarn { color: var(--orange); }
+.leftWarn { color: var(--orange-ink); }
 .leftBar { flex: none; width: 56px; height: 6px; border-radius: 999px; background: rgba(0,0,0,.06); overflow: hidden; }
 .leftBar i { display: block; height: 100%; border-radius: 999px; background: var(--ink); opacity: .78; }
 .leftWarn .leftBar i { background: var(--orange); opacity: 1; }

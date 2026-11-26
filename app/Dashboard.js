@@ -4,6 +4,7 @@ import SiteNav from "@/app/design/SiteNav";
 import MarginMix from "@/app/design/MarginMix";
 import ShortDated from "@/app/design/ShortDated";
 import StockStates from "@/app/design/StockStates";
+import CustomerMargin from "@/app/design/CustomerMargin";
 import { fyTargetOf } from "@/lib/repTargetMath";
 import React, { useState, useEffect, useRef, useReducer } from "react";
 import Link from "next/link";
@@ -22,6 +23,7 @@ import st from "./page.module.css";
    for the one figure that matters most, the latest period, or a fall / overdue / below-target. No per-company colours. */
 const INK = COLORS.ink;
 const ORANGE = COLORS.accent;
+const ORANGE_TEXT = "var(--orange-ink)";   // the accent as text, readable contrast
 const inkA = (a) => `rgba(20,22,20,${a})`;
 
 const STORES = [
@@ -1045,7 +1047,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
                 <tr>
                   <td style={{ ...footStyle("left"), fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>TOTAL</td>
                   <td style={footStyle()}>{d.totals.count.toLocaleString()}</td>
-                  <td style={{ ...footStyle(), color: ORANGE }}>{fmtExact(d.totals.value, currency)}</td>
+                  <td style={{ ...footStyle(), color: ORANGE_TEXT }}>{fmtExact(d.totals.value, currency)}</td>
                 </tr>
               </tfoot>
             )}
@@ -1066,7 +1068,7 @@ const CreditsPanel = ({ source, currency = "NZD", rangeLabel = null }) => {
       />
       {d?.notes?.length > 0 && (
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 12, paddingRight: 8, fontSize: 12.5, color: COLORS.mute, letterSpacing: "0.04em" }}>
-          TOTAL&nbsp;CREDITED<span style={{ color: ORANGE, fontSize: 18, letterSpacing: 0 }}>{fmtExact(d.totals.value, currency)}</span>
+          TOTAL&nbsp;CREDITED<span style={{ color: ORANGE_TEXT, fontSize: 18, letterSpacing: 0 }}>{fmtExact(d.totals.value, currency)}</span>
         </div>
       )}
     </div>
@@ -1151,7 +1153,7 @@ const SisterSalesCard = ({ cur, week, weekWp, currency, companyName = "Worthy Pr
             <input type="date" value={pick.to} min={pick.from || undefined} aria-label="To" onChange={(e) => setPick((p) => ({ ...p, to: e.target.value }))} style={dateInputStyle} />
             {(pick.from || pick.to) && <button type="button" onClick={() => setPick({ from: "", to: "" })} aria-label="Clear the chosen dates" title="Clear" style={{ ...dateInputStyle, cursor: "pointer", display: "inline-flex", alignItems: "center" }}><Icon n="close" size={12} /></button>}
             {picked.state === "loading" && <span style={{ color: COLORS.mute, fontSize: 13.5 }}>Reading Odoo</span>}
-            {picked.state === "error" && <span style={{ color: ORANGE, fontSize: 13.5 }}>{picked.error}</span>}
+            {picked.state === "error" && <span style={{ color: ORANGE_TEXT, fontSize: 13.5 }}>{picked.error}</span>}
           </div>
         )}
         <RangeTag text={fy.range} />
@@ -1217,7 +1219,7 @@ const ForecastCard = ({ cur, prior, currency, fyLabel }) => {
       ) : (
         <div className={st.forecast}>
           <div>
-            <div className={ui.statNum} style={{ color: ORANGE, fontSize: "clamp(26px, 3vw, 36px)" }}>{money(projected)}</div>
+            <div className={ui.statNum} style={{ color: ORANGE_TEXT, fontSize: "clamp(26px, 3vw, 36px)" }}>{money(projected)}</div>
             <div className={ui.statLabel}>At this year&apos;s pace</div>
             <div style={{ marginTop: 4 }}>{onLast(projected / full)}</div>
             <div style={{ marginTop: 18 }}>
@@ -2261,7 +2263,10 @@ export default function EcommerceDashboard({ section = "overview" }) {
      Leaving the view or the company stops the chain. */
   useEffect(() => {
     if (view !== "yoy" || !restored) return;
-    if (activeStore.id !== "worthy" && activeStore.id !== "luxe" && activeStore.id !== "nova") return;
+    /* Worthy Products North and Worthy Oceania draw the year view from the financial-year figures alone. This loop used to
+       read every past CALENDAR year from Odoo (/api/odoo and /api/odoo/advanced, no shared cache) on every visit, and
+       nothing on screen used them: pure Odoo load. Removed 27 Nov 2026. Dutch Rusk (Ostendo) still loads its years. */
+    if (activeStore.id !== "luxe") return;
     let live = true;
     const storeId = activeStore.id;
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2984,7 +2989,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
     { key: "name",          label: "Product",      color: T.text },
     { key: "currentStock",  label: "Stock",        align: "right", color: accent },
     { key: "qtySold",       label: "Sold",         align: "right", color: COLORS.ink2 },
-    { key: "lockedCapital", label: "Value Locked", align: "right", color: ORANGE, format: (v, c) => fmtK(v, c) },
+    { key: "lockedCapital", label: "Value Locked", align: "right", color: ORANGE_TEXT, format: (v, c) => fmtK(v, c) },
   ];
   const churnedColumns = [
     { key: "name",          label: "Customer",   color: T.text },
@@ -3132,7 +3137,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               const old = ageMin > 15;
               return (<>
                 <span>· Odoo figures as of {t} NZ, refreshed every few minutes</span>
-                {old && <span style={{ color: "var(--orange)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon n="hourglass" size={12} />{fp.stale ? `Odoo is slow: figures from ${t}, updating` : `Figures from ${t}, over 15 minutes old, updating`}</span>}
+                {old && <span style={{ color: "var(--orange-ink)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 5 }}><Icon n="hourglass" size={12} />{fp.stale ? `Odoo is slow: figures from ${t}, updating` : `Figures from ${t}, over 15 minutes old, updating`}</span>}
               </>);
             })()}
           </div>
@@ -3693,7 +3698,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
               exact={exactAmounts}
             />
             {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-              <MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+              <><MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+<CustomerMargin company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} /></>
             )}
           </div>
         )}
@@ -3725,6 +3731,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
               T={T}
               exact
             />
+            <CustomerMargin company="south" range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
           </div>
         )}
 
@@ -3752,7 +3759,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   exact={exactAmounts}
                 />
                 {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-                  <MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+                  <><MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+<CustomerMargin company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} /></>
                 )}
               </>
             )}
@@ -3820,7 +3828,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                     { key: "category",      label: "Category",      color: COLORS.mute },
                     { key: "currentStock",  label: "On Hand",       align: "right", color: COLORS.ink2 },
                     { key: "qtySold",       label: "Units Sold",    align: "right", color: COLORS.mute },
-                    { key: "lockedCapital", label: "Capital Tied",  align: "right", color: ORANGE, format: (v, c) => fmtK(v, c) },
+                    { key: "lockedCapital", label: "Capital Tied",  align: "right", color: ORANGE_TEXT, format: (v, c) => fmtK(v, c) },
                   ]}
                   aiContext="slow-moving Odoo SKUs"
                   aiExtra="Top 3 by capital tied, recommend specific clearance pricing or rep push. Anything with an expiry risk?"
@@ -3927,6 +3935,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   T={T}
                   exact
                 />
+                <CustomerMargin company="south" range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
                 </>
               ) : channelTab === "pos" ? (
                 <AdvancedTable icon="users" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"

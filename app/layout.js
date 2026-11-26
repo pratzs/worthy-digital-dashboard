@@ -18,7 +18,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={outfit.variable} style={{ colorScheme: "light" }}>
+    <html lang="en-NZ" className={outfit.variable} style={{ colorScheme: "light" }}>
       <head>
         <meta name="color-scheme" content="light" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -66,7 +66,7 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 18, marginBottom: 22 }}>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{pctTxt(d.marginPct)}</div><div className={u.statLabel}>Company margin · {money(d.grossProfit)} on {money(d.revenue)}</div></div>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(d.discount)}</div><div className={u.statLabel}>Discount given on invoice lines</div></div>
-            {worst[0] && <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange)" }}>{pts(worst[0].pullPts)}</div><div className={u.statLabel}>Biggest pull: {worst[0].label.toLowerCase()}</div></div>}
+            {worst[0] && <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange-ink)" }}>{pts(worst[0].pullPts)}</div><div className={u.statLabel}>Biggest pull: {worst[0].label.toLowerCase()}</div></div>}
             {d.sisters !== 0 && <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(d.sisters)}</div><div className={u.statLabel}>Sold to our sister companies, not in these figures</div></div>}
           </div>
 
@@ -125,7 +125,7 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                           <td style={{ maxWidth: 260 }}>{l.name}<div className={u.was}>{l.people.slice(0, 3).join(", ")}{l.people.length > 3 ? ` +${l.people.length - 3}` : ""}</div></td>
                           <td className={u.num}>{money(l.revenue)}</td>
                           <td className={u.num}>{money(l.cost)}</td>
-                          <td className={u.num} style={{ color: "var(--orange)" }}>{money(l.loss)}</td>
+                          <td className={u.num} style={{ color: "var(--orange-ink)" }}>{money(l.loss)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -134,6 +134,25 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
               )}
             </div>
           </div>
+          {d.nocostProducts?.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <Mini icon="alert">Sold with no cost in Odoo, left out of the margin</Mini>
+              <div className={u.tableWrap}>
+                <table className={u.table}>
+                  <thead><tr><th scope="col">Product</th><th scope="col" className={u.num}>Sales</th><th scope="col" className={u.num}>Invoice lines</th></tr></thead>
+                  <tbody>
+                    {d.nocostProducts.slice(0, 10).map((r) => (
+                      <tr key={r.name}>
+                        <td style={{ maxWidth: 360 }}>{r.name}<div className={u.was}>{r.people.slice(0, 3).join(", ")}</div></td>
+                        <td className={u.num}>{money(r.revenue)}</td>
+                        <td className={u.num}>{r.lines}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {(d.deepCustomers?.length > 0 || d.deepProducts?.length > 0) && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginTop: 24 }}>
               {[["Who gets 20%+ discounts", "building", d.deepCustomers, "Customer"], ["Products sold at 20%+ discount", "bag", d.deepProducts, "Product"]].map(([t, ic, rows, col]) => (

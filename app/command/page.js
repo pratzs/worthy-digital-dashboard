@@ -1093,7 +1093,7 @@ function MeetingNotes({ asanaTasks, today, onAsana }) {
                     <button type="button" className={s.iconBtn} style={{ width: 32, height: 32 }} aria-label={`Remove ${a.title}`} title="Remove"
                       onClick={() => act("edit", { action: "meeting-edit", id: a.id, patch: { drop: true } })}><Icon n="close" size={14} /></button>
                   </div>
-                  {!a.ownerGid && <div className={s.rowMeta} style={{ color: "var(--orange)" }}>Pick who does this</div>}
+                  {!a.ownerGid && <div className={s.rowMeta} style={{ color: "var(--orange-ink)" }}>Pick who does this</div>}
                 </div>
               ))}
               <button type="button" className={`${s.btn} ${s.btnDark}`} style={{ marginTop: 10 }} disabled={!!busy}
@@ -1476,7 +1476,7 @@ function EventsModal({ ev, onClose }) {
                     <div className={s.stat}><div className={s.statNum}>{n0(entries.length)}</div><div className={s.statLabel}>Form entries{spamIds.size ? `, ${spamIds.size} likely spam` : ""}</div></div>
                   </>
                 )}
-                <div className={s.stat}><div className={s.statNum} style={showForms && ev.forms?.status === "ok" ? undefined : { fontSize: 40, color: "var(--orange)" }}>{n0(gaTotal)}</div><div className={s.statLabel}>{ev.site === "worthy" ? "Recorded by Google Analytics" : "Conversions recorded by Google Analytics"}</div></div>
+                <div className={s.stat}><div className={s.statNum} style={showForms && ev.forms?.status === "ok" ? undefined : { fontSize: 40, color: "var(--orange-ink)" }}>{n0(gaTotal)}</div><div className={s.statLabel}>{ev.site === "worthy" ? "Recorded by Google Analytics" : "Conversions recorded by Google Analytics"}</div></div>
               </div>
               {pages.length > 0 && (
                 <div>
@@ -1908,7 +1908,7 @@ function Trend({ now, before, points = false }) {
 function Big({ value, label, pair, fmt = n0, points, accent }) {
   return (
     <div className={s.stat}>
-      <div className={s.statNum} style={accent ? { color: "var(--orange)" } : undefined}>{value ?? (pair ? fmt(pair[0]) : "-")}</div>
+      <div className={s.statNum} style={accent ? { color: "var(--orange-ink)" } : undefined}>{value ?? (pair ? fmt(pair[0]) : "-")}</div>
       <div className={s.statLabel}>{label}</div>
       {pair && (pair[1] === 0 && pair[0] > 0
         ? <div style={{ marginTop: 4 }}><span className={s.was}>none recorded before</span></div>
@@ -1999,7 +1999,7 @@ function Chain({ steps, compact = false }) {
         <div key={st.label} className={s.chainStep}>
           {i > 0 && <div className={s.chainLink}><span>{st.link}</span><span className={s.chainArrow}><Icon n="move" size={16} /></span></div>}
           <div className={s.chainBox}>
-            <div className={s.chainNum} style={st.accent ? { color: "var(--orange)" } : undefined}>{st.value}</div>
+            <div className={s.chainNum} style={st.accent ? { color: "var(--orange-ink)" } : undefined}>{st.value}</div>
             <div className={s.statLabel}>{st.label}</div>
             {st.pair && <div style={{ marginTop: 4 }}><Trend now={st.pair[0]} before={st.pair[1]} /></div>}
           </div>
@@ -2304,7 +2304,7 @@ function WeeklySummary() {
           {!d.watch.length ? <div className={s.empty}>No salesperson is 2 points or more under their usual margin</div> : d.watch.slice(0, 8).map((w) => (
             <div key={`${w.business}|${w.rep}|${w.month}`} className={s.row}>
               <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{w.rep}</div><div className={s.rowMeta}>{w.business} · {w.month}{w.through ? " so far" : ""} · {money(w.sales)}</div></div>
-              <span style={{ color: "var(--orange)", fontSize: 14.5, whiteSpace: "nowrap" }}>{pctT(w.margin)} <span className={s.rowMeta}>vs {pctT(w.usual)}</span></span>
+              <span style={{ color: "var(--orange-ink)", fontSize: 14.5, whiteSpace: "nowrap" }}>{pctT(w.margin)} <span className={s.rowMeta}>vs {pctT(w.usual)}</span></span>
             </div>
           ))}
         </div>

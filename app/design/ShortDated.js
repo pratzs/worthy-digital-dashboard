@@ -41,7 +41,7 @@ export default function ShortDated() {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 18, marginBottom: 22 }}>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(d.totals.cost)}</div><div className={u.statLabel}>Cost of {d.totals.lots} lots, {Math.round(d.totals.units).toLocaleString("en-NZ")} units</div></div>
-            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange)" }}>{money(d.totals.atRisk)}</div><div className={u.statLabel}>Lost if sold at clearance price</div></div>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange-ink)" }}>{money(d.totals.atRisk)}</div><div className={u.statLabel}>Lost if sold at clearance price</div></div>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{d.totals.wontSellLots}</div><div className={u.statLabel}>Lots that won&apos;t sell in time · {money(d.totals.wontSellCost)}</div></div>
           </div>
           <Mini icon="calendar">By time left</Mini>

@@ -11,6 +11,7 @@
 import { cachedAuth } from '@/lib/odooAuth';
 import { NextResponse } from 'next/server';
 import { ostendoSql } from '@/lib/ostendo';
+import { readWeeks } from '@/lib/odooWeeksCache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -60,12 +61,17 @@ async function southValue() {
   return Number(rows?.[0]?.V) || 0;
 }
 
+/* One shared copy per business with a lock, 15 minutes (27 Nov 2026). Until then every page view ran a stock read in
+   Odoo (5 s each), which added load for everyone. Stock value moves slowly; 15 minutes is plenty. */
 export async function GET(request) {
   const store = new URL(request.url).searchParams.get('store');
+  const key = store === 'luxe' ? 'luxe' : store === 'nova' ? 'nova' : 'worthy';
   try {
-    const value = store === 'luxe' ? await southValue() : await odooValue(store === 'nova' ? 1 : 4);
-    return NextResponse.json({ ok: true, store, value: Math.round(value * 100) / 100,
-                               asOf: new Date().toISOString() });
+    const { payload } = await readWeeks('sv', key, async () => {
+      const value = key === 'luxe' ? await southValue() : await odooValue(key === 'nova' ? 1 : 4);
+      return { ok: true, store: key, value: Math.round(value * 100) / 100, asOf: new Date().toISOString(), generatedAt: new Date().toISOString() };
+    }, { freshMs: 15 * 60000 });
+    return NextResponse.json({ ...payload, store });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e.message || e).slice(0, 200) }, { status: 502 });
   }

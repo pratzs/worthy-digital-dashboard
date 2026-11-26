@@ -11,7 +11,7 @@
 .input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; padding: 13px 14px; border-radius: 14px; border: 1px solid var(--line); background: #fff; color: var(--ink); outline: none; transition: border-color .15s, box-shadow .15s; }
 .input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(20,22,20,.06); }
 .inputErr, .inputErr:focus { border-color: var(--orange); }
-.err { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--orange); font-weight: 500; }
+.err { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--orange-ink); font-weight: 500; }
 .btn { margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; font: inherit; font-size: 14px; font-weight: 500; padding: 13px 16px; border-radius: 14px; border: 1px solid #1c1d1c; background: #1c1d1c; color: #fff; cursor: pointer; box-shadow: 0 10px 20px -10px rgba(0,0,0,.6); transition: background .15s, transform .05s; }
 .btn:hover { background: #000; }
 .btn:active:not(:disabled) { transform: translateY(1px); }

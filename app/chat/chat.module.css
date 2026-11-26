@@ -38,7 +38,7 @@
 .busyTrack { flex: 1; height: 4px; border-radius: 999px; background: rgba(0,0,0,.06); overflow: hidden; min-width: 60px; }
 .busyTrack i { display: block; height: 100%; width: 35%; border-radius: 999px; background: var(--orange); animation: slide 1.4s ease-in-out infinite; }
 @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
-.error { display: flex; align-items: flex-start; gap: 8px; font-size: 14.5px; color: var(--orange); padding: 11px 14px; background: #fff7ef; border: 1px solid rgba(242,137,42,.3); border-radius: 16px; }
+.error { display: flex; align-items: flex-start; gap: 8px; font-size: 14.5px; color: var(--orange-ink); padding: 11px 14px; background: #fff7ef; border: 1px solid rgba(242,137,42,.3); border-radius: 16px; }
 .error svg { margin-top: 1px; }
 
 .foot { border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); position: sticky; bottom: 0; }
@@ -48,7 +48,7 @@
 .input:focus { border-color: var(--ink); }
 .input:disabled { background: rgba(255,255,255,.6); }
 .quota { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13.5px; color: var(--mute); line-height: 1.4; }
-.quotaWarn { color: var(--orange); }
+.quotaWarn { color: var(--orange-ink); }
 .quotaBar { flex: none; width: 70px; height: 6px; border-radius: 999px; background: rgba(0,0,0,.06); overflow: hidden; }
 .quotaBar i { display: block; height: 100%; border-radius: 999px; background: var(--ink); opacity: .78; }
 .quotaWarn .quotaBar i { background: var(--orange); opacity: 1; }

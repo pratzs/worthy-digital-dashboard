@@ -38,7 +38,7 @@ export default function StockStates({ store = "worthy" }) {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 18, marginBottom: 22 }}>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(n?.total?.value)}</div><div className={u.statLabel}>Worthy Products North, whole warehouse · {n0(n?.total?.units)} units</div></div>
-            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange)" }}>{money((n?.states || []).filter((x) => x.key !== "good" && x.key !== "short").reduce((t, x) => t + x.value, 0))}</div><div className={u.statLabel}>North: past best-before, damaged and clearance</div></div>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange-ink)" }}>{money((n?.states || []).filter((x) => x.key !== "good" && x.key !== "short").reduce((t, x) => t + x.value, 0))}</div><div className={u.statLabel}>North: past best-before, damaged and clearance</div></div>
             <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(s?.total?.value)}</div><div className={u.statLabel}>Worthy Products South (Dutch Rusk), whole warehouse · {n0(s?.total?.units)} units</div></div>
           </div>
 
