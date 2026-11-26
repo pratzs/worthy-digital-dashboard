@@ -41,7 +41,7 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
   const worst = d ? [...d.groups].filter((g) => g.revenue !== 0 && g.pullPts > 0).sort((a, b) => b.pullPts - a.pullPts) : [];
   const maxShare = d ? Math.max(...d.groups.map((g) => g.share), 1) : 1;
   return (
-    <Card style={{ marginTop: 16 }} aria-label="What sets the margin">
+    <Card style={{ marginTop: 14 }} aria-label="What sets the margin">
       <CardHead icon="percent" title="What sets the margin">
         {!range && <div className={u.seg} role="group" aria-label="Period">
           <button type="button" className={mode === "month" ? u.segOn : ""} aria-pressed={mode === "month"} onClick={() => setMode("month")}>Selected month</button>

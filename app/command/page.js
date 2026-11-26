@@ -2281,11 +2281,12 @@ function WeeklySummary() {
   }, []);
   const money = (v) => (v == null ? "-" : `$${Math.round(v).toLocaleString("en-NZ")}`);
   const pctT = (v) => (v == null ? "-" : `${Number(v).toFixed(1)}%`);
-  if (err && !d) return <section className={s.card}><div className={s.err}>Weekly summary could not load: {err}</div></section>;
-  if (!d) return <section className={s.card}><div className={s.skeleton} style={{ height: 140 }} /></section>;
+  if (err && !d) return <section className={s.card} style={{ marginTop: 14 }}><div className={s.err}>Weekly summary could not load: {err}</div></section>;
+  if (!d) return <section className={s.card} style={{ marginTop: 14 }}><div className={s.skeleton} style={{ height: 140 }} /></section>;
   const subject = `Weekly summary, ${dShort(d.week.start)} to ${dLong(d.week.end)}`;
   return (
-    <section className={s.card}>
+    /* Same 14px gap as every other card on this page */
+    <section className={s.card} style={{ marginTop: 14 }}>
       <div className={s.cardHead}>
         <Title icon="mail">Weekly summary</Title>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

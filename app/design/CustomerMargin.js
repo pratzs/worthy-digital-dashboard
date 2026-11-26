@@ -48,7 +48,7 @@ export default function CustomerMargin({ company = 4, month, fy, range = null })
   if (hidden || !period) return null;
   const avg = d?.marginPct;
   return (
-    <Card style={{ marginTop: 16 }} aria-label="Customer margin">
+    <Card style={{ marginTop: 14 }} aria-label="Customer margin">
       <CardHead icon="building" title="Customer margin">
         {!range && (
           <div className={u.seg} role="group" aria-label="Period">

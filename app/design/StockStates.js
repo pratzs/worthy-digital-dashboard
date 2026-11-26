@@ -30,7 +30,7 @@ export default function StockStates({ store = "worthy" }) {
   const n = d?.north, s = d?.south;
   const maxV = n?.states ? Math.max(...n.states.map((x) => x.value), 1) : 1;
   return (
-    <Card style={{ marginBottom: 16 }} aria-label="Clearance and expired stock">
+    <Card style={{ marginBottom: 14 }} aria-label="Clearance and expired stock">
       <CardHead icon="wallet" title="Clearance and expired stock">{d && <Range>As at {dLong(d.today)}</Range>}</CardHead>
       {err && !d && <div className={u.empty}>Could not read stock: {err}</div>}
       {!d && !err && <Skeleton height={220} />}

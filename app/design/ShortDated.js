@@ -27,7 +27,7 @@ export default function ShortDated() {
   if (hidden) return null;
   const maxBand = d ? Math.max(...d.bands.map((b) => b.cost), 1) : 1;
   return (
-    <Card style={{ marginBottom: 16 }} aria-label="Short-dated stock">
+    <Card style={{ marginBottom: 14 }} aria-label="Short-dated stock">
       <CardHead icon="hourglass" title="Short-dated stock">
         <div className={u.seg} role="group" aria-label="Show">
           <button type="button" className={only === "risk" ? u.segOn : ""} aria-pressed={only === "risk"} onClick={() => setOnly("risk")}>Won&apos;t sell in time</button>
