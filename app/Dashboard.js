@@ -407,6 +407,14 @@ const WARN_COLOURS = ["#f87171", "#dc2626", "#b91c1c", "#c2410c", "#b45309"];
 const tone = (c) => (!c ? INK : WARN_COLOURS.includes(c) ? ORANGE : c.startsWith("#") && c !== INK && c !== ORANGE && c !== COLORS.ink2 && c !== COLORS.mute ? COLORS.ink2 : c);
 
 // Long tables show 25 rows at a time; the CSV and the AI summary still use every row.
+/* Category and product names for the Analytics cards (27 Nov 2026): Odoo's top level "PRODUCT BU / " (or "All / ") is on
+   every category, so it is dropped; the bars show the last level with its parent under it, and products their name with
+   the code and category under it. Units and counts with thousands separators. */
+const shortCat = (c) => String(c || "").replace(/^(PRODUCT BU|All)\s*\/\s*/i, "");
+const catParts = (c) => { const p = shortCat(c).split(/\s*\/\s*/); return { name: p[p.length - 1] || shortCat(c), sub: p.slice(0, -1).join(" / ") }; };
+const prodParts = (t, c) => { const m = /^\[([^\]]+)\]\s*(.*)$/.exec(String(t || "")); const cat = catParts(c).name; return m ? { name: m[2], sub: [m[1], cat].filter(Boolean).join(" · ") } : { name: String(t || ""), sub: cat }; };
+const fmtCount = (v) => (v == null || v === "" ? "-" : Number(v).toLocaleString("en-NZ"));
+
 const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZD", onRowClick, aiContext, aiExtra, headerExtra, icon, range, visual }) => {
   const pg = usePaged(data, `${title}|${data?.length ?? 0}`);
   return (
@@ -416,7 +424,7 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
     </CardHead>
     {subtitle && <div style={{ fontSize: 13.5, color: COLORS.mute, margin: "-6px 0 14px" }}>{subtitle}</div>}
     {visual && !loading && data?.length > 0 && <div style={{ marginBottom: 18 }}>{visual}</div>}
-    <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350, flex: 1 }}>
+    <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 350 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
         <thead style={{ position: "sticky", top: 0, background: COLORS.card, zIndex: 1 }}>
           <tr>
@@ -446,7 +454,8 @@ const AdvancedTable = ({ title, subtitle, columns, data, loading, currency = "NZ
     </div>
     {!loading && pg.bar}
     {aiContext && !loading && data?.length > 0 && (
-      <AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} />
+      /* at the foot of the card, so two cards side by side line up */
+      <div style={{ marginTop: "auto", paddingTop: 14 }}><AIInsights data={data} context={aiContext} currency={currency} extraContext={aiExtra} /></div>
     )}
   </Card>
   );
@@ -2995,7 +3004,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   ];
   const categoryColumns = [
     { key: "name",    label: "Category",   color: T.text },
-    { key: "qty",     label: "Units Sold", align: "right" },
+    { key: "qty",     label: "Units Sold", align: "right", format: v => fmtCount(v) },
     { key: "revenue", label: "Revenue",    align: "right", color: accent,    format: (v, c) => fmtK(v, c) },
     { key: "margin",  label: "Margin",     align: "right", color: COLORS.ink2, format: v => v != null ? `${v}%` : "-" },
   ];
@@ -3829,12 +3838,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 <div className={st.tableGrid}>
                   <AdvancedTable icon="folder" title="Top Categories" range={tableRange()} subtitle="Where the revenue actually comes from"
                     loading={isLoading(selectedYear)} currency={activeStore.currency}
-                    data={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
-                    visual={<BarList rows={getOdooTopCategories().slice(0, 15).map(c => ({ name: c.category, value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
+                    data={getOdooTopCategories().slice(0, 15).map(c => ({ name: shortCat(c.category), revenue: c.revenue, qty: c.unitsSold, margin: c.margin, productCount: c.productCount }))}
+                    visual={<BarList oneLine rows={getOdooTopCategories().slice(0, 15).map(c => ({ ...catParts(c.category), value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     columns={[
                       { key: "name",         label: "Category",     color: INK },
-                      { key: "productCount", label: "# Products",   align: "center", color: COLORS.ink2 },
-                      { key: "qty",          label: "Units Sold",   align: "right",  color: COLORS.ink2 },
+                      { key: "productCount", label: "Products",     align: "right",  color: COLORS.ink2, format: v => fmtCount(v) },
+                      { key: "qty",          label: "Units Sold",   align: "right",  color: COLORS.ink2, format: v => fmtCount(v) },
                       { key: "revenue",      label: "Revenue",      align: "right",  color: INK, format: (v, c) => fmtK(v, c) },
                       { key: "margin",       label: "Margin",       align: "right",  color: COLORS.ink2, format: v => v !== null ? `${v}%` : "-" },
                     ]}
@@ -3843,12 +3852,12 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   />
                   <AdvancedTable icon="award" title="Top Products" range={tableRange()} subtitle="High performers by net revenue"
                     loading={isLoading(selectedYear)} currency={activeStore.currency}
-                    data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: p.category, qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
-                    visual={<BarList rows={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, value: p.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
+                    data={getOdooTopProducts().slice(0, 25).map(p => ({ name: p.title, code: p.code, category: shortCat(p.category), qtySold: p.unitsSold, revenue: p.revenue, margin: p.margin }))}
+                    visual={<BarList oneLine rows={getOdooTopProducts().slice(0, 25).map(p => ({ ...prodParts(p.title, p.category), value: p.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     columns={[
                       { key: "name",     label: "Product",  color: INK },
                       { key: "category", label: "Category", color: COLORS.mute },
-                      { key: "qtySold",  label: "Units",    align: "right", color: COLORS.ink2 },
+                      { key: "qtySold",  label: "Units",    align: "right", color: COLORS.ink2, format: v => fmtCount(v) },
                       { key: "revenue",  label: "Revenue",  align: "right", color: INK, format: (v, c) => fmtK(v, c) },
                       { key: "margin",   label: "Margin",   align: "right", color: COLORS.ink2, format: v => v !== null ? `${v}%` : "-" },
                     ]}
@@ -4010,11 +4019,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
                 <div className={st.tableGrid}>
                   <AdvancedTable icon="folder" title="Top Categories" range={tableRange()} subtitle="Click a category to drill down into its products" loading={advLoading} currency={activeStore.currency} data={displayCategories} columns={categoryColumns}
                     onRowClick={row => setCategoryModal({ name: row.name, products: advancedData.curr?.categoryProducts?.[row.name] || [] })}
-                    visual={<BarList rows={displayCategories.map(c => ({ name: c.name, value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
+                    visual={<BarList oneLine rows={displayCategories.map(c => ({ ...catParts(c.name), value: c.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     aiContext="top revenue categories"
                     aiExtra="Focus on whether confectionery vs beverages balance aligns with current NZ season. Flag any categories at risk from competitors like DKSH or Gilmours." />
                   <AdvancedTable icon="award" title="Top Products" range={tableRange()}    subtitle="High Performers" loading={advLoading} currency={activeStore.currency} data={displayProducts}   columns={productColumns}  aiContext="top selling products"
-                    visual={<BarList rows={displayProducts.map(p => ({ name: p.name, value: p.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
+                    visual={<BarList oneLine rows={displayProducts.map(p => ({ ...prodParts(p.name, p.category), value: p.revenue }))} fmt={(v) => fmtK(v, activeStore.currency)} share={false} />}
                     aiExtra="Note any imported products in the top list, these need healthy stock levels given import lead times. Flag anything that could be pushed harder online." />
                 </div>
               </>

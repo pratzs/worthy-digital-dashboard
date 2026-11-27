@@ -56,6 +56,9 @@
 .err { color: var(--orange-ink); font-size: 14px; margin-top: 10px; }
 .bars { display: grid; gap: 10px; }
 .barRow { display: grid; grid-template-columns: minmax(90px, 140px) 1fr auto; gap: 12px; align-items: center; font-size: 14.5px; }
+.barRowWide { grid-template-columns: minmax(150px, 38%) 1fr auto; min-height: 40px; }
+.barLabel { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.barSub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: var(--mute); margin-top: 1px; }
 .barTrack { height: 8px; border-radius: 999px; background: rgba(0,0,0,.05); overflow: hidden; }
 .statLine { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px 36px; }
 .stat { min-width: 0; }

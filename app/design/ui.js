@@ -194,7 +194,9 @@ export function Paged({ rows, resetKey = "", step = PAGE, children }) {
 }
 
 /** Ranked horizontal bars with value and share. The top row is the accent. */
-export function BarList({ rows, k = "value", fmt = n0, limit = 6, caps = false, share = true, labelKey = "name" }) {
+/* oneLine (27 Nov 2026): each label on one line (full name on hover) with an optional small `sub` line under it, in a wider
+   column, so long category and product names never wrap into rows of different heights. Off by default. */
+export function BarList({ rows, k = "value", fmt = n0, limit = 6, caps = false, share = true, labelKey = "name", oneLine = false }) {
   if (!rows?.length) return <Empty />;
   const list = rows.slice(0, limit);
   const total = rows.reduce((t, r) => t + Math.max(0, r[k] || 0), 0) || 1;
@@ -202,8 +204,10 @@ export function BarList({ rows, k = "value", fmt = n0, limit = 6, caps = false, 
   return (
     <div className={u.bars}>
       {list.map((r, i) => (
-        <div key={`${r[labelKey]}-${i}`} className={u.barRow}>
-          <span style={{ overflowWrap: "anywhere", textTransform: caps ? "capitalize" : "none" }}>{r[labelKey]}</span>
+        <div key={`${r[labelKey]}-${i}`} className={`${u.barRow} ${oneLine ? u.barRowWide : ""}`}>
+          {oneLine
+            ? <span style={{ minWidth: 0 }} title={r[labelKey]}><span className={u.barLabel}>{r[labelKey]}</span>{r.sub && <span className={u.barSub}>{r.sub}</span>}</span>
+            : <span style={{ overflowWrap: "anywhere", textTransform: caps ? "capitalize" : "none" }}>{r[labelKey]}</span>}
           <div className={u.barTrack}><div className={`${u.barInk} ${i === 0 ? u.barAccent : ""}`} style={{ width: `${(Math.max(0, r[k] || 0) / max) * 100}%` }} /></div>
           <span className={u.num}>{fmt(r[k])}{share && <> <span className={u.was}>{Math.round((Math.max(0, r[k] || 0) / total) * 100)}%</span></>}</span>
         </div>
