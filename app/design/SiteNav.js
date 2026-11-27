@@ -113,9 +113,11 @@ export default function SiteNav({ current, sub = null, trail = [], keep = "", me
                       {CC_TABS.map((c) => {
                         const subOn = current === "command" && (sub || "dashboard") === c.id;
                         return (
-                          <Link key={c.id} href={`/command#${c.id}`} className={`${n.subItem} ${subOn ? n.subOn : ""}`} aria-current={subOn ? "page" : undefined} onClick={() => setDrawer(false)}>
+                          /* A plain link (not next/link): on the Command Center the browser then fires hashchange and the tab
+                             switches; from any other page it opens the Command Center on that tab (27 Nov 2026). */
+                          <a key={c.id} href={`/command#${c.id}`} className={`${n.subItem} ${subOn ? n.subOn : ""}`} aria-current={subOn ? "page" : undefined} onClick={() => setDrawer(false)}>
                             <Icon n={c.icon} size={15} /><span>{c.label}</span>
-                          </Link>
+                          </a>
                         );
                       })}
                     </div>

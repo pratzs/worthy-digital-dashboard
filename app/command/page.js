@@ -409,7 +409,8 @@ export default function CommandCenter() {
     restore();
     try { const sv = localStorage.getItem("cc-site"); if (sv) setSite(sv); } catch { /* fine */ }
     window.addEventListener("hashchange", fromHash);
-    return () => window.removeEventListener("hashchange", fromHash);
+    window.addEventListener("popstate", fromHash);   // Back and Forward between tabs too
+    return () => { window.removeEventListener("hashchange", fromHash); window.removeEventListener("popstate", fromHash); };
   }, []);
   useEffect(() => {
     if (restored) cache.set("cc-view-v1", { tab, preset, from, to, mode, feedTab });
