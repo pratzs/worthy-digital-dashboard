@@ -15,6 +15,8 @@ Every rule Pratham has set for the Worthy Digital Dashboard and the Command Cent
 - New figures are checked against the headline to the cent before they ship (month by month where they can be).
 - Free-in, free-out merchandise ($0 sale and $0 cost) never appears in report lists.
 - No explanation paragraphs under figures. Labels only; the method goes in docs.
+- Say "online store sales", never name the platform (Shopify) on screen (Pratham, 27 Nov 2026).
+- Never add up figures whose sources changed over time (for example Dutch Rusk moving onto the online store from July 2026): show each source on its own so a migration never reads as growth.
 - No repeated numbers on one page (the old "From orders to profit" card repeated the headline strip and was removed).
 
 ## 3. Colour

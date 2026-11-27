@@ -1702,7 +1702,7 @@ function AiSearch({ site, start, end, onAdd, data }) {
               <div className={s.stat}><div className={`${s.statNum} ${e.asked ? s.accentNum : ""}`}>{e.asked ? `${e.named}/${e.asked}` : "-"}</div><div className={s.statLabel}>Answers name us</div>{e.asked > 0 && <Meter value={e.named} max={e.asked} accent />}</div>
               <div className={s.stat}><div className={s.statNum}>{e.asked ? `${e.linked}/${e.asked}` : "-"}</div><div className={s.statLabel}>Link our site</div>{e.asked > 0 && <Meter value={e.linked} max={e.asked} />}</div>
               <div className={s.stat}><div className={s.statNum}>{ai ? n0(e.visits) : "-"}</div><div className={s.statLabel}>Visits{e.conversions ? `, ${n0(e.conversions)} converted` : ""}</div></div>
-              {e.id === "chatgpt" && showChannel && <div className={s.stat}><div className={s.statNum}>{shop ? n0(cgOrders) : "-"}</div><div className={s.statLabel}>Shopify ChatGPT orders{cgSales ? `, ${money(cgSales)}` : ""}</div></div>}
+              {e.id === "chatgpt" && showChannel && <div className={s.stat}><div className={s.statNum}>{shop ? n0(cgOrders) : "-"}</div><div className={s.statLabel}>ChatGPT orders{cgSales ? `, ${money(cgSales)}` : ""}</div></div>}
             </div>
           </section>
         ))}
@@ -2188,7 +2188,7 @@ function SocialTab({ site, start, end, nonce = 0 }) {
                   Jul to Oct read as tenfold growth in online sales. Each shop's own Shopify online store sales, so each trend is true. */}
               {shops.filter((x) => (x.months || []).length > 0).map((x) => (
                 <div key={x.id} style={{ marginTop: 20 }}>
-                  <Mini icon="bars">Shopify online store sales by month, {x.name}</Mini>
+                  <Mini icon="bars">Online store sales by month, {x.name}</Mini>
                   <MonthBars rows={x.months} k="revenue" fmt={money} partialTo={partOfMonth(x.months, p?.end || end)} />
                 </div>
               ))}
@@ -2361,7 +2361,7 @@ function Freshness({ data, liveAt, todayNow, asana, clickup, meeting, now }) {
   const items = [
     ["Live visitors", liveAt],
     ["Today so far", todayNow?.at],
-    ["Analytics and Shopify", traffic],
+    ["Visits and online store sales", traffic],
     [`Search Console${gscTo ? ` (data to ${dShort(gscTo)})` : ""}`, search],
     ["Asana", asana?.at],
     ["ClickUp", clickup?.at],
