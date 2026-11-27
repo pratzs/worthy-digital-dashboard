@@ -2265,14 +2265,20 @@ function EmailTab({ site, start, end, nonce = 0 }) {
               <RowBar value={a.now.sent} max={maxAuto} accent={a.now.sent > 0 && a.now.sent === maxAuto} />
             </div>
             {a.emails.length > 1 && a.now.sent > 0 && (
-              <Chain compact steps={a.emails.map((e, i) => ({
-                label: `Email ${i + 1}: ${e.subject}`, value: n0(e.now.sent),
-                link: i === 0 ? "" : "then",
-              }))} />
-            )}
-            {a.emails.length > 1 && a.now.sent > 0 && (
-              <div className={s.rowMeta} style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
-                {a.emails.map((e, i) => <span key={i}>Email {i + 1}: {pct(rate(e.now.clicks, e.now.delivered))} clicked</span>)}
+              /* Steps of the automation, left to right: emails sent at each step, its click rate, and a bar for how many of the
+                 first email's sends reached that step */
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginTop: 6 }}>
+                {a.emails.map((e, i) => {
+                  const first = a.emails[0].now.sent || 0;
+                  return (
+                    <div key={i} style={{ border: "1px solid var(--glass-line)", borderRadius: 14, padding: "10px 12px", background: "rgba(255,255,255,.45)", minWidth: 0 }}>
+                      <div className={s.rowMeta} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>Email {i + 1}</span><span>{pct(rate(e.now.clicks, e.now.delivered))} clicked</span></div>
+                      <div style={{ fontSize: 22, fontWeight: 300, marginTop: 2 }}>{n0(e.now.sent)}</div>
+                      <div className={s.rowMeta} title={e.subject} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.subject}</div>
+                      <Meter value={e.now.sent} max={first} accent={i === 0} />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
