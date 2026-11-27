@@ -2206,7 +2206,9 @@ function EmailTab({ site, start, end, nonce = 0 }) {
             <Mini icon="pie">Where the emails came from</Mini>
             <Ring rows={[{ name: "Campaigns", v: cN.delivered }, { name: "Automations", v: aN.delivered }].sort((a, b) => b.v - a.v)} k="v" />
             <div className={s.row} style={{ marginTop: 6 }}><div className={s.rowTitle}>Campaigns sent<div className={s.rowMeta}>{pct(rate(cN.opens, cN.delivered))} opened · {pct(rate(cN.clicks, cN.delivered))} clicked</div></div><span className={s.rowNum}>{n0(cN.count)} <Delta now={cN.count} before={cB.count} /></span></div>
-            <div className={s.row}><div className={s.rowTitle}>Automation emails<div className={s.rowMeta}>{autos.filter((a) => a.status === "active").length} of {autos.length} automations on · {pct(rate(aN.clicks, aN.delivered))} clicked</div></div><span className={s.rowNum}>{n0(aN.sent)} <Delta now={aN.sent} before={aB.sent} /></span></div>
+            {ok.length > 0 && ok.every((x) => x.automationsBlocked)
+              ? <div className={s.row}><div className={s.rowTitle}>Automation emails<div className={s.rowMeta}>Brevo key cannot read automations</div></div><span className={s.rowNum}>-</span></div>
+              : <div className={s.row}><div className={s.rowTitle}>Automation emails<div className={s.rowMeta}>{autos.filter((a) => a.status === "active").length} of {autos.length} automations on · {pct(rate(aN.clicks, aN.delivered))} clicked</div></div><span className={s.rowNum}>{n0(aN.sent)} <Delta now={aN.sent} before={aB.sent} /></span></div>}
           </div>
         </div>
 
