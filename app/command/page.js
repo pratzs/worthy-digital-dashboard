@@ -1194,6 +1194,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
           <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
           <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, start, end)}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(lead ? c[0] : ord[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={lead ? c[0] : ord[0]} before={lead ? c[1] : ord[1]} /></div></div>
           {!lead && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
+          {!lead && <OnlineProfit site={site} start={start} end={end} />}
         </div>
         <div className={s.miniHead} style={{ marginTop: 20 }}><Icon n="globe" size={13} />Search, enquiries and live</div>
         <div className={s.statLine}>
@@ -2323,6 +2324,31 @@ function WeeklySummary() {
       </div>
       {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 14.5, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{d.text}</pre>}
     </section>
+  );
+}
+
+// ── Gross profit and margin on online sales, order by order (lib/onlineMargin.js, /api/online-margin) ──
+function OnlineProfit({ site, start, end }) {
+  const [d, setD] = useState(null);
+  const [hidden, setHidden] = useState(false);
+  const shop = site === "worthyproducts" || site === "dutchrusk" ? site : "all";
+  useEffect(() => {
+    if (!start || !end || site === "worthy") return undefined;
+    let stop = false;
+    const k = `cc-om-v1:${shop}:${start}:${end}`;
+    const c = cache.get(k, 30 * 60 * 1000); setD(c || null);
+    fetch(`/api/online-margin?site=${shop}&from=${start}&to=${end}`, { cache: "no-store" })
+      .then(async (r) => { if (r.status === 401 || r.status === 403) { if (!stop) setHidden(true); return null; } const j = await r.json(); return r.ok ? j : null; })
+      .then((j) => { if (!stop && j) { setD(j); cache.set(k, j); } }).catch(() => {});
+    return () => { stop = true; };
+  }, [shop, start, end, site]);
+  if (hidden || site === "worthy") return null;
+  return (
+    <div className={s.stat}>
+      <div className={s.statNum}>{d ? money(d.grossProfit) : "-"}</div>
+      <div className={s.statLabel}>Gross profit{d?.marginPct != null ? ` · ${d.marginPct}% margin` : ""}</div>
+      {d && <div className={s.rowMeta}>On {n0(d.invoicedOrders)} of {n0(d.orders)} orders invoiced</div>}
+    </div>
   );
 }
 
