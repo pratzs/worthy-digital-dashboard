@@ -20,7 +20,7 @@ export async function POST(request) {
       body: JSON.stringify({
         // Same model as the other chats. The old claude-sonnet-4-20250514 has been retired and returned an error for every request.
         model: process.env.AI_INSIGHTS_MODEL || "claude-sonnet-5-5",
-        max_tokens: 1200,
+        max_tokens: 3000,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -31,7 +31,10 @@ export async function POST(request) {
     const person = request.headers.get('x-worthy-person');
     await addMonthTokens(person ? chatWho(person) : 'd.unknown', addUsage({}, data.usage), 0).catch(() => {});
 
-    return NextResponse.json({ text: data.content?.[0]?.text || "No insights available." });
+    /* Every text block, not only the first: with real data the model can lead with a block that is not text, which left
+       "No insights available" on every card (27 Nov 2026). */
+    const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+    return NextResponse.json({ text: text || (data.stop_reason === 'max_tokens' ? 'The answer ran too long; try again.' : 'No insights available.') });
   } catch (err) {
     console.error("AI proxy error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });

@@ -4030,7 +4030,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             )}
 
             {showGroup("movers") && isAnalytics && <GroupTitle text="Fast & Slow Movers" />}
-            {showGroup("movers") && activeStore.id === "luxe" && <StockStates />}
+            {showGroup("movers") && activeStore.id === "luxe" && <StockStates store="luxe" />}
             {showGroup("movers") && (
               <div className={st.tableGrid}>
                 <AdvancedTable icon="zap" title="Fast-Moving SKUs" range={tableRange()} subtitle="Highest velocity by units sold, keep stocked & push wider"

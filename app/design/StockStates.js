@@ -29,6 +29,25 @@ export default function StockStates({ store = "worthy" }) {
   if (hidden) return null;
   const n = d?.north, s = d?.south;
   const maxV = n?.states ? Math.max(...n.states.map((x) => x.value), 1) : 1;
+  /* Follows the company picked at the top (27 Nov 2026): North shows North only; South (Dutch Rusk) its own warehouse only,
+     as Ostendo keeps no best-before dates or clearance location to split it by. */
+  if (store === "luxe") return (
+    <Card style={{ marginBottom: 14 }} aria-label="Stock in the warehouse">
+      <CardHead icon="wallet" title="Stock in the warehouse">{d && <Range>As at {dLong(d.today)}</Range>}</CardHead>
+      {err && !d && <div className={u.empty}>Could not read stock: {err}</div>}
+      {!d && !err && <Skeleton height={90} />}
+      {d && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 18 }}>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange-ink)" }}>{money(s?.total?.value)}</div><div className={u.statLabel}>Value at cost</div></div>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{n0(s?.total?.units)}</div><div className={u.statLabel}>Units</div></div>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{n0(s?.total?.products)}</div><div className={u.statLabel}>Products in stock</div></div>
+          </div>
+          <div className={u.was} style={{ marginTop: 14, display: "flex", gap: 6, alignItems: "center" }}><Icon n="refresh" size={11} />Read {new Date(d.generatedAt).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" })}</div>
+        </>
+      )}
+    </Card>
+  );
   return (
     <Card style={{ marginBottom: 14 }} aria-label="Clearance and expired stock">
       <CardHead icon="wallet" title="Clearance and expired stock">{d && <Range>As at {dLong(d.today)}</Range>}</CardHead>
@@ -37,12 +56,11 @@ export default function StockStates({ store = "worthy" }) {
       {d && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 18, marginBottom: 22 }}>
-            <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(n?.total?.value)}</div><div className={u.statLabel}>Worthy Products North, whole warehouse · {n0(n?.total?.units)} units</div></div>
-            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange-ink)" }}>{money((n?.states || []).filter((x) => x.key !== "good" && x.key !== "short").reduce((t, x) => t + x.value, 0))}</div><div className={u.statLabel}>North: past best-before, damaged and clearance</div></div>
-            <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(s?.total?.value)}</div><div className={u.statLabel}>Worthy Products South (Dutch Rusk), whole warehouse · {n0(s?.total?.units)} units</div></div>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em" }}>{money(n?.total?.value)}</div><div className={u.statLabel}>Whole warehouse · {n0(n?.total?.units)} units</div></div>
+            <div><div style={{ fontSize: 30, letterSpacing: "-.02em", color: "var(--orange-ink)" }}>{money((n?.states || []).filter((x) => x.key !== "good" && x.key !== "short").reduce((t, x) => t + x.value, 0))}</div><div className={u.statLabel}>Past best-before, damaged and clearance</div></div>
           </div>
 
-          <Mini icon="pie">Worthy Products North by state</Mini>
+          <Mini icon="pie">By state</Mini>
           <div className={u.tableWrap}>
             <table className={u.table}>
               <thead><tr><th scope="col">State</th><th scope="col" style={{ width: "26%" }}>Share of stock value</th><th scope="col" className={u.num}>Products</th><th scope="col" className={u.num}>Units</th><th scope="col" className={u.num}>Value at cost</th></tr></thead>
@@ -57,15 +75,11 @@ export default function StockStates({ store = "worthy" }) {
                   </tr>
                 ))}
                 <tr><td><strong>Whole warehouse</strong></td><td /><td /><td className={u.num}><strong>{n0(n?.total?.units)}</strong></td><td className={u.num}><strong>{money(n?.total?.value)}</strong></td></tr>
-                <tr>
-                  <td>Worthy Products South (Dutch Rusk), whole warehouse</td>
-                  <td /><td className={u.num}>{n0(s?.total?.products)}</td><td className={u.num}>{n0(s?.total?.units)}</td><td className={u.num}>{money(s?.total?.value)}</td>
-                </tr>
               </tbody>
             </table>
           </div>
 
-          <Fold id="stock-states-items" icon="folder" title="What is in it, North" summary={`${(n?.expired || []).length} past best-before · ${(n?.damaged || []).length} damaged · ${(n?.clearance || []).length} in clearance`}>
+          <Fold id="stock-states-items" icon="folder" title="What is in it" summary={`${(n?.expired || []).length} past best-before · ${(n?.damaged || []).length} damaged · ${(n?.clearance || []).length} in clearance`}>
           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 10px" }}>
             <div className={u.seg} role="group" aria-label="List">
               {[["expired", "Past best-before"], ["damaged", "Damaged Goods"], ["clearance", "Clearance location"]].map(([k, t]) => (
