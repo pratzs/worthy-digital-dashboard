@@ -1313,7 +1313,7 @@ function AsanaCard({ asana, tasks, site, today, lastThu, onExt, saving }) {
   const shown = base.filter((t) => person === "all" || who(t) === person)
     .sort((a, b) => (a.done - b.done) || String(a.due || "9999").localeCompare(String(b.due || "9999")));
   return (
-    <section className={s.card}>
+    <section className={s.card} style={{ marginTop: 14 }}>   {/* 14px like every card (docs/DESIGN-PLAYBOOK.md) */}
       <div className={s.cardHead}>
         <Title icon="users">Meeting tasks</Title>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
