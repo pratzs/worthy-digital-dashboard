@@ -2112,7 +2112,7 @@ function SocialAccount({ a }) {
 const rate = (a, b) => (b ? a / b : null);
 // ── Email action items (lib/brevo.js emailActions): worked out live from Brevo, checked again every 5 minutes while the tab
 //    is open. An item drops off by itself once the problem is fixed. ──
-function EmailActions({ nonce = 0 }) {
+function EmailActions({ nonce = 0, site = "all" }) {
   const [d, setD] = useState(() => cache.get("cc-email-actions-v1", 5 * 60 * 1000));
   const [err, setErr] = useState("");
   useEffect(() => {
@@ -2125,7 +2125,8 @@ function EmailActions({ nonce = 0 }) {
     const t = setInterval(() => load(false), 5 * 60 * 1000);
     return () => { stop = true; clearInterval(t); };
   }, [nonce]);
-  const items = d?.items || [];
+  // Follows the site picked at the top, as every card does
+  const items = (d?.items || []).filter((x) => !["dutchrusk", "worthyproducts"].includes(site) || x.id.startsWith(`${site}:`));
   return (
     <section className={s.card}>
       <div className={s.cardHead}>
@@ -2169,7 +2170,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
 
   if (!cur) return (
     <div className={s.fade}>
-      <EmailActions nonce={nonce} />
+      <EmailActions nonce={nonce} site={site} />
       <section className={s.card} style={{ marginTop: 14 }}>{errText ? <div className={s.err}>Email figures could not load: {errText}</div> : <div className={s.skeleton} style={{ height: 160 }} />}</section>
     </div>
   );
@@ -2202,7 +2203,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
 
   return (
     <div className={s.fade}>
-      <EmailActions nonce={nonce} />
+      <EmailActions nonce={nonce} site={site} />
       <section className={s.card} style={{ marginTop: 14 }}>
         <div className={s.cardHead}>
           <Title icon="mail">Email marketing</Title>
