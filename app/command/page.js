@@ -2109,7 +2109,7 @@ function SocialTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
-  const ck = `cc-social-v1:${want}`;
+  const ck = `cc-social-v2:${want}`;
   useEffect(() => {
     let stop = false;
     // Within 30 minutes the server would send the same figures, so the browser's copy is used; Refresh always asks again.
@@ -2191,7 +2191,7 @@ function SocialTab({ site, start, end, nonce = 0 }) {
                   Jul to Oct read as tenfold growth in online sales. Each shop's own Shopify online store sales, so each trend is true. */}
               {shops.filter((x) => (x.months || []).length > 0).map((x) => (
                 <div key={x.id} style={{ marginTop: 20 }}>
-                  <Mini icon="bars">Online store sales by month, {x.name}</Mini>
+                  <Mini icon="bars">Online sales by month, {x.name}{x.liveFrom ? `, since ${monthLabel(x.liveFrom)}` : ""}</Mini>
                   <MonthBars rows={x.months} k="revenue" fmt={money} partialTo={partOfMonth(x.months, p?.end || end)} />
                 </div>
               ))}
