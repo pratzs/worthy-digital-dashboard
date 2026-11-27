@@ -2318,7 +2318,7 @@ function WeeklySummary() {
           {d.search && <div className={s.row}><div className={s.rowTitle}>Non-branded search clicks</div><span className={s.rowNum}>{n0(d.search[0])} <Delta now={d.search[0]} before={d.search[1]} /></span></div>}
           {d.social && <div className={s.row}><div className={s.rowTitle}>Social views<div className={s.rowMeta}>{n0(d.social.engagements[0])} engagements</div></div><span className={s.rowNum}>{n0(d.social.views[0])} <Delta now={d.social.views[0]} before={d.social.views[1]} /></span></div>}
           <div className={s.row}><div className={s.rowTitle}>Ads, month to date{d.ads.visits != null && <div className={s.rowMeta}>{n0(d.ads.visits)} visits from ads</div>}</div><span className={s.rowNum}>{money(d.ads.spend)}</span></div>
-          <div className={s.row}><div className={s.rowTitle}>Meeting<div className={s.rowMeta}>{d.meeting.sent} actions sent to Asana</div></div><span className={s.rowNum}>{d.meeting.points} to discuss</span></div>
+          <div className={s.row}><div className={s.rowTitle}>Meeting<div className={s.rowMeta}>{d.meeting.sent} {d.meeting.sent === 1 ? "action" : "actions"} sent to Asana</div></div><span className={s.rowNum}>{d.meeting.points} to discuss</span></div>
         </div>
       </div>
       {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 14.5, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{d.text}</pre>}
