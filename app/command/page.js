@@ -2114,7 +2114,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
-  const ck = `cc-email-v4:${want}`;
+  const ck = `cc-email-v5:${want}`;
   useEffect(() => {
     let stop = false;
     const fresh = nonce > 0;
@@ -2148,6 +2148,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
   const autos = ok.flatMap((x) => x.automations.map((a) => ({ ...a, shop: x.name, key: `${x.id}-${a.id}` })));
   const ST = { active: ["Active", s.pillDark], pause: ["Paused", s.pillSoft], inactive: ["Off", s.pillGrey] };
   const bestRate = Math.max(0, ...campaigns.map((c) => rate(c.clicks, c.delivered) || 0));
+  const failed = ok.filter((x) => x.failed && (x.failed.errors || x.failed.spam));
   const maxAuto = Math.max(0, ...autos.map((a) => a.now.sent));
 
   // Emails sent over time: by day for two weeks or less, else by week (Monday start); campaigns and automations stacked.
@@ -2168,6 +2169,12 @@ function EmailTab({ site, start, end, nonce = 0 }) {
           <Title icon="mail">Email marketing</Title>
           <Range>{range}</Range>
         </div>
+        {failed.map((x) => (
+          <div key={`f-${x.id}`} className={s.row} style={{ marginTop: -6, marginBottom: 8 }}>
+            <div className={s.rowTitle} style={{ display: "flex", gap: 8, alignItems: "center" }}><Icon n="alert" size={15} />{x.name}: emails Brevo could not send</div>
+            <span className={`${s.rowNum} ${s.rowNumAccent}`}>{n0(x.failed.errors)} failed{x.failed.spam ? ` · ${n0(x.failed.spam)} spam ${x.failed.spam === 1 ? "report" : "reports"}` : ""}</span>
+          </div>
+        ))}
         <Chain steps={[
           { label: "Emails delivered", value: n0(tN.delivered), pair: [tN.delivered, tB.delivered] },
           { label: "Opened", value: n0(tN.opens), link: `${pct(rate(tN.opens, tN.delivered))} opened`, pair: [tN.opens, tB.opens] },
