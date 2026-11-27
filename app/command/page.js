@@ -400,7 +400,7 @@ export default function CommandCenter() {
         if (["daily", "weekly", "monthly"].includes(v.mode)) setMode(v.mode);
         if (v.feedTab) setFeedTab(v.feedTab);
       }
-      const snap = cache.get("cc-data-v2", 24 * HOUR);
+      const snap = cache.get("cc-data-v3", 24 * HOUR);
       if (snap) { setData(snap); setLive(snap.live); setAsana(snap.asana); setClickup(snap.clickup); setBoard(snap.board); setLog(snap.log || []); setLiveAt(snap.liveAt || snap.builtAt); setTodayNow(snap.todayNow); setLoadedAt(snap.builtAt); }
       const draft = cache.get("cc-draft-v1", 7 * 24 * HOUR);
       if (draft?.kind && KINDS[draft.kind]) setEditing(draft);
@@ -426,7 +426,7 @@ export default function CommandCenter() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
       setData(j); setLive(j.live); setAsana(j.asana); setClickup(j.clickup); setBoard(j.board); setLog(j.log || []); setLiveAt(j.liveAt || j.builtAt); setTodayNow(j.todayNow); setLoadedAt(j.builtAt); setFailed("");
-      cache.set("cc-data-v2", j);
+      cache.set("cc-data-v3", j);
     } catch (e) { setFailed(String(e.message || e)); }
     finally { setLoading(false); }
   }, []);
@@ -482,7 +482,7 @@ export default function CommandCenter() {
   const lead = site === "worthy";
   const daily = useMemo(() => combineTraffic(data?.traffic, site), [data, site]);
   const shopDaily = useMemo(() => (site === "all" ? combineTraffic(data?.traffic, site, SHOPS) : daily), [data, site, daily]);
-  const [rStart, rEnd] = rangeFor(preset, from, to, yesterday);
+  const [rStart, rEnd] = rangeFor(preset, from, to, today);   // periods run up to today (real time), like the shops' own reports
   const sw30 = useMemo(() => rangeWin(shopDaily, rStart, rEnd), [shopDaily, rStart, rEnd]);
   const w30 = useMemo(() => rangeWin(daily, rStart, rEnd), [daily, rStart, rEnd]);
   const rangeText = `${dShort(rStart)}${rStart.slice(0, 4) !== rEnd.slice(0, 4) ? ` ${rStart.slice(0, 4)}` : ""} to ${dShort(rEnd)} ${rEnd.slice(0, 4)}`;
@@ -580,7 +580,7 @@ export default function CommandCenter() {
             <select className={s.select} value={preset} onChange={(e) => { setPreset(e.target.value); if (e.target.value === "custom" && !from) { setFrom(rStart); setTo(rEnd); } }} aria-label="Date range">
               {PRESETS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
             </select>
-            <DatePair start={rStart} end={rEnd} max={yesterday} onChange={pickDates} />
+            <DatePair start={rStart} end={rEnd} max={today} onChange={pickDates} />
             <select className={s.select} value={site} onChange={(e) => chooseSite(e.target.value)} aria-label="Site">
               <option value="all">All sites</option>
               {SITES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -1163,7 +1163,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
   const spendFrom = `${addDays(`${today.slice(0, 7)}-01`, -160).slice(0, 7)}-01`;
   useEffect(() => {
     let stop = false;
-    fetch(`/api/command?spend=1&start=${spendFrom}&end=${addDays(today, -1)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (!stop) setAuto(j); }).catch(() => {});
+    fetch(`/api/command?spend=1&start=${spendFrom}&end=${today}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (!stop) setAuto(j); }).catch(() => {});
     return () => { stop = true; };
   }, [spendFrom, today]);
   const autoRows = [...(auto?.google?.rows || []), ...(auto?.meta?.rows || [])].filter((r) => (r.site ? site === "all" || r.site === site : site === "all"));
