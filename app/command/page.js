@@ -2114,7 +2114,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
-  const ck = `cc-email-v2:${want}`;
+  const ck = `cc-email-v3:${want}`;
   useEffect(() => {
     let stop = false;
     const fresh = nonce > 0;
@@ -2147,6 +2147,19 @@ function EmailTab({ site, start, end, nonce = 0 }) {
   const campaigns = ok.flatMap((x) => x.campaigns.list.map((c) => ({ ...c, shop: x.name }))).sort((a, b) => (a.date < b.date ? 1 : -1));
   const autos = ok.flatMap((x) => x.automations.map((a) => ({ ...a, shop: x.name, key: `${x.id}-${a.id}` })));
   const ST = { active: ["Active", s.pillDark], pause: ["Paused", s.pillSoft], inactive: ["Off", s.pillGrey] };
+  const bestRate = Math.max(0, ...campaigns.map((c) => rate(c.clicks, c.delivered) || 0));
+  const maxAuto = Math.max(0, ...autos.map((a) => a.now.sent));
+
+  // Emails sent over time: by day for two weeks or less, else by week (Monday start); campaigns and automations stacked.
+  const nDays = Math.round((d0(cur.to) - d0(cur.from)) / 86400000) + 1;
+  const byWeek = nDays > 14;
+  const bucketOf = (iso) => { if (!byWeek) return iso; const t = d0(iso); const wd = (t.getUTCDay() + 6) % 7; return new Date(t.getTime() - wd * 86400000).toISOString().slice(0, 10); };
+  const buckets = new Map();
+  for (let t = d0(cur.from).getTime(); t <= d0(cur.to).getTime(); t += 86400000) { const b = bucketOf(new Date(t).toISOString().slice(0, 10)); if (!buckets.has(b)) buckets.set(b, { key: b, camp: 0, auto: 0 }); }
+  campaigns.forEach((c) => { const b = buckets.get(bucketOf(c.date)); if (b) b.camp += c.sent; });
+  autos.forEach((a) => Object.entries(a.byDay || {}).forEach(([day, v]) => { const b = buckets.get(bucketOf(day)); if (b) b.auto += v; }));
+  const series = [...buckets.values()];
+  const peak = Math.max(1, ...series.map((b) => b.camp + b.auto));
 
   return (
     <div className={s.fade}>
@@ -2155,36 +2168,61 @@ function EmailTab({ site, start, end, nonce = 0 }) {
           <Title icon="mail">Email marketing</Title>
           <Range>{range}</Range>
         </div>
-        <div className={s.statLine}>
-          <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{n0(tN.delivered)}</div><div className={s.statLabel}>Emails delivered <Delta now={tN.delivered} before={tB.delivered} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{pct(rate(tN.opens, tN.delivered))}</div><div className={s.statLabel}>Opened <Delta points now={rate(tN.opens, tN.delivered)} before={rate(tB.opens, tB.delivered)} /></div></div>
-          <div className={s.stat}><div className={s.statNum}>{pct(rate(tN.clicks, tN.delivered))}</div><div className={s.statLabel}>Clicked <Delta points now={rate(tN.clicks, tN.delivered)} before={rate(tB.clicks, tB.delivered)} /></div><div className={s.rowMeta}>{n0(tN.clicks)} clicked</div></div>
-          <div className={s.stat}><div className={s.statNum}>{n0(tN.unsubscribed)}</div><div className={s.statLabel}>Unsubscribed <Delta invert now={tN.unsubscribed} before={tB.unsubscribed} /></div></div>
+        <Chain steps={[
+          { label: "Emails delivered", value: n0(tN.delivered), pair: [tN.delivered, tB.delivered] },
+          { label: "Opened", value: n0(tN.opens), link: `${pct(rate(tN.opens, tN.delivered))} opened`, pair: [tN.opens, tB.opens] },
+          { label: "Clicked", value: n0(tN.clicks), link: `${pct(rate(tN.clicks, tN.opens))} of opens`, pair: [tN.clicks, tB.clicks], accent: true },
+        ]} />
+        <div className={s.gauges} style={{ marginTop: 18 }}>
+          <Gauge value={rate(tN.opens, tN.delivered)} label="Open rate" text={pct(rate(tN.opens, tN.delivered))} />
+          <Gauge value={Math.min(1, (rate(tN.clicks, tN.delivered) || 0) * 5)} accent label="Click rate" text={pct(rate(tN.clicks, tN.delivered))} />
+          <Gauge value={Math.min(1, (rate(tN.unsubscribed, tN.delivered) || 0) * 50)} label={`Unsubscribed (${n0(tN.unsubscribed)})`} text={pct(rate(tN.unsubscribed, tN.delivered), 2)} />
         </div>
+
         <div className={s.grid2} style={{ marginTop: 18 }}>
           <div>
-            <div className={s.miniHead}><Icon n="megaphone" size={13} />Campaigns</div>
-            <div className={s.row}><div className={s.rowTitle}>Sent<div className={s.rowMeta}>{n0(cN.delivered)} delivered</div></div><span className={s.rowNum}>{n0(cN.count)} <Delta now={cN.count} before={cB.count} /></span></div>
-            <div className={s.row}><div className={s.rowTitle}>Opened · clicked</div><span className={s.rowNum}>{pct(rate(cN.opens, cN.delivered))} · {pct(rate(cN.clicks, cN.delivered))}</span></div>
+            <Mini icon="bars">Emails sent {byWeek ? "by week" : "by day"}</Mini>
+            <div className={s.monthBars} role="img" aria-label={`Emails sent ${byWeek ? "by week" : "by day"}`}>
+              {series.map((b, i) => {
+                const tot = b.camp + b.auto;
+                return (
+                  <div key={b.key} title={`${byWeek ? "Week of " : ""}${dShort(b.key)}: ${n0(b.camp)} campaign, ${n0(b.auto)} automation`}>
+                    <b>{tot ? short(tot) : ""}</b>
+                    <div style={{ width: "100%", maxWidth: 26, height: `${Math.max(3, (tot / peak) * 100)}%`, display: "flex", flexDirection: "column", borderRadius: "6px 6px 2px 2px", overflow: "hidden", background: tot ? "transparent" : "rgba(0,0,0,.06)" }}>
+                      {b.camp > 0 && <i style={{ maxWidth: "none", borderRadius: 0, flex: b.camp, background: "var(--orange)", opacity: 1 }} />}
+                      {b.auto > 0 && <i style={{ maxWidth: "none", borderRadius: 0, flex: b.auto, background: "var(--ink)", opacity: 0.22 }} />}
+                    </div>
+                    <span>{(series.length <= 16 || i % 2 === 0) ? dShort(b.key) : ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className={s.ringLegend} style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 10 }}>
+              <div><i style={{ background: "var(--orange)" }} /><span>Campaigns</span></div>
+              <div><i style={{ background: "var(--ink)", opacity: 0.22 }} /><span>Automations</span></div>
+            </div>
           </div>
           <div>
-            <div className={s.miniHead}><Icon n="zap" size={13} />Automations</div>
-            <div className={s.row}><div className={s.rowTitle}>Emails sent<div className={s.rowMeta}>{autos.filter((a) => a.status === "active").length} of {autos.length} automations on</div></div><span className={s.rowNum}>{n0(aN.sent)} <Delta now={aN.sent} before={aB.sent} /></span></div>
-            <div className={s.row}><div className={s.rowTitle}>Opened · clicked</div><span className={s.rowNum}>{pct(rate(aN.opens, aN.delivered))} · {pct(rate(aN.clicks, aN.delivered))}</span></div>
+            <Mini icon="pie">Where the emails came from</Mini>
+            <Ring rows={[{ name: "Campaigns", v: cN.delivered }, { name: "Automations", v: aN.delivered }].sort((a, b) => b.v - a.v)} k="v" />
+            <div className={s.row} style={{ marginTop: 6 }}><div className={s.rowTitle}>Campaigns sent<div className={s.rowMeta}>{pct(rate(cN.opens, cN.delivered))} opened · {pct(rate(cN.clicks, cN.delivered))} clicked</div></div><span className={s.rowNum}>{n0(cN.count)} <Delta now={cN.count} before={cB.count} /></span></div>
+            <div className={s.row}><div className={s.rowTitle}>Automation emails<div className={s.rowMeta}>{autos.filter((a) => a.status === "active").length} of {autos.length} automations on · {pct(rate(aN.clicks, aN.delivered))} clicked</div></div><span className={s.rowNum}>{n0(aN.sent)} <Delta now={aN.sent} before={aB.sent} /></span></div>
           </div>
         </div>
+
         {pick.length > 1 && (
           <div style={{ marginTop: 18 }}>
-            <div className={s.miniHead}><Icon n="store" size={13} />By shop</div>
+            <Mini icon="store">By shop</Mini>
             {shops.map((x) => {
               if (x.status !== "ok") return (
-                <div key={x.id} className={s.row}><div className={s.rowTitle}>{x.name}</div><span className={`${s.pill} ${s.pillGrey}`}>{x.status === "not_connected" ? "Brevo not connected" : "Could not load"}</span></div>
+                <div key={x.id} className={s.row}><div className={s.rowTitle}>{x.name}</div><span className={`${s.pill} ${s.pillGrey}`}>{x.status === "not_connected" ? "Brevo not connected" : "Brevo refused the connection"}</span></div>
               );
               const t = add(x.campaigns.now, x.automations.reduce((u, a) => add(u, a.now), zero));
               return (
                 <div key={x.id} className={s.row}>
                   <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.name}</div><div className={s.rowMeta}>{n0(x.campaigns.now.count)} campaigns · {n0(x.automations.reduce((u, a) => u + a.now.sent, 0))} automation emails</div></div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(t.delivered)} delivered</span><div className={s.rowMeta}>{pct(rate(t.opens, t.delivered))} opened · {pct(rate(t.clicks, t.delivered))} clicked</div></div>
+                  <RowBar value={t.delivered} max={tN.delivered} accent />
                 </div>
               );
             })}
@@ -2195,39 +2233,49 @@ function EmailTab({ site, start, end, nonce = 0 }) {
       <section className={s.card} style={{ marginTop: 14 }}>
         <div className={s.cardHead}>
           <Title icon="megaphone">Campaigns sent</Title>
-          <Range>{`${dShort(cur.from)} to ${dShort(cur.to)}`}</Range>
+          <span className={s.tag}><Icon n="click" size={11} />Click rate</span>
         </div>
         {campaigns.length === 0 && <div className={s.empty}>No campaigns sent in these dates</div>}
-        {campaigns.map((c) => (
-          <div key={`${c.shop}-${c.id}`} className={s.row}>
-            <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{c.name}</div><div className={s.rowMeta}>{dShort(c.date)} · {c.shop} · {n0(c.delivered)} delivered{c.unsubscribed ? ` · ${n0(c.unsubscribed)} unsubscribed` : ""}</div></div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{pct(rate(c.clicks, c.delivered))} clicked</span><div className={s.rowMeta}>{pct(rate(c.opens, c.delivered))} opened · {n0(c.clicks)} clicks</div></div>
-          </div>
-        ))}
+        {campaigns.map((c) => {
+          const r = rate(c.clicks, c.delivered) || 0, top = r > 0 && r === bestRate;
+          return (
+            <div key={`${c.shop}-${c.id}`} className={s.row}>
+              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{c.name}</div><div className={s.rowMeta}>{dShort(c.date)}{pick.length > 1 ? ` · ${c.shop}` : ""} · {n0(c.delivered)} delivered · {pct(rate(c.opens, c.delivered))} opened{c.unsubscribed ? ` · ${n0(c.unsubscribed)} unsubscribed` : ""}</div></div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}><span className={`${s.rowNum} ${top ? s.rowNumAccent : ""}`}>{pct(r)}</span><div className={s.rowMeta}>{n0(c.clicks)} clicked</div></div>
+              <RowBar value={r} max={bestRate} accent={top} />
+            </div>
+          );
+        })}
       </section>
 
       <section className={s.card} style={{ marginTop: 14 }}>
         <div className={s.cardHead}>
           <Title icon="zap">Automations</Title>
-          <Range>{`${dShort(cur.from)} to ${dShort(cur.to)}`}</Range>
+          <span className={s.tag}><Icon n="mail" size={11} />Emails sent</span>
         </div>
         {autos.length === 0 && <div className={s.empty}>No automations</div>}
-        {autos.map((a) => (
-          <Fragment key={a.key}>
-            <div className={s.row}>
+        {autos.map((a, ai) => (
+          <div key={a.key} style={{ padding: "4px 0 14px", borderBottom: ai < autos.length - 1 ? "1px solid var(--line)" : 0 }}>
+            <div className={s.row} style={{ borderBottom: 0 }}>
               <div style={{ minWidth: 0 }}>
                 <div className={s.rowTitle} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{a.name}<span className={`${s.pill} ${(ST[a.status] || ST.inactive)[1]}`}>{(ST[a.status] || ST.inactive)[0]}</span></div>
-                <div className={s.rowMeta}>{a.trigger}{pick.length > 1 ? ` · ${a.shop}` : ""} · {a.emails.length} {a.emails.length === 1 ? "email" : "emails"}</div>
+                <div className={s.rowMeta}>{a.trigger}{pick.length > 1 ? ` · ${a.shop}` : ""}</div>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(a.now.sent)} sent <Delta now={a.now.sent} before={a.before.sent} /></span><div className={s.rowMeta}>{pct(rate(a.now.opens, a.now.delivered))} opened · {pct(rate(a.now.clicks, a.now.delivered))} clicked</div></div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(a.now.sent)} <Delta now={a.now.sent} before={a.before.sent} /></span><div className={s.rowMeta}>{pct(rate(a.now.opens, a.now.delivered))} opened · {pct(rate(a.now.clicks, a.now.delivered))} clicked</div></div>
+              <RowBar value={a.now.sent} max={maxAuto} accent={a.now.sent > 0 && a.now.sent === maxAuto} />
             </div>
-            {a.emails.length > 1 && a.now.sent > 0 && a.emails.map((e, i) => (
-              <div key={`${a.key}-${i}`} className={s.row} style={{ paddingLeft: 22 }}>
-                <div style={{ minWidth: 0 }}><div className={s.rowMeta} style={{ fontSize: 14 }}>Email {i + 1}: {e.subject}</div></div>
-                <span className={s.rowMeta} style={{ whiteSpace: "nowrap", fontSize: 14 }}>{n0(e.now.sent)} sent · {pct(rate(e.now.clicks, e.now.delivered))} clicked</span>
+            {a.emails.length > 1 && a.now.sent > 0 && (
+              <Chain compact steps={a.emails.map((e, i) => ({
+                label: `Email ${i + 1}: ${e.subject}`, value: n0(e.now.sent),
+                link: i === 0 ? "" : "then",
+              }))} />
+            )}
+            {a.emails.length > 1 && a.now.sent > 0 && (
+              <div className={s.rowMeta} style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
+                {a.emails.map((e, i) => <span key={i}>Email {i + 1}: {pct(rate(e.now.clicks, e.now.delivered))} clicked</span>)}
               </div>
-            ))}
-          </Fragment>
+            )}
+          </div>
         ))}
       </section>
     </div>
