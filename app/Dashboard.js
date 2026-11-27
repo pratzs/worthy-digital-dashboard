@@ -2992,7 +2992,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
   const productColumns  = [
     { key: "name",    label: "Product",  color: T.text },
-    { key: "qtySold", label: "Units",    align: "right" },
+    { key: "qtySold", label: "Units",    align: "right", format: v => fmtCount(v) },
     { key: "revenue", label: "Revenue",  align: "right", color: COLORS.ink2, format: (v, c) => fmtK(v, c) },
     { key: "margin",  label: "Margin",   align: "right", format: v => v ? `${v}%` : "-" },
   ];
@@ -3010,8 +3010,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
   ];
   const slowMovingColumns = [
     { key: "name",          label: "Product",      color: T.text },
-    { key: "currentStock",  label: "Stock",        align: "right", color: accent },
-    { key: "qtySold",       label: "Sold",         align: "right", color: COLORS.ink2 },
+    { key: "currentStock",  label: "Stock",        align: "right", color: accent, format: v => fmtCount(v) },
+    { key: "qtySold",       label: "Sold",         align: "right", color: COLORS.ink2, format: v => fmtCount(v) },
     { key: "lockedCapital", label: "Value Locked", align: "right", color: ORANGE_TEXT, format: (v, c) => fmtK(v, c) },
   ];
   const churnedColumns = [
