@@ -31,7 +31,7 @@ const GROUPS = [
   { label: "Performance", ids: ["overview", "reps", "margin"] },
   { label: "Products and stock", ids: ["analytics"] },
   { label: "Money owed", ids: ["credits", "debtors"] },
-  { label: "Marketing", ids: ["command", "socialweb"] },
+  { label: "Ecommerce and Marketing", ids: ["command", "socialweb"] },
   { label: "Help", ids: ["chat", "repusage"] },
 ];
 

@@ -78,7 +78,7 @@ Cards side by side share a top, so a negative or equal value between columns is 
 
 ## 9. Navigation
 
-- Left sidebar, open by default, collapsible to icons (remembered), labelled groups with clear icons; the Command Center's tabs live inside it (no second menu bar). On a phone it opens from a menu button.
+- Left sidebar, open by default, collapsible to icons (remembered), labelled groups with clear icons; the Command Center's tabs live inside it under "Ecommerce and Marketing" (no second menu bar). On a phone it opens from a menu button.
 - Every page keeps a Back button and a trail.
 
 ## 10. Speed and Odoo
