@@ -750,9 +750,10 @@ export default function CommandCenter() {
 }
 
 const posClass = (p) => (p <= 3 ? s.pos1 : p <= 10 ? s.pos2 : p <= 20 ? s.pos3 : s.pos4);
-// The same bands as the rankings filter: top 3, rest of page 1, page 2, beyond
-const POS_BANDS = [["top3", "Top 3", (p) => p <= 3], ["page1", "Rest of page 1", (p) => p > 3 && p <= 10], ["page2", "Page 2", (p) => p > 10 && p <= 20], ["beyond", "Beyond", (p) => p > 20]];
-const BAND_SHADE = [1, 0.78, 0.35, 0.14];
+// The same bands as the rankings filter: top 3, rest of page 1, page 2, page 3, beyond page 3
+const POS_BANDS = [["top3", "Top 3", (p) => p <= 3], ["page1", "Rest of page 1", (p) => p > 3 && p <= 10], ["page2", "Page 2", (p) => p > 10 && p <= 20], ["page3", "Page 3", (p) => p > 20 && p <= 30], ["beyond", "Beyond page 3", (p) => p > 30]];
+const BAND_SHADE = [1, 0.78, 0.45, 0.25, 0.12];
+const pagePath = (u) => { try { const x = new URL(u); return x.pathname === "/" ? x.hostname.replace(/^www\./, "") : x.pathname.replace(/\/$/, ""); } catch { return u || "-"; } };
 
 // ── Search tab ──────────────────────────────────────────────────────────────────────────────────────
 function SearchTab(props) {
@@ -775,7 +776,7 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
   const T = (k, i) => sites.reduce((a, x) => a + (x.totals?.[k]?.[i] || 0), 0);
   const wpos = (i) => { const imp = T("nonBrandedImpressions", i); return imp ? sites.reduce((a, x) => a + (x.totals.nonBrandedPosition[i] || 0) * x.totals.nonBrandedImpressions[i], 0) / imp : null; };
   const all = sites.flatMap((x) => x.queries.map((r) => ({ ...r, site: x.id })));
-  const inBand = (p) => band === "all" || (band === "top3" ? p <= 3 : band === "page1" ? p <= 10 : band === "page2" ? p > 10 && p <= 20 : p > 20);
+  const inBand = (p) => band === "all" || (band === "page1" ? p <= 10 : band === "page2" ? p > 10 && p <= 20 : band === "page3" ? p > 20 && p <= 30 : p > 30);
   const shown = all.filter((r) => inBand(r.position) && (!q || r.query.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => { const k = sort.k; const av = k === "move" ? (a.prevPosition ? a.prevPosition - a.position : -999) : a[k]; const bv = k === "move" ? (b.prevPosition ? b.prevPosition - b.position : -999) : b[k]; return typeof av === "string" ? av.localeCompare(bv) * sort.dir : (av - bv) * sort.dir; })
     .slice(0, 200);
@@ -811,15 +812,15 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
             </div>
           )}
           <div className={s.cardHead}>
-            <div className={s.seg}>{[["all", "All"], ["top3", "Top 3"], ["page1", "Page 1"], ["page2", "Page 2"], ["beyond", "Beyond"]].map(([id, l]) => <button key={id} type="button" className={band === id ? s.segOn : ""} onClick={() => setBand(id)}>{l}</button>)}</div>
+            <div className={s.seg}>{[["all", "All"], ["page1", "Page 1"], ["page2", "Page 2"], ["page3", "Page 3"], ["beyond", "Beyond page 3"]].map(([id, l]) => <button key={id} type="button" className={band === id ? s.segOn : ""} onClick={() => setBand(id)}>{l}</button>)}</div>
             <input className={s.search} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className={s.tableWrap}>
             <table className={s.table}>
-              <thead><tr>{th("query", "Search term")}{site === "all" && <th className={s.hideSm}>Site</th>}{th("position", "Position", true)}{th("move", "Move", true)}{th("clicks", "Clicks", true)}{th("impressions", "Shown", true)}<th className={`${s.num} ${s.hideSm}`}>CTR</th></tr></thead>
+              <thead><tr>{th("query", "Search term")}{site === "all" && <th className={s.hideSm}>Site</th>}{th("position", "Position", true)}{th("move", "Move", true)}{th("clicks", "Clicks", true)}{th("impressions", "Shown", true)}<th className={`${s.num} ${s.hideSm}`}>CTR</th><th className={s.hideSm}>Ranking page</th></tr></thead>
               <tbody>
-                {!data && [0, 1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={7}><div className={s.skeleton} style={{ height: 16 }} /></td></tr>)}
-                {data && shown.length === 0 && <tr><td colSpan={7} className={s.empty}>No matches</td></tr>}
+                {!data && [0, 1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={8}><div className={s.skeleton} style={{ height: 16 }} /></td></tr>)}
+                {data && shown.length === 0 && <tr><td colSpan={8} className={s.empty}>No matches</td></tr>}
                 {shown.map((r) => {
                   const mv = r.prevPosition ? r.prevPosition - r.position : null;
                   return (
@@ -831,6 +832,7 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
                       <td className={s.num}>{n0(r.clicks)}</td>
                       <td className={s.num}>{n0(r.impressions)}</td>
                       <td className={`${s.num} ${s.hideSm}`}>{pct(r.ctr)}</td>
+                      <td className={s.hideSm} style={{ overflowWrap: "anywhere" }}>{r.page ? <a href={r.page} target="_blank" rel="noreferrer" className={s.pageLink}>{pagePath(r.page)}</a> : "-"}</td>
                     </tr>
                   );
                 })}

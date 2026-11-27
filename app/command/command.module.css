@@ -394,3 +394,6 @@ button.check:hover { border-color: var(--ink); }
 .actionMeta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .actionMeta select, .actionMeta input { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); min-height: 32px; }
 .pillWarn { background: #eef0fd; color: var(--orange-ink); }
+
+.pageLink { color: var(--ink); text-decoration: none; opacity: .72; font-size: 12.5px; }
+.pageLink:hover { opacity: 1; text-decoration: underline; }
