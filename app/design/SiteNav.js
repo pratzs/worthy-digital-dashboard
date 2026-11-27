@@ -31,7 +31,7 @@ const GROUPS = [
   { label: "Performance", ids: ["overview", "reps", "margin"] },
   { label: "Products and stock", ids: ["analytics"] },
   { label: "Money owed", ids: ["credits", "debtors"] },
-  { label: "Ecommerce and Marketing", ids: ["command", "socialweb"] },
+  { label: "Ecommerce and Marketing", ids: ["command"] },   // Social and web is the Command Center tab; the old /social-web page sends you there
   { label: "Help", ids: ["chat", "repusage"] },
 ];
 

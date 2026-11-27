@@ -2184,12 +2184,14 @@ function SocialTab({ site, start, end, nonce = 0 }) {
                 { label: "Orders", value: n0(orders?.[0]), pair: orders, link: conv !== null ? `${(conv * 100).toFixed(2)}% converted` : "" },
                 { label: "Online sales", value: moneyShort(sales?.[0]), pair: sales, link: orders?.[0] ? `${money(sales[0] / orders[0])} an order` : "", accent: true },
               ]} />
-              {shopMonths.length > 0 && (
-                <div style={{ marginTop: 20 }}>
-                  <Mini icon="bars">Online sales by month{shops.length === 1 ? `, ${shops[0].name}` : ""}</Mini>
-                  <MonthBars rows={shopMonths} k="revenue" fmt={money} partialTo={partOfMonth(shopMonths, p?.end || end)} />
+              {/* One chart per shop (27 Nov 2026): added together, Dutch Rusk customers moving onto the Shopify portal over
+                  Jul to Oct read as tenfold growth in online sales. Each shop's own Shopify online store sales, so each trend is true. */}
+              {shops.filter((x) => (x.months || []).length > 0).map((x) => (
+                <div key={x.id} style={{ marginTop: 20 }}>
+                  <Mini icon="bars">Shopify online store sales by month, {x.name}</Mini>
+                  <MonthBars rows={x.months} k="revenue" fmt={money} partialTo={partOfMonth(x.months, p?.end || end)} />
                 </div>
-              )}
+              ))}
               {shops.length > 1 && sales?.[0] > 0 && (
                 <div style={{ marginTop: 18 }}>
                   <Mini icon="pie">Share of online sales</Mini>
