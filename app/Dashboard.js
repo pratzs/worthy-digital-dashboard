@@ -3104,7 +3104,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const initials = (me?.label || "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "W";
 
   return (
-    <div className={st.page} style={{ background: T.bg, color: T.text }}>
+    <div className={st.page} style={{ background: "transparent", color: T.text }}>   {/* the body's soft wash shows through the frosted cards */}
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:${T.scrollTrack}}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:6px}
@@ -3332,7 +3332,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         </div>}
 
         {/* 3. WHAT NEEDS ATTENTION: weekly summary for management, all three businesses (Overview) */}
-        {isOv && isMgmt && <WeeklySummary style={{ marginBottom: 14 }} />}
+        {isOv && isMgmt && <WeeklySummary style={{ marginBottom: 14 }} business={activeStore.id === "luxe" ? "Dutch Rusk" : activeStore.id === "nova" ? "Worthy Oceania" : "Worthy Products"} />}
 
         {/* Sister company sales (Sales) */}
         {isSales && isMgmt && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && onFYView() && (() => {
@@ -3350,8 +3350,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
           const wkGp = wk.reduce((t, r) => t + (r.grossProfit || 0), 0);
           const weekWp = wk.length && wkGp + wkCost > 0
             ? { margin: Math.round((wkGp / (wkGp + wkCost)) * 10000) / 100, cost: wkCost, costed: wkGp + wkCost } : null;
-          return <SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency}
-            companyName={activeStore.id === "nova" ? "Worthy Oceania" : "Worthy Products"} />;
+          return <div style={{ marginTop: 14 }}><SisterSalesCard cur={cur} week={picked} weekWp={weekWp} currency={activeStore.currency}
+            companyName={activeStore.id === "nova" ? "Worthy Oceania" : "Worthy Products"} /></div>;
         })()}
 
         {/* 4. WHERE WE ARE HEADING (Overview) */}

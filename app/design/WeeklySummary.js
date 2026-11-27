@@ -11,7 +11,9 @@ const cacheGet = () => { try { const v = JSON.parse(localStorage.getItem(KEY) ||
 const cacheSet = (d) => { try { localStorage.setItem(KEY, JSON.stringify({ t: Date.now(), d })); } catch { /* private window */ } };
 const pctT = (v) => (v == null ? "-" : `${Number(v).toFixed(1)}%`);
 
-export default function WeeklySummary({ style }) {
+/** business: "Worthy Products", "Worthy Oceania" or "Dutch Rusk" shows only that company (the Overview follows the company
+ *  picked at the top); left out, all three (the Command Center, the company-wide view). */
+export default function WeeklySummary({ style, business = null }) {
   const [d, setD] = useState(() => (typeof window !== "undefined" ? cacheGet() : null));
   const [err, setErr] = useState("");
   const [hidden, setHidden] = useState(false);
@@ -28,15 +30,43 @@ export default function WeeklySummary({ style }) {
   if (hidden) return null;
   if (err && !d) return <Card style={style}><div className={u.empty}>Weekly summary could not load: {err}</div></Card>;
   if (!d) return <Card style={style}><Skeleton height={160} /></Card>;
-  const subject = `Weekly summary, ${dShort(d.week.start)} to ${dLong(d.week.end)}`;
+  const one = business ? d.business.find((b) => b.name === business) : null;
+  const watch = business ? d.watch.filter((w) => w.business === business) : d.watch;
+  const showStock = !business || business === "Worthy Products";
+  const showPulls = !business || business === "Worthy Products";
+  // The draft for one company: only its own lines (the company-wide draft stays as the server wrote it)
+  const text = !business ? d.text : [
+    `${business}, week ${dShort(d.week.start)} to ${dLong(d.week.end)}`, "",
+    ...(one?.week ? [`Last week: ${money(one.week.sales)} at ${pctT(one.week.margin)}`] : []),
+    ...(one?.month ? [`${one.month.label} so far: ${money(one.month.sales)} at ${pctT(one.month.margin)}`] : []),
+    ...(one?.lastMonth ? [`${one.lastMonth.label}: ${money(one.lastMonth.sales)} at ${pctT(one.lastMonth.margin)}`] : []),
+    ...(one?.sisters ? [`Sold to our sister companies last week: ${money(one.sisters.sales)} at ${pctT(one.sisters.margin)} (not in the figures above)`] : []),
+    "", "Margin watch",
+    ...(showPulls && d.pulls?.length ? [`  Biggest pulls last week: ${d.pulls.map((g) => `${g.label.toLowerCase()} (${g.pts.toFixed(1)} pts)`).join(", ")}`] : []),
+    ...(watch.length ? watch.slice(0, 8).map((w) => `  ${w.rep}: ${w.month}${w.through ? " so far" : ""} ${pctT(w.margin)} against ${pctT(w.usual)} for the year, on ${money(w.sales)}`) : ["  No salesperson is 2 points or more under their usual margin."]),
+    ...(showStock && d.shortDated ? ["", "Short-dated stock", `  Past best-before: ${money(d.shortDated.past?.cost)} (${d.shortDated.past?.lots || 0} lots)`, `  Won't sell in time: ${money(d.shortDated.wontSellCost)} (${d.shortDated.wontSellLots} lots)`] : []),
+  ].join("\n");
+  const subject = `Weekly summary${business ? `, ${business}` : ""}, ${dShort(d.week.start)} to ${dLong(d.week.end)}`;
   return (
     <Card style={style} aria-label="Weekly summary">
       <CardHead icon="mail" title="Weekly summary">
         <Range>{dShort(d.week.start)} to {dLong(d.week.end)}</Range>
         <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}><Icon n="eye" size={14} />{open ? "Hide draft" : "Show draft"}</button>
-        <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : <Win win="Copy the wins">Copy</Win>}</button>
-        <a className={`${u.btn} ${u.btnSmall} ${u.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} /><Win win="Share this week's wins">Open as email draft</Win></a>
+        <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : <Win win="Copy the wins">Copy</Win>}</button>
+        <a className={`${u.btn} ${u.btnSmall} ${u.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`}><Icon n="out" size={14} /><Win win="Share this week's wins">Open as email draft</Win></a>
       </CardHead>
+      {one ? (
+        /* One company: its three figures side by side */
+        <div className={u.grid3}>
+          {[one.week && ["Last week", one.week], one.month && [`${one.month.label} so far`, one.month], one.lastMonth && [one.lastMonth.label, one.lastMonth]].filter(Boolean).map(([label, v]) => (
+            <div key={label} className={u.stat}>
+              <Mini icon="calendar">{label}</Mini>
+              <div className={u.statNum}>{money(v.sales)}</div>
+              <div className={u.statLabel}>{pctT(v.margin)} margin</div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className={u.grid3}>
         {d.business.map((b) => (
           <div key={b.name} className={u.stat}>
@@ -48,20 +78,21 @@ export default function WeeklySummary({ style }) {
           </div>
         ))}
       </div>
-      <div className={u.grid2} style={{ marginTop: 22 }}>
+      )}
+      <div className={showStock ? u.grid2 : ""} style={{ marginTop: 22 }}>
         <div>
           <Mini icon="alert">Margin watch</Mini>
-          {d.pulls?.length > 0 && <div className={u.rowMeta} style={{ marginBottom: 8 }}>Worthy Products last week, biggest pulls: {d.pulls.map((g) => `${g.label.toLowerCase()} ${g.pts.toFixed(1)} pts`).join(", ")}</div>}
-          {!d.watch.length ? <div className={u.empty}>No salesperson is 2 points or more under their usual margin</div> : d.watch.slice(0, 8).map((w) => (
+          {showPulls && d.pulls?.length > 0 && <div className={u.rowMeta} style={{ marginBottom: 8 }}>Worthy Products last week, biggest pulls: {d.pulls.map((g) => `${g.label.toLowerCase()} ${g.pts.toFixed(1)} pts`).join(", ")}</div>}
+          {!watch.length ? <div className={u.empty}>No salesperson is 2 points or more under their usual margin</div> : watch.slice(0, 8).map((w) => (
             <div key={`${w.business}|${w.rep}|${w.month}`} className={u.row}>
-              <div style={{ minWidth: 0 }}><div className={u.rowTitle}>{w.rep}</div><div className={u.rowMeta}>{w.business} · {w.month}{w.through ? " so far" : ""} · {money(w.sales)}</div></div>
+              <div style={{ minWidth: 0 }}><div className={u.rowTitle}>{w.rep}</div><div className={u.rowMeta}>{business ? "" : `${w.business} · `}{w.month}{w.through ? " so far" : ""} · {money(w.sales)}</div></div>
               <span style={{ color: "var(--orange-ink)", fontSize: 15, whiteSpace: "nowrap" }}>{pctT(w.margin)} <span className={u.rowMeta}>vs {pctT(w.usual)}</span></span>
             </div>
           ))}
         </div>
         <div>
-          <Mini icon="hourglass">Short-dated stock, Worthy Products</Mini>
-          {d.shortDated ? (
+          {showStock && <Mini icon="hourglass">Short-dated stock, Worthy Products</Mini>}
+          {!showStock ? null : d.shortDated ? (
             <>
               <div className={u.row}><div className={u.rowTitle}>Past best-before</div><span>{money(d.shortDated.past?.cost)} <span className={u.rowMeta}>· {d.shortDated.past?.lots || 0} lots</span></span></div>
               <div className={u.row}><div className={u.rowTitle}>Won&apos;t sell in time</div><span>{money(d.shortDated.wontSellCost)} <span className={u.rowMeta}>· {d.shortDated.wontSellLots} lots</span></span></div>
@@ -70,7 +101,7 @@ export default function WeeklySummary({ style }) {
           ) : <div className={u.empty}>Not available</div>}
         </div>
       </div>
-      {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 14.5, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{d.text}</pre>}
+      {open && <pre style={{ whiteSpace: "pre-wrap", font: "inherit", fontSize: 14.5, marginTop: 18, padding: 16, borderRadius: 14, background: "rgba(0,0,0,.03)" }}>{text}</pre>}
     </Card>
   );
 }

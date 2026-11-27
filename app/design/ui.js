@@ -22,7 +22,7 @@ export { Icon };
 export const ui = u;
 
 // Colours for charts (recharts takes plain values, not CSS variables)
-export const COLORS = { page: "#f5f4ef", card: "#fbfaf7", ink: "#141614", ink2: "#4a4f4b", mute: "#676d68", line: "rgba(30,25,15,0.08)", accent: "#f2892a", inkSoft: "rgba(20,22,20,0.28)", inkFaint: "rgba(20,22,20,0.12)" };
+export const COLORS = { page: "#f5f4ef", card: "#fbfaf7", ink: "#141614", ink2: "#4a4f4b", mute: "#676d68", line: "rgba(30,25,15,0.08)", accent: "#4B5BD6", inkSoft: "rgba(20,22,20,0.28)", inkFaint: "rgba(20,22,20,0.12)" };
 
 // ── formatting ──
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

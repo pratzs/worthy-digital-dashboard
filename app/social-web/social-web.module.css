@@ -1,5 +1,5 @@
 /* Social and Web: same look as the Command Center Social tab. Off-white, ink, orange accent. */
-.page { min-height: 100vh; min-height: 100dvh; background: var(--page); color: var(--ink); padding: clamp(16px, 2.4vw, 32px) 16px 40px; box-sizing: border-box; overflow-x: hidden; }
+.page { min-height: 100vh; min-height: 100dvh; background: transparent; color: var(--ink); padding: clamp(16px, 2.4vw, 32px) 16px 40px; box-sizing: border-box; overflow-x: hidden; }
 .wrap { max-width: 1240px; margin: 0 auto; min-width: 0; }
 .head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 4px 4px 8px; }
 .crumb { display: inline-flex; align-items: center; gap: 6px; font-size: 14.5px; color: var(--mute); text-decoration: none; }

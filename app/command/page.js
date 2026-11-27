@@ -277,7 +277,7 @@ function TrafficChart({ rows, mode, lead }) {
           <g key={f}>
             <line x1={padL} x2={padL + iw} y1={padT + ih - f * ih} y2={padT + ih - f * ih} stroke="rgba(20,22,20,.16)" strokeDasharray="5 5" />
             <text x={padL - 8} y={padT + ih - f * ih + 4} textAnchor="end" fontSize="11" fill="#676d68">{axisNum(maxA * f)}</text>
-            <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#f2892a" opacity=".85">{f ? `${lead ? "" : "$"}${axisNum(maxB * f)}` : ""}</text>
+            <text x={padL + iw + 8} y={padT + ih - f * ih + 4} textAnchor="start" fontSize="11" fill="#4B5BD6" opacity=".85">{f ? `${lead ? "" : "$"}${axisNum(maxB * f)}` : ""}</text>
           </g>
         ))}
         {rows.map((r, i) => (i % every === 0 || i === rows.length - 1) && (i === rows.length - 1 || rows.length - 1 - i >= every / 2) ? <text key={`l${i}`} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="#676d68">{r.label}</text> : null)}
@@ -285,12 +285,12 @@ function TrafficChart({ rows, mode, lead }) {
         <path d={`${smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} L${x(rows.length - 1)},${padT + ih} L${x(0)},${padT + ih} Z`} fill="url(#cc-fadeA)" />
         <path d={smoothPath(rows.map((r, i) => (r.c === null ? null : [x(i), yA(r.c)])))} stroke="#141614" strokeOpacity=".22" strokeWidth="1.6" strokeDasharray="4 4" fill="none" />
         <path d={smoothPath(rows.map((r, i) => [x(i), yA(r.a)]))} stroke="#141614" strokeWidth="2.4" fill="none" />
-        <path d={smoothPath(rows.map((r, i) => [x(i), yB(r.b)]))} stroke="#f2892a" strokeWidth="2.6" fill="none" />
+        <path d={smoothPath(rows.map((r, i) => [x(i), yB(r.b)]))} stroke="#4B5BD6" strokeWidth="2.6" fill="none" />
         {h && (
           <g>
             <line x1={x(hover)} x2={x(hover)} y1={padT + 4} y2={padT + ih} stroke="#141614" strokeOpacity=".5" strokeWidth="1.5" />
             <circle cx={x(hover)} cy={padT + 4} r="4" fill="#141614" />
-            <circle cx={x(hover)} cy={yB(h.b)} r="5.5" fill="#f2892a" stroke="#fff" strokeWidth="2" />
+            <circle cx={x(hover)} cy={yB(h.b)} r="5.5" fill="#4B5BD6" stroke="#fff" strokeWidth="2" />
             <circle cx={x(hover)} cy={yA(h.a)} r="4.5" fill="#fff" stroke="#141614" strokeWidth="2" />
           </g>
         )}
@@ -298,11 +298,11 @@ function TrafficChart({ rows, mode, lead }) {
       {h && (
         <div className={s.tip} style={{ left: Math.min(Math.max(x(hover), 90), w - 90), top: Math.max(yA(h.a), 70) }}>
           <div><b>{h.long}</b></div>
-          {change !== null && <div className={s.tipRow}><span>Change</span><b style={{ color: change >= 0 ? "#141614" : "#f2892a", display: "inline-flex", alignItems: "center", gap: 3 }}><Icon n={change >= 0 ? "tri-up" : "tri-down"} size={8} />{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
+          {change !== null && <div className={s.tipRow}><span>Change</span><b style={{ color: change >= 0 ? "#141614" : "#4B5BD6", display: "inline-flex", alignItems: "center", gap: 3 }}><Icon n={change >= 0 ? "tri-up" : "tri-down"} size={8} />{change >= 0 ? "+" : ""}{(change * 100).toFixed(2)}%</b></div>}
           <div className={s.tipRow}><span>Visits</span><b>{n0(h.a)}</b></div>
           {lead
-            ? <div className={s.tipRow}><span style={{ color: "#f2892a" }}>Enquiries</span><b>{n0(h.conv)}</b></div>
-            : <><div className={s.tipRow}><span style={{ color: "#f2892a" }}>Online sales</span><b>{money(h.b)}</b></div>
+            ? <div className={s.tipRow}><span style={{ color: "#4B5BD6" }}>Enquiries</span><b>{n0(h.conv)}</b></div>
+            : <><div className={s.tipRow}><span style={{ color: "#4B5BD6" }}>Online sales</span><b>{money(h.b)}</b></div>
               <div className={s.tipRow}><span>Orders</span><b>{n0(h.conv)}</b></div></>}
           {h.c !== null && <div className={s.tipRow}><span>Previous</span><b>{n0(h.c)}</b></div>}
         </div>

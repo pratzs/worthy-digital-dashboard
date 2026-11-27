@@ -78,6 +78,8 @@ Year figures (`lib/odooFyCache.js`): one Odoo read per company and year at a tim
 
 ## How to work on it
 
+**Before any visual change, read [DESIGN-PLAYBOOK.md](DESIGN-PLAYBOOK.md)** (spacing, colours, glass, folds, buttons, navigation, the spacing check to run live).
+
 - Build before push, always chained: `npx next build >/dev/null 2>&1 && echo BUILD-OK && git commit ... && git push`. GitHub sometimes answers 500 on push; retry.
 - Cached data needs its key bumped when logic changes: `odoo-fy-v8` (lib/odooFyCache.js and lib/odooFy.js), `rep-data-v4` (lib/repData.js), `bd-data-v5` (lib/bdData.js). A bump means the next page load reads Odoo cold (about 90 s).
 - Money in `lib/ostendo.js` helpers is integer micro-dollars: convert with `toDollars`, never `/100`.

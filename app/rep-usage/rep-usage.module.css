@@ -1,5 +1,5 @@
 /* AI questions, sign-ins and cost per person. Worthy design: off-white, ink, orange accent. */
-.page { min-height: 100vh; min-height: 100dvh; background: var(--page); color: var(--ink); padding: clamp(16px, 2.4vw, 32px) 16px 40px; box-sizing: border-box; overflow-x: hidden; }
+.page { min-height: 100vh; min-height: 100dvh; background: transparent; color: var(--ink); padding: clamp(16px, 2.4vw, 32px) 16px 40px; box-sizing: border-box; overflow-x: hidden; }
 .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 14px; min-width: 0; }
 .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 4px 6px; }
 .chip { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(255,255,255,.85); color: var(--ink); flex: none; box-shadow: 0 6px 18px -12px rgba(0,0,0,.3); }

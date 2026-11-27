@@ -24,7 +24,7 @@
 .trail a { color: var(--ink2); text-decoration: none; border-radius: 6px; padding: 2px 2px; }
 .trail a:hover { color: var(--ink); text-decoration: underline; }
 .trail span[aria-current] { color: var(--ink); }
-.btn:focus-visible, .out:focus-visible, .backBtn:focus-visible, .brand:focus-visible, .trail a:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.btn:focus-visible, .out:focus-visible, .backBtn:focus-visible, .brand:focus-visible, .trail a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 @media (max-width: 1100px) {
   .top { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "brand tools" "nav nav"; }
   .nav { justify-self: stretch; }
