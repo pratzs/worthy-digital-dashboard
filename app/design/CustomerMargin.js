@@ -90,9 +90,9 @@ export default function CustomerMargin({ company = 4, month, fy, range = null })
                         <td style={{ maxWidth: 320 }}>{c.name}<div className={u.was}>{c.people.slice(0, 2).join(", ")}{c.people.length > 2 ? ` +${c.people.length - 2}` : ""}</div></td>
                         <td className={u.num}>{money(c.revenue)}</td>
                         <td className={u.num}>{c.discount >= 1 ? money(c.discount) : "-"}</td>
-                        <td className={u.num} style={{ color: low ? "var(--orange)" : undefined, fontWeight: low ? 500 : 400 }}>{pctTxt(c.marginPct)}</td>
-                        <td className={u.num} style={{ color: c.grossProfit < 0 ? "var(--orange)" : undefined }}>{money(c.grossProfit)}</td>
-                        <td className={u.num} style={{ color: c.pullPts > 0.05 ? "var(--orange)" : COLORS.ink2 }}>{pts(c.pullPts)}</td>
+                        <td className={u.num} style={{ color: low ? "var(--orange-ink)" : undefined, fontWeight: low ? 500 : 400 }}>{pctTxt(c.marginPct)}</td>
+                        <td className={u.num} style={{ color: c.grossProfit < 0 ? "var(--orange-ink)" : undefined }}>{money(c.grossProfit)}</td>
+                        <td className={u.num} style={{ color: c.pullPts > 0.05 ? "var(--orange-ink)" : COLORS.ink2 }}>{pts(c.pullPts)}</td>
                       </tr>
                     );
                   })}

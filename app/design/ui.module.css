@@ -142,3 +142,14 @@
   .chainLink { flex-direction: row; gap: 6px; max-width: none; padding: 6px 0; justify-content: center; }
   .chainArrow { transform: rotate(90deg); margin-top: 0; }
 }
+
+/* Fold: secondary detail, closed but plain to see (27 Nov 2026) */
+.fold { margin-top: 14px; border-top: 1px solid var(--line); }
+.foldHead { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 2px; background: none; border: 0; font: inherit; color: var(--ink); cursor: pointer; text-align: left; }
+.foldHead:hover .foldPill { background: var(--accent-tint, #eef0fd); color: var(--orange-ink); }
+.foldIcon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: rgba(255,255,255,.75); color: var(--ink2); flex: none; }
+.foldTitle { font-size: 13.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink2); }
+.foldSum { font-size: 14px; color: var(--mute); margin-left: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.foldPill { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.95); font-size: 13.5px; color: var(--ink); white-space: nowrap; flex: none; transition: background .15s, color .15s; }
+.foldPillOn { background: var(--ink); color: #fff; border-color: var(--ink); }
+.foldBody { padding: 4px 0 6px; }

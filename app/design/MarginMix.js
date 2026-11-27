@@ -3,7 +3,7 @@
    everyone else away, and then this card shows nothing. Same sales and cost as the headline, split by kind of sale and by
    person, so the reader can see what pulls the company margin down and by how much. */
 import React, { useEffect, useState } from "react";
-import { Card, CardHead, Mini, Range, Skeleton, money, dLong, COLORS, ui as u } from "@/app/design/ui";
+import { Fold, Card, CardHead, Mini, Range, Skeleton, money, dLong, COLORS, ui as u } from "@/app/design/ui";
 import { Icon } from "@/app/design/icons";
 
 const cacheGet = (k, maxMs) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v && Date.now() - v.t < maxMs ? v.d : null; } catch { return null; } };
@@ -81,9 +81,9 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                     <td><div className={u.barTrack}><div className={`${u.barInk} ${g.pullPts > 0.05 ? u.barAccent : ""}`} style={{ width: `${(Math.max(0, g.share) / maxShare) * 100}%` }} /></div><div className={u.was} style={{ marginTop: 4 }}>{g.share}%</div></td>
                     <td className={u.num}>{money(g.revenue)}</td>
                     <td className={u.num}>{money(g.cost)}</td>
-                    <td className={u.num} style={{ color: g.grossProfit < 0 ? "var(--orange)" : undefined }}>{money(g.grossProfit)}</td>
+                    <td className={u.num} style={{ color: g.grossProfit < 0 ? "var(--orange-ink)" : undefined }}>{money(g.grossProfit)}</td>
                     <td className={u.num}>{pctTxt(g.marginPct)}</td>
-                    <td className={u.num} style={{ color: g.pullPts > 0.05 ? "var(--orange)" : COLORS.ink2 }}>{pts(g.pullPts)}</td>
+                    <td className={u.num} style={{ color: g.pullPts > 0.05 ? "var(--orange-ink)" : COLORS.ink2 }}>{pts(g.pullPts)}</td>
                   </tr>
                 ))}
                 <tr><td><strong>Total</strong></td><td /><td className={u.num}><strong>{money(d.revenue)}</strong></td><td className={u.num}><strong>{money(d.cost)}</strong></td><td className={u.num}><strong>{money(d.grossProfit)}</strong></td><td className={u.num}><strong>{pctTxt(d.marginPct)}</strong></td><td /></tr>
@@ -91,9 +91,8 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
             </table>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginTop: 24 }}>
-            <div>
-              <Mini icon="users">By person, everyone who sold</Mini>
+          {/* Secondary detail, folded (docs/DESIGN-PLAYBOOK.md section 7) */}
+          <Fold id={`mix-people-${company}`} icon="users" title="By person, everyone who sold" summary={`${d.people.length} people`}>
               <div className={u.tableWrap}>
                 <table className={u.table}>
                   <thead><tr><th scope="col">Person</th><th scope="col" className={u.num}>Sales</th><th scope="col" className={u.num}>Margin</th><th scope="col" className={u.num}>Clearance</th><th scope="col" className={u.num}>Short-dated</th><th scope="col" className={u.num}>Lost below cost</th><th scope="col" className={u.num}>Effect</th></tr></thead>
@@ -102,19 +101,18 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                       <tr key={p.name}>
                         <td>{p.name}</td>
                         <td className={u.num}>{money(p.revenue)}</td>
-                        <td className={u.num} style={{ color: (p.marginPct ?? 0) < 0 ? "var(--orange)" : undefined }}>{pctTxt(p.marginPct)}</td>
+                        <td className={u.num} style={{ color: (p.marginPct ?? 0) < 0 ? "var(--orange-ink)" : undefined }}>{pctTxt(p.marginPct)}</td>
                         <td className={u.num}>{p.clearance ? money(p.clearance) : "-"}</td>
                         <td className={u.num}>{p.shortDated ? money(p.shortDated) : "-"}</td>
                         <td className={u.num}>{p.belowCostLoss >= 1 ? money(p.belowCostLoss) : "-"}</td>
-                        <td className={u.num} style={{ color: p.pullPts > 0.05 ? "var(--orange)" : COLORS.ink2 }}>{pts(p.pullPts)}</td>
+                        <td className={u.num} style={{ color: p.pullPts > 0.05 ? "var(--orange-ink)" : COLORS.ink2 }}>{pts(p.pullPts)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
-            <div>
-              <Mini icon="alert">Products that lost the most</Mini>
+          </Fold>
+          <Fold id={`mix-losers-${company}`} icon="alert" title="Products that lost the most" summary={d.losers.length ? `${d.losers.length} products · ${money(d.losers.reduce((t, l) => t + l.loss, 0))} lost` : "Nothing sold below cost"}>
               {!d.losers.length ? <div className={u.empty}>Nothing sold below cost</div> : (
                 <div className={u.tableWrap}>
                   <table className={u.table}>
@@ -132,11 +130,10 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                   </table>
                 </div>
               )}
-            </div>
-          </div>
+
+          </Fold>
           {d.nocostProducts?.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <Mini icon="alert">Sold with no cost in Odoo, left out of the margin</Mini>
+            <Fold id={`mix-nocost-${company}`} icon="alert" title="Sold with no cost in Odoo" summary={`${d.nocostProducts.length} products · ${money(d.nocostProducts.reduce((t, r) => t + r.revenue, 0))} left out of the margin`}>
               <div className={u.tableWrap}>
                 <table className={u.table}>
                   <thead><tr><th scope="col">Product</th><th scope="col" className={u.num}>Sales</th><th scope="col" className={u.num}>Invoice lines</th></tr></thead>
@@ -151,10 +148,11 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </Fold>
           )}
           {(d.deepCustomers?.length > 0 || d.deepProducts?.length > 0) && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginTop: 24 }}>
+            <Fold id={`mix-deep-${company}`} icon="building" title="Who gets 20%+ discounts" summary={`${d.deepCustomers.length} customers · ${d.deepProducts.length} products`}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
               {[["Who gets 20%+ discounts", "building", d.deepCustomers, "Customer"], ["Products sold at 20%+ discount", "bag", d.deepProducts, "Product"]].map(([t, ic, rows, col]) => (
                 <div key={t}>
                   <Mini icon={ic}>{t}</Mini>
@@ -167,7 +165,7 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                             <td style={{ maxWidth: 260 }}>{r.name}<div className={u.was}>{r.people.slice(0, 3).join(", ")}{r.people.length > 3 ? ` +${r.people.length - 3}` : ""}</div></td>
                             <td className={u.num}>{money(r.revenue)}</td>
                             <td className={u.num}>{money(r.discount)}</td>
-                            <td className={u.num} style={{ color: (r.marginPct ?? 0) < 12 ? "var(--orange)" : undefined }}>{pctTxt(r.marginPct)}</td>
+                            <td className={u.num} style={{ color: (r.marginPct ?? 0) < 12 ? "var(--orange-ink)" : undefined }}>{pctTxt(r.marginPct)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -175,7 +173,8 @@ export default function MarginMix({ month, fy, company = 4, range = null }) {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            </Fold>
           )}
           <div className={u.was} style={{ marginTop: 14, display: "flex", gap: 6, alignItems: "center" }}>
             <Icon n="refresh" size={11} />Odoo read {new Date(d.generatedAt).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" })}{d.stale ? ", newer figures are being read" : ""}

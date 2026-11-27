@@ -3,7 +3,7 @@
    split by state; Worthy Products South (Dutch Rusk, Ostendo) shows its total only, as Ostendo keeps no best-before
    dates or clearance location. */
 import React, { useEffect, useState } from "react";
-import { Card, CardHead, Mini, Range, Skeleton, money, dLong, ui as u, usePaged } from "@/app/design/ui";
+import { Fold, Card, CardHead, Mini, Range, Skeleton, money, dLong, ui as u, usePaged } from "@/app/design/ui";
 import { Icon } from "@/app/design/icons";
 
 const KEY = "wdd-stock-states-v1";
@@ -53,7 +53,7 @@ export default function StockStates({ store = "worthy" }) {
                     <td><div className={u.barTrack}><div className={`${u.barInk} ${i < 3 ? u.barAccent : ""}`} style={{ width: `${(x.value / maxV) * 100}%` }} /></div><div className={u.was} style={{ marginTop: 4 }}>{x.share}%</div></td>
                     <td className={u.num}>{n0(x.products)}</td>
                     <td className={u.num}>{n0(x.units)}</td>
-                    <td className={u.num} style={{ color: i < 3 && x.value > 0 ? "var(--orange)" : undefined }}>{money(x.value)}</td>
+                    <td className={u.num} style={{ color: i < 3 && x.value > 0 ? "var(--orange-ink)" : undefined }}>{money(x.value)}</td>
                   </tr>
                 ))}
                 <tr><td><strong>Whole warehouse</strong></td><td /><td /><td className={u.num}><strong>{n0(n?.total?.units)}</strong></td><td className={u.num}><strong>{money(n?.total?.value)}</strong></td></tr>
@@ -65,8 +65,8 @@ export default function StockStates({ store = "worthy" }) {
             </table>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "22px 0 10px" }}>
-            <Mini icon="folder">What is in it, North</Mini>
+          <Fold id="stock-states-items" icon="folder" title="What is in it, North" summary={`${(n?.expired || []).length} past best-before · ${(n?.damaged || []).length} damaged · ${(n?.clearance || []).length} in clearance`}>
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 10px" }}>
             <div className={u.seg} role="group" aria-label="List">
               {[["expired", "Past best-before"], ["damaged", "Damaged Goods"], ["clearance", "Clearance location"]].map(([k, t]) => (
                 <button key={k} type="button" className={list === k ? u.segOn : ""} aria-pressed={list === k} onClick={() => setList(k)}>{t}</button>
@@ -92,6 +92,7 @@ export default function StockStates({ store = "worthy" }) {
               {pg.bar}
             </div>
           )}
+          </Fold>
           <div className={u.was} style={{ marginTop: 14, display: "flex", gap: 6, alignItems: "center" }}><Icon n="refresh" size={11} />Read {new Date(d.generatedAt).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" })}</div>
         </>
       )}

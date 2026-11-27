@@ -3330,7 +3330,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
                   {rows.map((r) => (
                     <div key={r.name} className={st.marginRow}>
                       <span className={st.marginName}>{r.name}</span>
-                      <div className={st.marginTrack}><i style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: isMgmt && r.value < avg - 1 ? "var(--orange)" : "var(--ink)" }} /></div>
+                      <div className={st.marginTrack}><i style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: isMgmt && r.value < avg - 1 ? "var(--orange-ink)" : "var(--ink)" }} /></div>
                       <span className={st.marginVal}>{isMgmt ? `${r.value.toFixed(1)}%` : r.value.toLocaleString("en-NZ")}</span>
                     </div>
                   ))}

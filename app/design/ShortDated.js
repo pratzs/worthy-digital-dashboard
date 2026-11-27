@@ -2,7 +2,7 @@
 /* Short-dated stock, Worthy Products (lib/shortDated.js, /api/short-dated): lots that reach best-before within 90 days,
    what they cost, what they bring in at the clearance price, and whether they sell in time at the current pace. */
 import React, { useEffect, useState } from "react";
-import { Card, CardHead, Mini, Range, Skeleton, money, dLong, COLORS, ui as u, usePaged } from "@/app/design/ui";
+import { Fold, Card, CardHead, Mini, Range, Skeleton, money, dLong, COLORS, ui as u, usePaged } from "@/app/design/ui";
 import { Icon } from "@/app/design/icons";
 
 const KEY = "wdd-short-dated-v1";
@@ -54,6 +54,7 @@ export default function ShortDated() {
               </div>
             ))}
           </div>
+          <Fold id="short-dated-lots" icon="hourglass" title={only === "risk" ? "Lots that won't sell in time" : "Every lot within 90 days"} summary={`${rows.length} lots · ${money(rows.reduce((t, r) => t + r.cost, 0))} at cost`}>
           {!rows.length ? <div className={u.empty}>Every short-dated lot sells in time at the current pace</div> : (
             <div className={u.tableWrap}>
               <table className={u.table}>
@@ -62,12 +63,12 @@ export default function ShortDated() {
                   {pg.shown.map((r) => (
                     <tr key={`${r.code}|${r.lot}`}>
                       <td style={{ maxWidth: 300 }}>{r.product}<div className={u.was}>Lot {r.lot}{r.inClearance ? (r.locations.some((n) => /damaged/i.test(n)) ? " · in Damaged Goods" : " · in Clearance") : ""}{r.reserved > 0 ? ` · ${r.reserved} reserved` : ""}</div></td>
-                      <td style={{ whiteSpace: "nowrap", color: r.daysLeft <= 30 ? "var(--orange)" : undefined }}>{dLong(r.bestBefore)}<div className={u.was}>{r.expired ? "Past date" : `${r.daysLeft} days left`}</div></td>
+                      <td style={{ whiteSpace: "nowrap", color: r.daysLeft <= 30 ? "var(--orange-ink)" : undefined }}>{dLong(r.bestBefore)}<div className={u.was}>{r.expired ? "Past date" : `${r.daysLeft} days left`}</div></td>
                       <td className={u.num}>{r.units.toLocaleString("en-NZ")}</td>
                       <td className={u.num}>{r.perDay ? r.perDay.toLocaleString("en-NZ") : "-"}<div className={u.was}>{r.sellsInTime ? "Sells in time" : r.daysToSell ? `${r.daysToSell} days to sell` : "Not selling"}</div></td>
                       <td className={u.num}>{money(r.cost)}</td>
                       <td className={u.num}>{money(r.clearanceValue)}<div className={u.was}>{r.clearanceOff ? `${r.clearanceOff}% off` : "Can't sell"}</div></td>
-                      <td className={u.num} style={{ color: r.atRisk > 0 ? "var(--orange)" : undefined }}>{r.atRisk > 0 ? money(r.atRisk) : "-"}</td>
+                      <td className={u.num} style={{ color: r.atRisk > 0 ? "var(--orange-ink)" : undefined }}>{r.atRisk > 0 ? money(r.atRisk) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -75,6 +76,7 @@ export default function ShortDated() {
               {pg.bar}
             </div>
           )}
+          </Fold>
           <div className={u.was} style={{ marginTop: 14, display: "flex", gap: 6, alignItems: "center" }}><Icon n="refresh" size={11} />Odoo read {new Date(d.generatedAt).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" })}</div>
         </>
       )}

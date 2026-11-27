@@ -14,7 +14,7 @@
  * - Only show what is verified: never add figures that are measured differently, say "none recorded before" rather than
  *   "was 0" when there was no data, leave out what cannot be added up honestly.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import u from "./ui.module.css";
 import { Icon } from "./icons";
 
@@ -56,6 +56,26 @@ export const Range = ({ children }) => (children ? <span className={u.tag}><Icon
 export const Win = ({ children, win }) => (
   <span className="ctaSwap"><span className="ctaT">{children}</span>{win && <span className="ctaW" aria-hidden="true">{win}</span>}</span>
 );
+/** Secondary detail, folded away (27 Nov 2026; docs/DESIGN-PLAYBOOK.md section 7). Closed by default but plain to see: a
+ *  full-width header with icon, title, a one-line summary and a "Show" pill. The open state is remembered per browser
+ *  (`id`). Children render only when open, so a folded table costs nothing. */
+export function Fold({ id, icon, title, summary, children, defaultOpen = false }) {
+  const key = `wdd-fold-v1:${id}`;
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => { try { const v = localStorage.getItem(key); if (v != null) setOpen(v === "1"); } catch { /* private window */ } }, [key]);
+  const flip = () => setOpen((o) => { try { localStorage.setItem(key, o ? "0" : "1"); } catch { /* private window */ } return !o; });
+  return (
+    <div className={u.fold}>
+      <button type="button" className={u.foldHead} onClick={flip} aria-expanded={open}>
+        {icon && <span className={u.foldIcon}><Icon n={icon} size={14} /></span>}
+        <span className={u.foldTitle}>{title}</span>
+        {summary && <span className={u.foldSum}>{summary}</span>}
+        <span className={`${u.foldPill} ${open ? u.foldPillOn : ""}`}>{open ? "Hide" : "Show"}<Icon n="chev" size={13} style={{ transform: open ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform .2s" }} /></span>
+      </button>
+      {open && <div className={u.foldBody}>{children}</div>}
+    </div>
+  );
+}
 export const Pill = ({ children, tone = "grey" }) => <span className={`${u.pill} ${tone === "dark" ? u.pillDark : tone === "accent" ? u.pillAccent : u.pillGrey}`}>{children}</span>;
 export const Empty = ({ children = "None in this period" }) => <div className={u.empty}>{children}</div>;
 export const Skeleton = ({ height = 160 }) => <div className={u.skeleton} style={{ height }} />;
@@ -206,14 +226,14 @@ export function Ring({ rows, k = "value", labelKey = "name", fmt = n0, size = 12
       <svg viewBox="0 0 90 90" className={u.ring} style={{ width: size, height: size }} role="img" aria-label="Split">
         <circle cx="45" cy="45" r={R} fill="none" stroke="rgba(0,0,0,.05)" strokeWidth="11" />
         {list.map((r, i) => (
-          <circle key={r[labelKey]} cx="45" cy="45" r={R} fill="none" stroke={i === 0 ? "var(--orange)" : "var(--ink)"} strokeOpacity={i === 0 ? 1 : shades[i] ?? 0.1}
+          <circle key={r[labelKey]} cx="45" cy="45" r={R} fill="none" stroke={i === 0 ? "var(--orange-ink)" : "var(--ink)"} strokeOpacity={i === 0 ? 1 : shades[i] ?? 0.1}
             strokeWidth="11" strokeDasharray={`${lens[i]} ${C - lens[i]}`} strokeDashoffset={-offs[i]} transform="rotate(-90 45 45)" />
         ))}
         <text x="45" y="49" textAnchor="middle" fontSize="13" fontWeight="300" fill="var(--ink)">{Math.round((list[0][k] / total) * 100)}%</text>
       </svg>
       <div className={u.ringLegend}>
         {list.map((r, i) => (
-          <div key={r[labelKey]}><i style={{ background: i === 0 ? "var(--orange)" : "var(--ink)", opacity: i === 0 ? 1 : shades[i] ?? 0.1 }} /><span>{r[labelKey]}</span><b>{fmt(r[k])}</b></div>
+          <div key={r[labelKey]}><i style={{ background: i === 0 ? "var(--orange-ink)" : "var(--ink)", opacity: i === 0 ? 1 : shades[i] ?? 0.1 }} /><span>{r[labelKey]}</span><b>{fmt(r[k])}</b></div>
         ))}
       </div>
     </div>
@@ -242,7 +262,7 @@ export function Chain({ steps, compact = false }) {
 export function ShareBar({ parts, fmt = moneyShort }) {
   const total = parts.reduce((t, p) => t + Math.max(0, p.value || 0), 0);
   if (!total) return null;
-  const tone = (i) => (i === 0 ? "var(--orange)" : `rgba(20,22,20,${[0.85, 0.5, 0.25, 0.12][i - 1] ?? 0.1})`);
+  const tone = (i) => (i === 0 ? "var(--orange-ink)" : `rgba(20,22,20,${[0.85, 0.5, 0.25, 0.12][i - 1] ?? 0.1})`);
   return (
     <div>
       <div className={u.shareBar}>{parts.map((p, i) => <i key={p.name} style={{ width: `${(Math.max(0, p.value || 0) / total) * 100}%`, background: tone(i) }} title={`${p.name}: ${fmt(p.value)}`} />)}</div>

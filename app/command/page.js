@@ -137,8 +137,8 @@ function Gauge({ value, label, accent = false, text }) {
     <div className={s.gauge}>
       <svg viewBox="0 0 92 60" role="img" aria-label={`${label} ${text}`}>
         <path d={arc(a0, a1)} stroke="rgba(0,0,0,.07)" strokeWidth="4" fill="none" strokeLinecap="round" />
-        {v > 0.003 && <path d={arc(a0, end)} stroke={accent ? "var(--orange)" : "var(--ink)"} strokeOpacity={accent ? 1 : 0.78} strokeWidth="4" fill="none" strokeLinecap="round" />}
-        <text x="46" y="48" textAnchor="middle" fontSize="15" fontWeight="300" fill={accent ? "var(--orange)" : "var(--ink)"}>{text}</text>
+        {v > 0.003 && <path d={arc(a0, end)} stroke={accent ? "var(--orange-ink)" : "var(--ink)"} strokeOpacity={accent ? 1 : 0.78} strokeWidth="4" fill="none" strokeLinecap="round" />}
+        <text x="46" y="48" textAnchor="middle" fontSize="15" fontWeight="300" fill={accent ? "var(--orange-ink)" : "var(--ink)"}>{text}</text>
       </svg>
       <div className={s.gaugeLabel}>{label}</div>
     </div>
@@ -801,10 +801,10 @@ function GoogleSearch({ data, site, items, onEdit, onAdd }) {
           {all.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div className={s.shareBar}>
-                {POS_BANDS.map(([id, , test], i) => { const n = all.filter((r) => test(r.position)).length; return n ? <i key={id} style={{ width: `${(n / all.length) * 100}%`, background: i === 0 ? "var(--orange)" : "var(--ink)", opacity: BAND_SHADE[i] }} /> : null; })}
+                {POS_BANDS.map(([id, , test], i) => { const n = all.filter((r) => test(r.position)).length; return n ? <i key={id} style={{ width: `${(n / all.length) * 100}%`, background: i === 0 ? "var(--orange-ink)" : "var(--ink)", opacity: BAND_SHADE[i] }} /> : null; })}
               </div>
               <div className={s.shareLegend}>
-                {POS_BANDS.map(([id, l, test], i) => <span key={id}><i style={{ background: i === 0 ? "var(--orange)" : "var(--ink)", opacity: BAND_SHADE[i] }} />{l} {n0(all.filter((r) => test(r.position)).length)}</span>)}
+                {POS_BANDS.map(([id, l, test], i) => <span key={id}><i style={{ background: i === 0 ? "var(--orange-ink)" : "var(--ink)", opacity: BAND_SHADE[i] }} />{l} {n0(all.filter((r) => test(r.position)).length)}</span>)}
               </div>
             </div>
           )}
@@ -1976,14 +1976,14 @@ function Ring({ rows, k }) {
       <svg viewBox="0 0 90 90" className={s.ring} role="img" aria-label="Split by device">
         <circle cx="45" cy="45" r={R} fill="none" stroke="rgba(0,0,0,.05)" strokeWidth="11" />
         {list.map((r, i) => (
-          <circle key={r.name} cx="45" cy="45" r={R} fill="none" stroke={i === 0 ? "var(--orange)" : "var(--ink)"} strokeOpacity={i === 0 ? 1 : shades[i] ?? 0.1}
+          <circle key={r.name} cx="45" cy="45" r={R} fill="none" stroke={i === 0 ? "var(--orange-ink)" : "var(--ink)"} strokeOpacity={i === 0 ? 1 : shades[i] ?? 0.1}
             strokeWidth="11" strokeDasharray={`${lens[i]} ${C - lens[i]}`} strokeDashoffset={-offs[i]} transform="rotate(-90 45 45)" />
         ))}
         <text x="45" y="49" textAnchor="middle" fontSize="13" fontWeight="300" fill="var(--ink)">{Math.round((list[0][k] / total) * 100)}%</text>
       </svg>
       <div className={s.ringLegend}>
         {list.map((r, i) => (
-          <div key={r.name}><i style={{ background: i === 0 ? "var(--orange)" : "var(--ink)", opacity: i === 0 ? 1 : shades[i] ?? 0.1 }} /><span style={{ textTransform: "capitalize" }}>{r.name}</span><b>{n0(r[k])}</b></div>
+          <div key={r.name}><i style={{ background: i === 0 ? "var(--orange-ink)" : "var(--ink)", opacity: i === 0 ? 1 : shades[i] ?? 0.1 }} /><span style={{ textTransform: "capitalize" }}>{r.name}</span><b>{n0(r[k])}</b></div>
         ))}
       </div>
     </div>
@@ -2199,10 +2199,10 @@ function SocialTab({ site, start, end, nonce = 0 }) {
                 <div style={{ marginTop: 18 }}>
                   <Mini icon="pie">Share of online sales</Mini>
                   <div className={s.shareBar}>
-                    {shops.map((x, i) => <i key={x.id} style={{ width: `${((x.totals?.revenue?.[0] || 0) / sales[0]) * 100}%`, background: i === 0 ? "var(--orange)" : "var(--ink)" }} title={`${x.name}: ${money(x.totals?.revenue?.[0])}`} />)}
+                    {shops.map((x, i) => <i key={x.id} style={{ width: `${((x.totals?.revenue?.[0] || 0) / sales[0]) * 100}%`, background: i === 0 ? "var(--orange-ink)" : "var(--ink)" }} title={`${x.name}: ${money(x.totals?.revenue?.[0])}`} />)}
                   </div>
                   <div className={s.shareLegend}>
-                    {shops.map((x, i) => <span key={x.id}><i style={{ background: i === 0 ? "var(--orange)" : "var(--ink)" }} />{x.name} {Math.round(((x.totals?.revenue?.[0] || 0) / sales[0]) * 100)}% · {moneyShort(x.totals?.revenue?.[0])}</span>)}
+                    {shops.map((x, i) => <span key={x.id}><i style={{ background: i === 0 ? "var(--orange-ink)" : "var(--ink)" }} />{x.name} {Math.round(((x.totals?.revenue?.[0] || 0) / sales[0]) * 100)}% · {moneyShort(x.totals?.revenue?.[0])}</span>)}
                   </div>
                 </div>
               )}
