@@ -2190,7 +2190,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
                     <b>{tot ? short(tot) : ""}</b>
                     <div style={{ width: "100%", maxWidth: 26, height: `${Math.max(3, (tot / peak) * 100)}%`, display: "flex", flexDirection: "column", borderRadius: "6px 6px 2px 2px", overflow: "hidden", background: tot ? "transparent" : "rgba(0,0,0,.06)" }}>
                       {b.camp > 0 && <i style={{ maxWidth: "none", borderRadius: 0, flex: b.camp, background: "var(--orange)", opacity: 1 }} />}
-                      {b.auto > 0 && <i style={{ maxWidth: "none", borderRadius: 0, flex: b.auto, background: "var(--ink)", opacity: 0.22 }} />}
+                      {b.auto > 0 && <i style={{ maxWidth: "none", borderRadius: 0, flex: b.auto, background: "var(--ink)", opacity: 0.75 }} />}
                     </div>
                     <span>{(series.length <= 16 || i % 2 === 0) ? dShort(b.key) : ""}</span>
                   </div>
@@ -2199,7 +2199,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
             </div>
             <div className={s.ringLegend} style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 10 }}>
               <div><i style={{ background: "var(--orange)" }} /><span>Campaigns</span></div>
-              <div><i style={{ background: "var(--ink)", opacity: 0.22 }} /><span>Automations</span></div>
+              <div><i style={{ background: "var(--ink)", opacity: 0.75 }} /><span>Automations</span></div>
             </div>
           </div>
           <div>
