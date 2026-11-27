@@ -17,7 +17,7 @@ Every rule Pratham has set for the Worthy Digital Dashboard and the Command Cent
 - No explanation paragraphs under figures. Labels only; the method goes in docs.
 - **Online sales** = every sales channel of Worthy Products and Dutch Rusk except Point of Sale: the online store, B2B Wholesale Hub, Miko B2B and draft orders once they become orders (Pratham, 27 Nov 2026). The conversion rate stays website visits that bought.
 - Say "online store sales", never name the platform (Shopify) on screen (Pratham, 27 Nov 2026).
-- A shop's history starts the month it went live (first month with 50+ orders; worthyproducts.nz June 2026). Months before, when orders went through the old system, are not shown as if they were real trading.
+- Online sales by month count every online channel, so a shop's B2B Wholesale Hub months (worthyproducts.nz Dec 2025 to Jun 2026, $41k to $72k a month) show with the online store months. Only test months before a shop had 50+ orders a month are left out, and the title then says "since".
 - Never add up figures whose sources changed over time (for example Dutch Rusk moving onto the online store from July 2026): show each source on its own so a migration never reads as growth.
 - No repeated numbers on one page (the old "From orders to profit" card repeated the headline strip and was removed).
 
