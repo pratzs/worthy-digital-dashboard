@@ -411,7 +411,8 @@ const tone = (c) => (!c ? INK : WARN_COLOURS.includes(c) ? ORANGE : c.startsWith
    every category, so it is dropped; the bars show the last level with its parent under it, and products their name with
    the code and category under it. Units and counts with thousands separators. */
 const shortCat = (c) => String(c || "").replace(/^(PRODUCT BU|All)\s*\/\s*/i, "");
-const catParts = (c) => { const p = shortCat(c).split(/\s*\/\s*/); return { name: p[p.length - 1] || shortCat(c), sub: p.slice(0, -1).join(" / ") }; };
+// Levels are separated by " / "; "Coffee/Tea" (no spaces) is one name
+const catParts = (c) => { const p = shortCat(c).split(/\s+\/\s+/); return { name: p[p.length - 1] || shortCat(c), sub: p.slice(0, -1).join(" / ") }; };
 const prodParts = (t, c) => { const m = /^\[([^\]]+)\]\s*(.*)$/.exec(String(t || "")); const cat = catParts(c).name; return m ? { name: m[2], sub: [m[1], cat].filter(Boolean).join(" · ") } : { name: String(t || ""), sub: cat }; };
 const fmtCount = (v) => (v == null || v === "" ? "-" : Number(v).toLocaleString("en-NZ"));
 
