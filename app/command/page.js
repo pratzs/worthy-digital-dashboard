@@ -44,7 +44,8 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "grid" },
   { id: "search", label: "Search", icon: "search" },
   { id: "social", label: "Social & Web", icon: "megaphone" },
-  { id: "outreach", label: "Outreach", icon: "mail" },
+  { id: "email", label: "Email", icon: "mail" },
+  { id: "outreach", label: "Outreach", icon: "link" },
   { id: "listings", label: "Listings", icon: "pin" },
   { id: "pipeline", label: "Pipeline", icon: "flow" },
   { id: "meeting", label: "Ecom x Marketing", icon: "calendar" },
@@ -474,7 +475,7 @@ export default function CommandCenter() {
   };
   const person = data?.person || "";
   const newItem = (kind, extra = {}) => { setSaveErr(""); setEditing({ kind, status: KINDS[kind].statuses[0], site: site === "all" ? "" : site, owner: person ? cap(person) : "", ...extra }); };
-  const defaultKind = { dashboard: "pipeline", search: "authority", social: "pipeline", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "pipeline" }[tab];
+  const defaultKind = { dashboard: "pipeline", search: "authority", social: "pipeline", outreach: "outreach", listings: "listing", pipeline: "pipeline", meeting: "pipeline", email: "pipeline" }[tab];
 
   // ── derived numbers ──
   const today = data?.today || nzTodayIso();
@@ -731,6 +732,7 @@ export default function CommandCenter() {
 
         {tab === "search" && <SearchTab data={rangeSearch ? { ...data, search: rangeSearch } : data} site={site} items={items} start={rStart} end={rEnd} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} />}
         {tab === "social" && <SocialTab site={site} start={rStart} end={rEnd} nonce={nonce} />}
+        {tab === "email" && <EmailTab site={site} start={rStart} end={rEnd} nonce={nonce} />}
         {tab === "outreach" && <BoardTab kind="outreach" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "listings" && <BoardTab kind="listing" items={items} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
         {tab === "pipeline" && <BoardTab kind="pipeline" onExt={ext} items={[...items, ...external]} site={site} today={today} onEdit={(x) => { setSaveErr(""); setEditing(x); }} onAdd={newItem} onMove={quickStatus} />}
@@ -2103,6 +2105,132 @@ function SocialAccount({ a }) {
       )}
       <div className={s.siteBtns}><a href={a.link} target="_blank" rel="noreferrer"><Icon n="out" size={13} />Open</a></div>
     </section>
+  );
+}
+
+// ── Email tab: Brevo campaigns and automations per shop (lib/brevo.js, /api/email). Brevo's own counts. ──
+const rate = (a, b) => (b ? a / b : null);
+function EmailTab({ site, start, end, nonce = 0 }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const want = `${start}|${end}`;
+  const ck = `cc-email-v1:${want}`;
+  useEffect(() => {
+    let stop = false;
+    const fresh = nonce > 0;
+    if (!fresh && cache.entry(ck, 0.25 * HOUR)) return () => { stop = true; };
+    fetch(`/api/email?from=${start}&to=${end}${fresh ? "&fresh=1" : ""}`, { cache: "no-store" })
+      .then((r) => r.json().then((j) => (r.ok ? j : Promise.reject(new Error(j.error || r.status)))))
+      .then((j) => { if (!stop) { cache.set(ck, j); setD({ ...j, key: want }); setErr(""); } })
+      .catch((e) => { if (!stop) setErr(`${want}|${String(e.message || e)}`); });
+    return () => { stop = true; };
+  }, [start, end, ck, want, nonce]);
+  const saved = useMemo(() => cache.get(ck, 24 * HOUR), [ck]);
+  const cur = d && d.key === want ? d : saved ? { ...saved, key: want } : null;
+  const errText = err.startsWith(`${want}|`) ? err.slice(want.length + 1) : "";
+
+  if (!cur) return (
+    <div className={s.fade}>
+      <section className={s.card}>{errText ? <div className={s.err}>Email figures could not load: {errText}</div> : <div className={s.skeleton} style={{ height: 160 }} />}</section>
+    </div>
+  );
+  const pick = ["dutchrusk", "worthyproducts"].includes(site) ? [site] : ["dutchrusk", "worthyproducts"];
+  const shops = cur.shops.filter((x) => pick.includes(x.id));
+  const ok = shops.filter((x) => x.status === "ok");
+  const zero = { count: 0, sent: 0, delivered: 0, opens: 0, clicks: 0, unsubscribed: 0, bounced: 0 };
+  const add = (a, b) => { const o = { ...a }; for (const k of Object.keys(zero)) o[k] = (a[k] || 0) + (b[k] || 0); return o; };
+  const camp = (w) => ok.reduce((t, x) => add(t, x.campaigns[w]), zero);
+  const auto = (w) => ok.reduce((t, x) => x.automations.reduce((u, a) => add(u, a[w]), t), zero);
+  const cN = camp("now"), cB = camp("before"), aN = auto("now"), aB = auto("before");
+  const tN = add(cN, aN), tB = add(cB, aB);
+  const range = `${dShort(cur.from)} to ${dShort(cur.to)} vs ${dShort(cur.prevFrom)} to ${dShort(cur.prevTo)}`;
+  const campaigns = ok.flatMap((x) => x.campaigns.list.map((c) => ({ ...c, shop: x.name }))).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const autos = ok.flatMap((x) => x.automations.map((a) => ({ ...a, shop: x.name, key: `${x.id}-${a.id}` })));
+  const ST = { active: ["Active", s.pillDark], pause: ["Paused", s.pillSoft], inactive: ["Off", s.pillGrey] };
+
+  return (
+    <div className={s.fade}>
+      <section className={s.card}>
+        <div className={s.cardHead}>
+          <Title icon="mail">Email marketing</Title>
+          <Range>{range}</Range>
+        </div>
+        <div className={s.statLine}>
+          <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{n0(tN.delivered)}</div><div className={s.statLabel}>Emails delivered <Delta now={tN.delivered} before={tB.delivered} /></div></div>
+          <div className={s.stat}><div className={s.statNum}>{pct(rate(tN.opens, tN.delivered))}</div><div className={s.statLabel}>Opened <Delta points now={rate(tN.opens, tN.delivered)} before={rate(tB.opens, tB.delivered)} /></div></div>
+          <div className={s.stat}><div className={s.statNum}>{pct(rate(tN.clicks, tN.delivered))}</div><div className={s.statLabel}>Clicked <Delta points now={rate(tN.clicks, tN.delivered)} before={rate(tB.clicks, tB.delivered)} /></div><div className={s.rowMeta}>{n0(tN.clicks)} clicked</div></div>
+          <div className={s.stat}><div className={s.statNum}>{n0(tN.unsubscribed)}</div><div className={s.statLabel}>Unsubscribed <Delta invert now={tN.unsubscribed} before={tB.unsubscribed} /></div></div>
+        </div>
+        <div className={s.grid2} style={{ marginTop: 18 }}>
+          <div>
+            <div className={s.miniHead}><Icon n="megaphone" size={13} />Campaigns</div>
+            <div className={s.row}><div className={s.rowTitle}>Sent<div className={s.rowMeta}>{n0(cN.delivered)} delivered</div></div><span className={s.rowNum}>{n0(cN.count)} <Delta now={cN.count} before={cB.count} /></span></div>
+            <div className={s.row}><div className={s.rowTitle}>Opened · clicked</div><span className={s.rowNum}>{pct(rate(cN.opens, cN.delivered))} · {pct(rate(cN.clicks, cN.delivered))}</span></div>
+          </div>
+          <div>
+            <div className={s.miniHead}><Icon n="zap" size={13} />Automations</div>
+            <div className={s.row}><div className={s.rowTitle}>Emails sent<div className={s.rowMeta}>{autos.filter((a) => a.status === "active").length} of {autos.length} automations on</div></div><span className={s.rowNum}>{n0(aN.sent)} <Delta now={aN.sent} before={aB.sent} /></span></div>
+            <div className={s.row}><div className={s.rowTitle}>Opened · clicked</div><span className={s.rowNum}>{pct(rate(aN.opens, aN.delivered))} · {pct(rate(aN.clicks, aN.delivered))}</span></div>
+          </div>
+        </div>
+        {pick.length > 1 && (
+          <div style={{ marginTop: 18 }}>
+            <div className={s.miniHead}><Icon n="store" size={13} />By shop</div>
+            {shops.map((x) => {
+              if (x.status !== "ok") return (
+                <div key={x.id} className={s.row}><div className={s.rowTitle}>{x.name}</div><span className={`${s.pill} ${s.pillGrey}`}>{x.status === "not_connected" ? "Brevo not connected" : "Could not load"}</span></div>
+              );
+              const t = add(x.campaigns.now, x.automations.reduce((u, a) => add(u, a.now), zero));
+              return (
+                <div key={x.id} className={s.row}>
+                  <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.name}</div><div className={s.rowMeta}>{n0(x.campaigns.now.count)} campaigns · {n0(x.automations.reduce((u, a) => u + a.now.sent, 0))} automation emails</div></div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(t.delivered)} delivered</span><div className={s.rowMeta}>{pct(rate(t.opens, t.delivered))} opened · {pct(rate(t.clicks, t.delivered))} clicked</div></div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className={s.card} style={{ marginTop: 14 }}>
+        <div className={s.cardHead}>
+          <Title icon="megaphone">Campaigns sent</Title>
+          <Range>{`${dShort(cur.from)} to ${dShort(cur.to)}`}</Range>
+        </div>
+        {campaigns.length === 0 && <div className={s.empty}>No campaigns sent in these dates</div>}
+        {campaigns.map((c) => (
+          <div key={`${c.shop}-${c.id}`} className={s.row}>
+            <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{c.name}</div><div className={s.rowMeta}>{dShort(c.date)} · {c.shop} · {n0(c.delivered)} delivered{c.unsubscribed ? ` · ${n0(c.unsubscribed)} unsubscribed` : ""}</div></div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{pct(rate(c.clicks, c.delivered))} clicked</span><div className={s.rowMeta}>{pct(rate(c.opens, c.delivered))} opened · {n0(c.clicks)} clicks</div></div>
+          </div>
+        ))}
+      </section>
+
+      <section className={s.card} style={{ marginTop: 14 }}>
+        <div className={s.cardHead}>
+          <Title icon="zap">Automations</Title>
+          <Range>{`${dShort(cur.from)} to ${dShort(cur.to)}`}</Range>
+        </div>
+        {autos.length === 0 && <div className={s.empty}>No automations</div>}
+        {autos.map((a) => (
+          <Fragment key={a.key}>
+            <div className={s.row}>
+              <div style={{ minWidth: 0 }}>
+                <div className={s.rowTitle} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{a.name}<span className={`${s.pill} ${(ST[a.status] || ST.inactive)[1]}`}>{(ST[a.status] || ST.inactive)[0]}</span></div>
+                <div className={s.rowMeta}>{a.trigger}{pick.length > 1 ? ` · ${a.shop}` : ""} · {a.emails.length} {a.emails.length === 1 ? "email" : "emails"}</div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(a.now.sent)} sent <Delta now={a.now.sent} before={a.before.sent} /></span><div className={s.rowMeta}>{pct(rate(a.now.opens, a.now.delivered))} opened · {pct(rate(a.now.clicks, a.now.delivered))} clicked</div></div>
+            </div>
+            {a.emails.length > 1 && a.now.sent > 0 && a.emails.map((e, i) => (
+              <div key={`${a.key}-${i}`} className={s.row} style={{ paddingLeft: 22 }}>
+                <div style={{ minWidth: 0 }}><div className={s.rowMeta} style={{ fontSize: 14 }}>Email {i + 1}: {e.subject}</div></div>
+                <span className={s.rowMeta} style={{ whiteSpace: "nowrap", fontSize: 14 }}>{n0(e.now.sent)} sent · {pct(rate(e.now.clicks, e.now.delivered))} clicked</span>
+              </div>
+            ))}
+          </Fragment>
+        ))}
+      </section>
+    </div>
   );
 }
 
