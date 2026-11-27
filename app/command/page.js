@@ -2263,14 +2263,14 @@ function SocialTab({ site, start, end, nonce = 0 }) {
 // ── Ecom and Marketing weekly summary (lib/ecomSummary.js): last week against the week before. A draft to copy or open as
 //    an email; nothing is sent from here. Company sales, salespeople and stock are the management summary on the Overview. ──
 function WeeklySummary() {
-  const [d, setD] = useState(() => cache.get("cc-ecom-summary-v1", 10 * 60 * 1000));
+  const [d, setD] = useState(() => cache.get("cc-ecom-summary-v2", 10 * 60 * 1000));
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     let stop = false;
     fetch("/api/summary?kind=ecom", { cache: "no-store" }).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; })
-      .then((j) => { if (!stop) { setD(j); cache.set("cc-ecom-summary-v1", j); } }).catch((e) => { if (!stop) setErr(String(e.message || e)); });
+      .then((j) => { if (!stop) { setD(j); cache.set("cc-ecom-summary-v2", j); } }).catch((e) => { if (!stop) setErr(String(e.message || e)); });
     return () => { stop = true; };
   }, []);
   const pctT = (v) => (v == null ? "-" : `${(v * 100).toFixed(2)}%`);
@@ -2331,7 +2331,7 @@ function OnlineProfit({ site, start, end }) {
   useEffect(() => {
     if (!start || !end || site === "worthy") return undefined;
     let stop = false;
-    const k = `cc-om-v1:${shop}:${start}:${end}`;
+    const k = `cc-om-v2:${shop}:${start}:${end}`;
     const c = cache.get(k, 30 * 60 * 1000); setD(c || null);
     fetch(`/api/online-margin?site=${shop}&from=${start}&to=${end}`, { cache: "no-store" })
       .then(async (r) => { if (r.status === 401 || r.status === 403) { if (!stop) setHidden(true); return null; } const j = await r.json(); return r.ok ? j : null; })
