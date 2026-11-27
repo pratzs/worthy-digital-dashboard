@@ -60,3 +60,9 @@ body::before {
 :is(a, button):focus-visible .ctaSwap > .ctaT { opacity: 0; transform: translateY(-4px); }
 :is(a, button):focus-visible .ctaSwap > .ctaW { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .ctaSwap > span { transition: none; transform: none !important; } }
+
+/* Room for the left sidebar (app/design/SiteNav.js): 240px wide + 12px either side, or 68px when collapsed. */
+body[data-side="open"] { padding-left: 264px; }
+body[data-side="closed"] { padding-left: 92px; }
+body[data-side] { transition: padding-left .2s ease; }
+@media (max-width: 900px) { body[data-side] { padding-left: 0; } }

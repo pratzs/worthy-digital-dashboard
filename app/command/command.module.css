@@ -7,7 +7,8 @@
   overflow-x: clip;
   --bg: #dfe6e2;
   --bg2: #eceee9;
-  --glass: linear-gradient(170deg, #faf9f6 0%, #f5f4ef 55%, #f1efe9 100%);
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-line: rgba(255, 255, 255, 0.75);
   --card: rgba(255, 255, 255, 0.72);
   --card-solid: #fbfaf7;
   --line: rgba(30, 25, 15, 0.08);
@@ -30,13 +31,10 @@
   max-width: 100%;
   min-height: 100vh;
   margin: 0;
-  background: var(--glass);
+  background: transparent;   /* the body's soft wash shows through the frosted cards */
   border: 0;
   border-radius: 0;
   padding: clamp(14px, 1.6vw, 28px) clamp(12px, 2vw, 36px) 32px;
-  box-shadow: 0 30px 80px -40px rgba(30, 50, 40, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
 }
 
 /* ── top bar ─────────────────────────────────────────── */

@@ -564,22 +564,8 @@ export default function CommandCenter() {
     <div className={s.page}>
       <div className={s.shell}>
         {/* top bar */}
-        <SiteNav current="command" trail={tab !== "dashboard" ? [{ label: TABS.find((t) => t.id === tab)?.label }] : []} />
-        <header className={s.top} style={{ marginTop: 10 }}>
-          <span />
-          <nav className={s.nav} aria-label="Command Center sections">
-            {TABS.map((t) => (
-              <button key={t.id} type="button" className={`${s.navBtn} ${tab === t.id ? s.navOn : ""}`} onClick={() => go(t.id)} aria-current={tab === t.id ? "page" : undefined}>
-                <Icon n={t.icon} size={15} />{t.label}
-              </button>
-            ))}
-          </nav>
-          <div className={s.tools}>
-            <button type="button" className={s.iconBtn} title={overdue ? `${overdue} overdue` : "Nothing overdue"} onClick={() => go("meeting")}>
-              <Icon n="bell" size={18} />{overdue > 0 && <span className={s.dot} />}
-            </button>
-          </div>
-        </header>
+        {/* The Command Center's tabs are in the left sidebar, under Marketing (27 Nov 2026): no second menu bar */}
+        <SiteNav current="command" sub={tab} trail={tab !== "dashboard" ? [{ label: TABS.find((t) => t.id === tab)?.label }] : []} />
 
         {/* heading */}
         <div className={s.head} id="main" tabIndex={-1}>

@@ -3,7 +3,7 @@
    this file only lays out the dashboard itself. */
 
 .page { box-sizing: border-box; width: 100%; min-height: 100vh; overflow-x: clip; background: transparent; color: var(--ink); font-feature-settings: 'tnum' 1; }
-.shell { box-sizing: border-box; min-height: 100vh; padding: clamp(14px, 1.6vw, 28px) clamp(16px, 2vw, 36px) 40px; background: linear-gradient(170deg, #faf9f6 0%, #f5f4ef 55%, #f1efe9 100%); }
+.shell { box-sizing: border-box; min-height: 100vh; padding: clamp(14px, 1.6vw, 28px) clamp(16px, 2vw, 36px) 40px; background: transparent; }
 
 /* ── top bar ── */
 .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand nav tools"; align-items: center; gap: 16px; }
