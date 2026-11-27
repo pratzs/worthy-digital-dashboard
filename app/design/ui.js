@@ -51,6 +51,11 @@ export const CardHead = ({ icon, title, children }) => (
 );
 export const Mini = ({ icon, children }) => <div className={u.miniHead}>{icon && <Icon n={icon} size={13} />}{children}</div>;
 export const Range = ({ children }) => (children ? <span className={u.tag}><Icon n="calendar" size={11} />{children}</span> : null);
+/** A call to action whose label turns into the win it brings when hovered or focused (27 Nov 2026). Both texts share one
+ *  space, so the button never changes size or moves anything. Touch screens keep the plain label. */
+export const Win = ({ children, win }) => (
+  <span className="ctaSwap"><span className="ctaT">{children}</span>{win && <span className="ctaW" aria-hidden="true">{win}</span>}</span>
+);
 export const Pill = ({ children, tone = "grey" }) => <span className={`${u.pill} ${tone === "dark" ? u.pillDark : tone === "accent" ? u.pillAccent : u.pillGrey}`}>{children}</span>;
 export const Empty = ({ children = "None in this period" }) => <div className={u.empty}>{children}</div>;
 export const Skeleton = ({ height = 160 }) => <div className={u.skeleton} style={{ height }} />;

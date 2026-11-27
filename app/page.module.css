@@ -107,3 +107,8 @@ section.tileStrip { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 .marginTrack i { display: block; height: 100%; border-radius: 999px; opacity: .85; transition: width .6s cubic-bezier(.2,.8,.2,1); }
 .marginVal { font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .rangeField { width: 100%; } .rangeField input { flex: 1; } }
+
+/* Go deeper tiles on the Overview (27 Nov 2026): one per related page, same 14px gap as every card */
+.deeper { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.deepTile { display: flex; flex-direction: column; }
+.deepCta { margin-top: 16px; align-self: flex-start; justify-content: space-between; gap: 10px; }

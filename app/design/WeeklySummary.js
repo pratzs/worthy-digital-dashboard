@@ -3,7 +3,7 @@
    the dashboard kit so it sits in the Overview with the page's own spacing (14px gaps). A draft to copy or open as an
    email; nothing is sent from here. Management only: the route turns everyone else away and the card then shows nothing. */
 import React, { useEffect, useState } from "react";
-import { Card, CardHead, Mini, Range, Skeleton, money, dShort, dLong, ui as u } from "@/app/design/ui";
+import { Win, Card, CardHead, Mini, Range, Skeleton, money, dShort, dLong, ui as u } from "@/app/design/ui";
 import { Icon } from "@/app/design/icons";
 
 const KEY = "wdd-summary-v1";
@@ -34,8 +34,8 @@ export default function WeeklySummary({ style }) {
       <CardHead icon="mail" title="Weekly summary">
         <Range>{dShort(d.week.start)} to {dLong(d.week.end)}</Range>
         <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}><Icon n="eye" size={14} />{open ? "Hide draft" : "Show draft"}</button>
-        <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : "Copy"}</button>
-        <a className={`${u.btn} ${u.btnSmall} ${u.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} />Open as email draft</a>
+        <button type="button" className={`${u.btn} ${u.btnSmall}`} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : <Win win="Copy the wins">Copy</Win>}</button>
+        <a className={`${u.btn} ${u.btnSmall} ${u.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} /><Win win="Share this week's wins">Open as email draft</Win></a>
       </CardHead>
       <div className={u.grid3}>
         {d.business.map((b) => (

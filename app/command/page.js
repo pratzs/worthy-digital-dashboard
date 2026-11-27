@@ -10,6 +10,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import s from "./command.module.css";
 import { Icon } from "../design/icons";
+import { Win } from "@/app/design/ui";
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────
 const SITES = [
@@ -587,7 +588,7 @@ export default function CommandCenter() {
             <div className={s.sub}><span className={s.liveDot} />{updatedText}<span>·</span><span>{siteName(site)}</span><span>·</span><span>{rangeText}</span></div>
           </div>
           <div className={s.actions}>
-            <button type="button" className={s.btn} onClick={refreshAll} disabled={loading}><Icon n="refresh" size={15} className={loading ? s.spin : ""} />{loading ? "Refreshing" : "Refresh"}</button>
+            <button type="button" className={s.btn} onClick={refreshAll} disabled={loading}><Icon n="refresh" size={15} className={loading ? s.spin : ""} />{loading ? "Refreshing" : <Win win="Get the latest wins">Refresh</Win>}</button>
             <select className={s.select} value={preset} onChange={(e) => { setPreset(e.target.value); if (e.target.value === "custom" && !from) { setFrom(rStart); setTo(rEnd); } }} aria-label="Date range">
               {PRESETS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
             </select>
@@ -597,8 +598,8 @@ export default function CommandCenter() {
               {SITES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
             {tab === "meeting"
-              ? <a className={`${s.btn} ${s.btnDark}`} href={`https://app.asana.com/0/${ASANA_PROJECT}/list`} target="_blank" rel="noreferrer"><Icon n="plus" size={15} stroke={2} />New task in Asana</a>
-              : <button type="button" className={`${s.btn} ${s.btnDark}`} onClick={() => newItem(defaultKind)}><Icon n="plus" size={15} stroke={2} />Add {KINDS[defaultKind].one.toLowerCase()}</button>}
+              ? <a className={`${s.btn} ${s.btnDark}`} href={`https://app.asana.com/0/${ASANA_PROJECT}/list`} target="_blank" rel="noreferrer"><Icon n="plus" size={15} stroke={2} /><Win win="Get it moving">New task in Asana</Win></a>
+              : <button type="button" className={`${s.btn} ${s.btnDark}`} onClick={() => newItem(defaultKind)}><Icon n="plus" size={15} stroke={2} /><Win win="Line up the next win">{`Add ${KINDS[defaultKind].one.toLowerCase()}`}</Win></button>}
           </div>
         </div>
 
@@ -1066,7 +1067,7 @@ function MeetingNotes({ asanaTasks, today, onAsana }) {
           {isCurrent && (
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
               <button type="button" className={`${s.btn} ${s.btnDark}`} onClick={readNotes} disabled={!!busy || !(text || "").trim()}>
-                <Icon n="sparkle" size={14} />{busy === "read" ? "Reading" : "Read notes into actions"}
+                <Icon n="sparkle" size={14} />{busy === "read" ? "Reading" : <Win win="Turn talk into action">Read notes into actions</Win>}
               </button>
               {m.meetings[m.current]?.readAt && <span className={s.rowMeta}>Last read {nzTime(m.meetings[m.current].readAt)}</span>}
             </div>
@@ -1103,7 +1104,7 @@ function MeetingNotes({ asanaTasks, today, onAsana }) {
                   if (!window.confirm(`Create ${ready.length} task${ready.length > 1 ? "s" : ""} in Asana and tell each person?\n\n${ready.map((a) => `${a.title} (${a.owner}${a.due ? `, due ${dShort(a.due)}` : ""})`).join("\n")}`)) return;
                   act("send", { action: "meeting-send", ids: ready.map((a) => a.id) }, (j) => { setNote(`${j.created} sent to Asana${j.failed?.length ? `, ${j.failed.length} failed: ${j.failed.map((f) => f.error).join("; ")}` : ""}`); if (j.asana && onAsana) onAsana(j.asana); });
                 }}>
-                <Icon n="out" size={14} />{busy === "send" ? "Sending" : `Send ${proposed.filter((a) => a.ownerGid).length} to Asana`}
+                <Icon n="out" size={14} />{busy === "send" ? "Sending" : <Win win="Get everyone moving">{`Send ${proposed.filter((a) => a.ownerGid).length} to Asana`}</Win>}
               </button>
             </div>
           )}
@@ -1238,7 +1239,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
         <section className={s.card}>
           <div className={s.cardHead}>
             <Title icon="wallet">Ad spend and results</Title>
-            <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("spend", { month: today.slice(0, 7) })}><Icon n="plus" size={13} />Add spend</button>
+            <button type="button" className={`${s.btn} ${s.btnSmall}`} onClick={() => onAdd("spend", { month: today.slice(0, 7) })}><Icon n="plus" size={13} /><Win win="Track what pays off">Add spend</Win></button>
           </div>
           <div className={s.rowMeta} style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {!auto && <span>Reading ad spend</span>}
@@ -2292,8 +2293,8 @@ function WeeklySummary() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <Range>{dShort(d.week.start)} to {dLong(d.week.end)}</Range>
           <button type="button" className={s.btn} onClick={() => setOpen((o) => !o)} aria-expanded={open}><Icon n="eye" size={14} />{open ? "Hide draft" : "Show draft"}</button>
-          <button type="button" className={s.btn} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : "Copy"}</button>
-          <a className={`${s.btn} ${s.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} />Open as email draft</a>
+          <button type="button" className={s.btn} onClick={() => { navigator.clipboard?.writeText(d.text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}><Icon n="check" size={14} />{copied ? "Copied" : <Win win="Copy the wins">Copy</Win>}</button>
+          <a className={`${s.btn} ${s.btnDark}`} href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(d.text)}`}><Icon n="out" size={14} /><Win win="Share this week's wins">Open as email draft</Win></a>
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 18 }}>

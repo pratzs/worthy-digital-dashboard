@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import Dashboard from "../Dashboard";
 
-// Sales by Rep now sits on the Overview and Sales page; keep old links and bookmarks working.
+// Sales: who sold what (27 Nov 2026). Sales vs Target, Sales by Rep, sister company sales and the month, week and year detail.
 export default function Page() {
-  redirect("/");
+  return <Dashboard section="reps" />;
 }

@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { bankTargetFor } from "@/lib/bankTargets";
 import { weekOfMonth } from "@/lib/weekOfMonth";
-import { Card, CardHead, Mini, Pill, StatLine, MonthBars, BarList, Ring, Chain, ShareBar, COLORS, ui, moneyShort, usePaged, Paged } from "@/app/design/ui";
+import { Win, Card, CardHead, Mini, Pill, StatLine, MonthBars, BarList, Ring, Chain, ShareBar, COLORS, ui, moneyShort, usePaged, Paged } from "@/app/design/ui";
 import { Icon } from "@/app/design/icons";
 import st from "./page.module.css";
 
@@ -1828,7 +1828,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
   // Which table group is on screen for the active company: reps first, then
   // products/categories, movers, customers, credits, debtors last.
   // Each table group is its own page now; the page decides which one shows.
-  const advTab = section === "overview" ? "reps" : section;
+  /* Overview, Sales and Margin share one page shell (company, year, dates, headline figures) and each shows its own group
+     of cards (27 Nov 2026): Overview = the story at a glance, Sales = who sold what, Margin = why the margin is what it is. */
+  const ovLike = section === "overview" || section === "reps" || section === "margin";
+  const isOv = section === "overview", isSales = section === "reps", isMarginPage = section === "margin";
+  const advTab = ovLike ? "reps" : section;
   const [categoryModal,  setCategoryModal]  = useState(null);
   const [decliningMode,  setDecliningMode]  = useState("yoy");
   // One light design only (26 Nov 2026): there is no dark mode, and an old dark=1 in the address simply shows the light page.
@@ -2124,7 +2128,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         await fetchFYFor("nova", selectedYear);
         if (advStoreRef.current === storeId) setAdvLoading(false);
         // Weekly margin comes from the per-week cost read, same as North.
-        if (section === "overview" && advStoreRef.current === storeId) {
+        if (ovLike && advStoreRef.current === storeId) {
           const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
           fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
         }
@@ -2142,7 +2146,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       ]);
       /* The weekly rep cost is a second heavy Odoo read. It waits for the year's own
          figures so the two never compete - the cards on screen come first. */
-      if (section === "overview" && storeId !== "luxe" && FY_SOURCE[storeId] && advStoreRef.current === storeId) {
+      if (ovLike && storeId !== "luxe" && FY_SOURCE[storeId] && advStoreRef.current === storeId) {
         const calYear = weeklyMonth >= 3 ? selectedYear : selectedYear + 1;
         fetchOdooWeeks(storeId, `${calYear}-${String(weeklyMonth + 1).padStart(2, "0")}`);
       }
@@ -3114,6 +3118,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         const keep = new URLSearchParams({
           store: activeStore.id, fy: String(selectedYear), view, tab: channelTab,
           m: String(weeklyMonth), w: String(selectedWeek),
+          ...(customOn ? { from: period.from, to: period.to } : {}),
         }).toString();
         const SUB = { products: "Categories & Products", movers: "Fast & Slow Movers", customers: "Customers" };
         return <SiteNav current={section} me={me} keep={keep} trail={SUB[section] ? [{ label: SUB[section] }] : []} />;
@@ -3130,7 +3135,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             {(() => {
               /* Say when these figures were read, so nobody has to wonder how fresh they are. */
               const fp = fyPayload(selectedYear), at = fp?.generatedAt;
-              if (!at || activeStore.id === "luxe" || section !== "overview") return null;
+              if (!at || activeStore.id === "luxe" || !ovLike) return null;
               const t = new Date(at).toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" });
               // The last good copy (Odoo slow) or figures over 15 minutes old: say so in the accent, one line.
               // Only figures over 15 minutes old are flagged: the copy refreshes every 5 minutes, so a younger one is normal.
@@ -3178,7 +3183,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
       )}
 
       <div className={st.body}>
-        {section === "overview" && (<>
+        {ovLike && (<>
         {/* View toggle, and the period the headline figures cover */}
         <div className={st.viewRow}>
           <div className={ui.seg} role="group" aria-label="View">
@@ -3296,8 +3301,8 @@ export default function EcommerceDashboard({ section = "overview" }) {
           {isMgmt && <KPICard label={(kpiHasCost || partCost) && kpiGPMargin !== null ? `Gross Profit · ${kpiGPMargin}% margin` : "Gross Profit"} value={(kpiHasCost || partCost) ? kpiGP : null} growth={kpiGPGrowth} icon="wallet" sub="currency" animated={animated} currency={activeStore.currency} exact={exactAmounts} compareText={cmpGP} />}
         </section>
 
-        {/* 2. HOW THE HEADLINE FIGURES RELATE, and the year by month */}
-        <div className={ui.grid} style={{ marginBottom: 14 }}>
+        {/* 2. HOW THE HEADLINE FIGURES RELATE, and the year by month (Overview) */}
+        {isOv && <div className={ui.grid} style={{ marginBottom: 14 }}>
           <Card>
             <CardHead icon="bars" title={customOn ? "Sales by month, chosen dates" : `Sales by month, ${onFYView() ? `FY${String(selectedYear).slice(2)}` : selectedYear}`}><RangeTag text={yearRange()} /></CardHead>
             {monthBars.length > 0 ? <MonthBars rows={monthBars} fmt={moneyShort} partialTo={barsPartialTo} /> : <div className={ui.empty}>{anyLoading ? "Loading" : "No sales recorded yet"}</div>}
@@ -3324,12 +3329,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
               );
             })()}
           </Card>
-        </div>
+        </div>}
 
-        {/* Weekly summary for management, all three businesses (same card as the Command Center), 14px gap like its neighbours */}
-        {isMgmt && <WeeklySummary style={{ marginBottom: 14 }} />}
+        {/* 3. WHAT NEEDS ATTENTION: weekly summary for management, all three businesses (Overview) */}
+        {isOv && isMgmt && <WeeklySummary style={{ marginBottom: 14 }} />}
 
-        {isMgmt && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && onFYView() && (() => {
+        {/* Sister company sales (Sales) */}
+        {isSales && isMgmt && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && onFYView() && (() => {
           const cur = fyPayload(selectedYear);
           if (!cur?.sisterSales) return null;
           const done = (cur.weeks || []).filter((w) => w.sisters);
@@ -3348,12 +3354,40 @@ export default function EcommerceDashboard({ section = "overview" }) {
             companyName={activeStore.id === "nova" ? "Worthy Oceania" : "Worthy Products"} />;
         })()}
 
-        {onFYView() && view !== "weekly" && (
+        {/* 4. WHERE WE ARE HEADING (Overview) */}
+        {isOv && onFYView() && view !== "weekly" && (
           <ForecastCard cur={fyPayload(selectedYear)} prior={fyPayload(selectedYear - 1)} currency={activeStore.currency}
             fyLabel={`FY${String(selectedYear).slice(2)}`} />
         )}
 
-        {view === "monthly" ? (
+        {/* 5. GO DEEPER: one tile per related page, each with the figure that matters and a way in (Overview) */}
+        {isOv && (() => {
+          const fp = fyPayload(selectedYear);
+          const t = fp?.totals;
+          const reps = (fp?.reps || []).filter((r) => r.revenue > 0);
+          const top = [...reps].sort((a, b) => b.revenue - a.revenue)[0];
+          const keepQ = new URLSearchParams({ store: activeStore.id, fy: String(selectedYear), view, tab: channelTab, m: String(weeklyMonth), w: String(selectedWeek), ...(customOn ? { from: period.from, to: period.to } : {}) }).toString();
+          const tiles = [
+            { key: "sales", icon: "users", title: "Sales", figure: top ? top.name : "-", sub: top ? `Top seller, ${money0(top.revenue)} · ${reps.length} people selling` : "Who sold what", href: `/reps#${keepQ}`, cta: "See every rep", win: "Find your top performers" },
+            ...(isMgmt ? [{ key: "margin", icon: "percent", title: "Margin", figure: t?.marginPct != null ? `${t.marginPct}%` : "-", sub: "What sets it, by kind of sale and by customer", href: `/margin#${keepQ}`, cta: "See what sets the margin", win: "Win back margin" }] : []),
+            ...(canSeeStock && activeStore.id !== "luxe" ? [{ key: "stock", icon: "hourglass", title: "Stock", figure: stockValue != null ? money0(stockValue) : "-", sub: "Clearance, expired and short-dated stock", href: `/movers#${keepQ}`, cta: "See the stock", win: "Turn stock into sales" }] : []),
+          ];
+          return (
+            <div className={st.deeper} style={{ marginBottom: 14 }}>
+              {tiles.map((x) => (
+                <Card key={x.key} className={st.deepTile}>
+                  <CardHead icon={x.icon} title={x.title} />
+                  <div className={ui.statNum}>{x.figure}</div>
+                  <div className={ui.statLabel}>{x.sub}</div>
+                  <Link href={x.href} className={`${ui.btn} ${st.deepCta}`}><Win win={x.win}>{x.cta}</Win><Icon n="out" size={14} /></Link>
+                </Card>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* SALES DETAIL: the month, week and year tables (Sales) */}
+        {!isSales ? null : view === "monthly" ? (
           <>
             {/* Trend chart: this year in ink, last year faint and dashed */}
             <Card style={{ marginBottom: 14 }}>
@@ -3684,7 +3718,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
 
         {/* SALES BY REP on the Overview page, for North, Oceania and South. The same table as
             the Sales by Rep page, fed by the same figures, so the two can never disagree. */}
-        {section === "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
+        {isSales && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <div style={{ marginTop: 14 }}>
             {activeStore.id === "worthy" && <SalesVsTargetTable payload={fyPayload(selectedYear)} />}
             <SalesRepBreakdown partialMonth={partialMonth} weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
@@ -3701,13 +3735,18 @@ export default function EcommerceDashboard({ section = "overview" }) {
               T={T}
               exact={exactAmounts}
             />
-            {(activeStore.id === "worthy" || activeStore.id === "nova") && (
-              <><MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
-<CustomerMargin company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} /></>
-            )}
           </div>
         )}
-        {section === "overview" && activeStore.id === "worthy" && channelTab !== "odoo" && (
+        {/* MARGIN PAGE: what sets the margin and customer margin, management only */}
+        {isMarginPage && isMgmt && (
+          activeStore.id === "luxe"
+            ? <CustomerMargin company="south" range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+            : ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (<>
+                <MarginMix company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+                <CustomerMargin company={activeStore.id === "nova" ? 1 : 4} range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
+              </>)
+        )}
+        {isSales && activeStore.id === "worthy" && channelTab !== "odoo" && (
           <div style={{ marginTop: 14 }}>
             {channelTab === "pos" ? (
               <AdvancedTable icon="users" title="Sales by Rep" range={yearRange()} subtitle="POS performance by sales representative" loading={isLoading(selectedYear)} currency={activeStore.currency} data={salespeople} columns={salespersonColumns} aiContext="sales rep performance"
@@ -3718,7 +3757,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
             )}
           </div>
         )}
-        {section === "overview" && activeStore.id === "luxe" && (
+        {isSales && activeStore.id === "luxe" && (
           <div style={{ marginTop: 14 }}>
             <SalesVsTargetTable payload={fyPayload(selectedYear)} company="south" />
             <SalesRepBreakdown partialMonth={partialMonth} weekRangeOf={(w) => weekDateRange(selectedYear, weeklyMonth, w, true)}
@@ -3735,12 +3774,11 @@ export default function EcommerceDashboard({ section = "overview" }) {
               T={T}
               exact
             />
-            <CustomerMargin company="south" range={customOn ? period : null} fy={selectedYear} month={`${onFYView() ? (weeklyMonth >= 3 ? selectedYear : selectedYear + 1) : selectedYear}-${String(weeklyMonth + 1).padStart(2, "0")}`} />
           </div>
         )}
 
         {/* ODOO ADVANCED SECTION, Worthy North (Odoo tab) and Worthy Oceania (nova) - one tab per table group, Sales by Rep first, Debtors last */}
-        {section !== "overview" && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
+        {!ovLike && ((activeStore.id === "worthy" && channelTab === "odoo") || activeStore.id === "nova") && (
           <>
             {renderAdvTabs()}
 
@@ -3889,7 +3927,7 @@ export default function EcommerceDashboard({ section = "overview" }) {
         )}
 
         {/* ADVANCED ANALYTICS, not shown for Odoo tab (Shopify-based) or nova - one tab per table group, Sales by Rep first, Debtors last */}
-        {section !== "overview" && (activeStore.id === "luxe" || (activeStore.id === "worthy" && channelTab !== "odoo")) && (
+        {!ovLike && (activeStore.id === "luxe" || (activeStore.id === "worthy" && channelTab !== "odoo")) && (
           <>
             {/* Category drill-down modal */}
             <CategoryModal

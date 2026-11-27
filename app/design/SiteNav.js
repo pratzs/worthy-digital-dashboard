@@ -12,13 +12,13 @@ import Link from "next/link";
 import n from "./nav.module.css";
 import { Icon } from "./icons";
 
-export const SECTION_ICONS = { overview: "grid", analytics: "bars", credits: "receipt", debtors: "wallet", chat: "sparkle", repusage: "users", socialweb: "megaphone", command: "compass", reps: "users", products: "award", movers: "zap", customers: "trophy" };
+export const SECTION_ICONS = { margin: "percent", overview: "grid", analytics: "bars", credits: "receipt", debtors: "wallet", chat: "sparkle", repusage: "users", socialweb: "megaphone", command: "compass", reps: "users", products: "award", movers: "zap", customers: "trophy" };
 const GROUP = ["products", "movers", "customers"];   // Categories & Products, Fast & Slow Movers and Customers are one "Analytics" tab
-const SHORT = { overview: "Overview", chat: "Ask a Question", repusage: "AI usage", socialweb: "Social and Web", command: "Command Center", credits: "Credit Notes", debtors: "Debtors", analytics: "Analytics" };
+const SHORT = { reps: "Sales", margin: "Margin", overview: "Overview", chat: "Ask a Question", repusage: "AI usage", socialweb: "Social and Web", command: "Command Center", credits: "Credit Notes", debtors: "Debtors", analytics: "Analytics" };
 
 /** The tabs a department sees, in order. */
 export function navTabs(sections) {
-  const mine = (sections || []).filter((x) => x.id !== "reps");
+  const mine = sections || [];   // Sales (/reps) and Margin are their own pages again (27 Nov 2026)
   const grouped = mine.filter((x) => GROUP.includes(x.id));
   const tabs = mine.filter((x) => !GROUP.includes(x.id));
   if (grouped.length) {
