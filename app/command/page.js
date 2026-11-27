@@ -160,8 +160,9 @@ const SHOPS = ["worthyproducts", "dutchrusk"];   // worthy.nz is the company sit
 function combineTraffic(traffic, site, only = null) {
   const m = new Map();
   pick(traffic, site).filter((t) => !only || only.includes(t.id)).forEach((t) => (t.daily || []).forEach((r) => {
-    const o = m.get(r.date) || { date: r.date, sessions: 0, conversions: 0, revenue: 0 };
-    o.sessions += r.sessions || 0; o.conversions += r.conversions || 0; o.revenue += r.revenue || 0;
+    const o = m.get(r.date) || { date: r.date, sessions: 0, conversions: 0, orders: 0, revenue: 0 };
+    // orders: every online channel (shops); for worthy.nz the enquiries. conversions: what the conversion rate rests on.
+    o.sessions += r.sessions || 0; o.conversions += r.conversions || 0; o.orders += (r.orders ?? r.conversions) || 0; o.revenue += r.revenue || 0;
     m.set(r.date, o);
   }));
   return [...m.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -196,12 +197,12 @@ function chartSeries(allDaily, mode, start, end) {
   const daily = win.cur, prevDaily = win.prev;
   if (mode === "daily") {
     const last = daily, before = prevDaily;
-    return last.map((r, i) => ({ key: r.date, label: dShort(r.date), long: `${DAYS_LONG[d0(r.date).getUTCDay()]} ${dLong(r.date)}`, weekend: [0, 6].includes(d0(r.date).getUTCDay()), a: r.sessions, b: r.revenue, c: before[i]?.sessions ?? null, conv: r.conversions }));
+    return last.map((r, i) => ({ key: r.date, label: dShort(r.date), long: `${DAYS_LONG[d0(r.date).getUTCDay()]} ${dLong(r.date)}`, weekend: [0, 6].includes(d0(r.date).getUTCDay()), a: r.sessions, b: r.revenue, c: before[i]?.sessions ?? null, conv: r.orders ?? r.conversions }));
   }
   const keyOf = mode === "weekly" ? (iso) => mondayOf(iso) : (iso) => iso.slice(0, 7);
   const group = (list) => {
     const g = new Map();
-    list.forEach((r) => { const k = keyOf(r.date); const o = g.get(k) || { key: k, sessions: 0, revenue: 0, conversions: 0, days: 0 }; o.sessions += r.sessions; o.revenue += r.revenue; o.conversions += r.conversions; o.days += 1; g.set(k, o); });
+    list.forEach((r) => { const k = keyOf(r.date); const o = g.get(k) || { key: k, sessions: 0, revenue: 0, conversions: 0, days: 0 }; o.sessions += r.sessions; o.revenue += r.revenue; o.conversions += (r.orders ?? r.conversions); o.days += 1; g.set(k, o); });
     let out = [...g.values()].sort((a, b) => a.key.localeCompare(b.key));
     if (mode === "weekly" && out.some((r) => r.days === 7)) out = out.filter((r) => r.days === 7);   // a part week would look like a drop
     return out;
@@ -399,7 +400,7 @@ export default function CommandCenter() {
         if (["daily", "weekly", "monthly"].includes(v.mode)) setMode(v.mode);
         if (v.feedTab) setFeedTab(v.feedTab);
       }
-      const snap = cache.get("cc-data-v1", 24 * HOUR);
+      const snap = cache.get("cc-data-v2", 24 * HOUR);
       if (snap) { setData(snap); setLive(snap.live); setAsana(snap.asana); setClickup(snap.clickup); setBoard(snap.board); setLog(snap.log || []); setLiveAt(snap.liveAt || snap.builtAt); setTodayNow(snap.todayNow); setLoadedAt(snap.builtAt); }
       const draft = cache.get("cc-draft-v1", 7 * 24 * HOUR);
       if (draft?.kind && KINDS[draft.kind]) setEditing(draft);
@@ -424,7 +425,7 @@ export default function CommandCenter() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
       setData(j); setLive(j.live); setAsana(j.asana); setClickup(j.clickup); setBoard(j.board); setLog(j.log || []); setLiveAt(j.liveAt || j.builtAt); setTodayNow(j.todayNow); setLoadedAt(j.builtAt); setFailed("");
-      cache.set("cc-data-v1", j);
+      cache.set("cc-data-v2", j);
     } catch (e) { setFailed(String(e.message || e)); }
     finally { setLoading(false); }
   }, []);
@@ -1148,7 +1149,8 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
   const lead = site === "worthy";
   const sd = site === "all" ? combineTraffic(data?.traffic, site, SHOPS) : daily;
   const sw = rangeWin(sd, start, end);
-  const c = [sumOf(sw.cur, "conversions"), sumOf(sw.prev, "conversions")];
+  const c = [sumOf(sw.cur, "conversions"), sumOf(sw.prev, "conversions")];   // conversion rate: online store orders from visits
+  const ord = [sumOf(sw.cur, "orders"), sumOf(sw.prev, "orders")];           // orders shown: every online channel
   const sv = [sumOf(sw.cur, "sessions"), sumOf(sw.prev, "sessions")];
   const ew = rangeWin(combineTraffic(data?.traffic, "worthy"), start, end);
   const e = [sumOf(ew.cur, "conversions"), sumOf(ew.prev, "conversions")];
@@ -1189,7 +1191,7 @@ function MeetingTab({ todayNow, data, onEvents, onExt, asana, asanaTasks, extern
         <div className={s.statLine}>
           {/* Visit to sale: with all sites, the shops' own NZ visits, the same visits the conversion rate is worked out on (worthy.nz visits are counted with its enquiries). */}<div className={s.stat}><div className={s.statNum}>{n0(site === "all" ? sv[0] : v[0])}</div><div className={s.statLabel}>{site === "all" ? "Shop visits, NZ" : "Visits"} <Delta now={site === "all" ? sv[0] : v[0]} before={site === "all" ? sv[1] : v[1]} /></div></div>
           <div className={s.stat}><div className={s.statNum}>{sv[0] ? `${((c[0] / sv[0]) * 100).toFixed(2)}%` : "-"}</div><div className={s.statLabel}>{lead ? "Enquiry rate" : "Conversion"} <Delta now={sv[0] ? c[0] / sv[0] : null} before={sv[1] ? c[1] / sv[1] : null} points /></div></div>
-          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, start, end)}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(c[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={c[0]} before={c[1]} /></div></div>
+          <div className={`${s.stat} ${s.kpiClick}`} onClick={() => onEvents(site === "all" ? "all" : site, start, end)}><div className={`${s.statNum} ${lead ? s.accentNum : ""}`}>{n0(lead ? c[0] : ord[0])}</div><div className={s.statLabel}>{lead ? "Enquiries" : "Orders"} <Delta now={lead ? c[0] : ord[0]} before={lead ? c[1] : ord[1]} /></div></div>
           {!lead && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(r[0])}</div><div className={s.statLabel}>Online sales <Delta now={r[0]} before={r[1]} /></div></div>}
         </div>
         <div className={s.miniHead} style={{ marginTop: 20 }}><Icon n="globe" size={13} />Search, enquiries and live</div>
@@ -2331,7 +2333,7 @@ function TodaySoFar({ todayNow, site, bar }) {
   const shops = ["worthyproducts", "dutchrusk"];
   if (bar) {
     const items = [[n0(sum("sessions")), "visits"]];
-    if (site !== "worthy") items.push([n0(sum("conversions", shops)), "orders"], [money(sum("revenue", shops)), "online sales"]);
+    if (site !== "worthy") items.push([n0(sum("orders", shops)), "orders"], [money(sum("revenue", shops)), "online sales"]);
     if (site === "all" || site === "worthy") items.push([n0(sum("conversions", ["worthy"])), "worthy.nz enquiries"]);
     return (
       <div className={s.todayBar}>
@@ -2345,7 +2347,7 @@ function TodaySoFar({ todayNow, site, bar }) {
       <div className={s.todayHead}><span className={s.liveDot} />Today so far <span className={s.todayTime}>{nzTime(todayNow.at)}</span></div>
       <div className={s.statLine}>
         <div className={s.stat}><div className={s.statNum}>{n0(sum("sessions"))}</div><div className={s.statLabel}>Visits</div></div>
-        {site !== "worthy" && <div className={s.stat}><div className={s.statNum}>{n0(sum("conversions", shops))}</div><div className={s.statLabel}>Orders</div></div>}
+        {site !== "worthy" && <div className={s.stat}><div className={s.statNum}>{n0(sum("orders", shops))}</div><div className={s.statLabel}>Orders</div></div>}
         {site !== "worthy" && <div className={s.stat}><div className={`${s.statNum} ${s.accentNum}`}>{money(sum("revenue", shops))}</div><div className={s.statLabel}>Online sales</div></div>}
         {(site === "all" || site === "worthy") && <div className={s.stat}><div className={s.statNum}>{n0(sum("conversions", ["worthy"]))}</div><div className={s.statLabel}>worthy.nz enquiries</div></div>}
       </div>
