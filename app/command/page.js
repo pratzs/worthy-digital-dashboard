@@ -2109,7 +2109,7 @@ function SocialTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
-  const ck = `cc-social-v3:${want}`;
+  const ck = `cc-social-v4:${want}`;
   useEffect(() => {
     let stop = false;
     // Within 30 minutes the server would send the same figures, so the browser's copy is used; Refresh always asks again.
