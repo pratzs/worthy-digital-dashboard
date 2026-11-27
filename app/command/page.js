@@ -2110,11 +2110,49 @@ function SocialAccount({ a }) {
 
 // ── Email tab: Brevo campaigns and automations per shop (lib/brevo.js, /api/email). Brevo's own counts. ──
 const rate = (a, b) => (b ? a / b : null);
+// ── Email action items (lib/brevo.js emailActions): worked out live from Brevo, checked again every 5 minutes while the tab
+//    is open. An item drops off by itself once the problem is fixed. ──
+function EmailActions({ nonce = 0 }) {
+  const [d, setD] = useState(() => cache.get("cc-email-actions-v1", 5 * 60 * 1000));
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let stop = false;
+    const load = (fresh) => fetch(`/api/email?actions=1${fresh ? "&fresh=1" : ""}`, { cache: "no-store" })
+      .then((r) => r.json().then((j) => (r.ok ? j : Promise.reject(new Error(j.error || r.status)))))
+      .then((j) => { if (!stop) { setD(j); cache.set("cc-email-actions-v1", j); setErr(""); } })
+      .catch((e) => { if (!stop) setErr(String(e.message || e)); });
+    load(nonce > 0);
+    const t = setInterval(() => load(false), 5 * 60 * 1000);
+    return () => { stop = true; clearInterval(t); };
+  }, [nonce]);
+  const items = d?.items || [];
+  return (
+    <section className={s.card}>
+      <div className={s.cardHead}>
+        <Title icon="alert">Action items</Title>
+        <span className={s.tag}><span className={s.liveDot} />{d ? `Checked ${new Date(d.generatedAt).toLocaleTimeString("en-NZ", { hour: "numeric", minute: "2-digit" })}` : "Checking"}</span>
+      </div>
+      {!d && !err && <div className={s.skeleton} style={{ height: 60 }} />}
+      {!d && err && <div className={s.err}>Action items could not load: {err}</div>}
+      {d && items.length === 0 && <div className={s.row}><div className={s.rowTitle} style={{ display: "flex", gap: 8, alignItems: "center" }}><Icon n="check" size={15} />Nothing needs action</div></div>}
+      {items.map((x) => (
+        <div key={x.id} className={s.row}>
+          <div style={{ minWidth: 0, display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ marginTop: 3, color: x.level === "high" ? "var(--orange-ink)" : "var(--ink2)", flexShrink: 0 }}><Icon n="alert" size={15} /></span>
+            <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{x.title}</div><div className={s.rowMeta}>{x.shop} · {x.detail}</div></div>
+          </div>
+          <span className={`${s.pill} ${x.level === "high" ? s.pillDark : s.pillSoft}`}>{x.level === "high" ? "Fix now" : "Check"}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function EmailTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
-  const ck = `cc-email-v5:${want}`;
+  const ck = `cc-email-v6:${want}`;
   useEffect(() => {
     let stop = false;
     const fresh = nonce > 0;
@@ -2131,13 +2169,14 @@ function EmailTab({ site, start, end, nonce = 0 }) {
 
   if (!cur) return (
     <div className={s.fade}>
-      <section className={s.card}>{errText ? <div className={s.err}>Email figures could not load: {errText}</div> : <div className={s.skeleton} style={{ height: 160 }} />}</section>
+      <EmailActions nonce={nonce} />
+      <section className={s.card} style={{ marginTop: 14 }}>{errText ? <div className={s.err}>Email figures could not load: {errText}</div> : <div className={s.skeleton} style={{ height: 160 }} />}</section>
     </div>
   );
   const pick = ["dutchrusk", "worthyproducts"].includes(site) ? [site] : ["dutchrusk", "worthyproducts"];
   const shops = cur.shops.filter((x) => pick.includes(x.id));
   const ok = shops.filter((x) => x.status === "ok");
-  const zero = { count: 0, sent: 0, delivered: 0, opens: 0, clicks: 0, unsubscribed: 0, bounced: 0 };
+  const zero = { count: 0, sent: 0, delivered: 0, opens: 0, clicks: 0, unsubscribed: 0, bounced: 0, hardBounced: 0 };
   const add = (a, b) => { const o = { ...a }; for (const k of Object.keys(zero)) o[k] = (a[k] || 0) + (b[k] || 0); return o; };
   const camp = (w) => ok.reduce((t, x) => add(t, x.campaigns[w]), zero);
   const auto = (w) => ok.reduce((t, x) => x.automations.reduce((u, a) => add(u, a[w]), t), zero);
@@ -2148,7 +2187,6 @@ function EmailTab({ site, start, end, nonce = 0 }) {
   const autos = ok.flatMap((x) => x.automations.map((a) => ({ ...a, shop: x.name, key: `${x.id}-${a.id}` })));
   const ST = { active: ["Active", s.pillDark], pause: ["Paused", s.pillSoft], inactive: ["Off", s.pillGrey] };
   const bestRate = Math.max(0, ...campaigns.map((c) => rate(c.clicks, c.delivered) || 0));
-  const failed = ok.filter((x) => x.failed && (x.failed.errors || x.failed.spam));
   const maxAuto = Math.max(0, ...autos.map((a) => a.now.sent));
 
   // Emails sent over time: by day for two weeks or less, else by week (Monday start); campaigns and automations stacked.
@@ -2164,25 +2202,21 @@ function EmailTab({ site, start, end, nonce = 0 }) {
 
   return (
     <div className={s.fade}>
-      <section className={s.card}>
+      <EmailActions nonce={nonce} />
+      <section className={s.card} style={{ marginTop: 14 }}>
         <div className={s.cardHead}>
           <Title icon="mail">Email marketing</Title>
           <Range>{range}</Range>
         </div>
-        {failed.map((x) => (
-          <div key={`f-${x.id}`} className={s.row} style={{ marginTop: -6, marginBottom: 8 }}>
-            <div className={s.rowTitle} style={{ display: "flex", gap: 8, alignItems: "center" }}><Icon n="alert" size={15} />{x.name}: emails Brevo could not send</div>
-            <span className={`${s.rowNum} ${s.rowNumAccent}`}>{n0(x.failed.errors)} failed{x.failed.spam ? ` · ${n0(x.failed.spam)} spam ${x.failed.spam === 1 ? "report" : "reports"}` : ""}</span>
-          </div>
-        ))}
         <Chain steps={[
           { label: "Emails delivered", value: n0(tN.delivered), pair: [tN.delivered, tB.delivered] },
           { label: "Opened", value: n0(tN.opens), link: `${pct(rate(tN.opens, tN.delivered))} opened`, pair: [tN.opens, tB.opens] },
           { label: "Clicked", value: n0(tN.clicks), link: `${pct(rate(tN.clicks, tN.opens))} of opens`, pair: [tN.clicks, tB.clicks], accent: true },
         ]} />
-        <div className={s.gauges} style={{ marginTop: 18 }}>
+        <div className={s.gauges} style={{ marginTop: 18, gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))" }}>
           <Gauge value={rate(tN.opens, tN.delivered)} label="Open rate" text={pct(rate(tN.opens, tN.delivered))} />
           <Gauge value={Math.min(1, (rate(tN.clicks, tN.delivered) || 0) * 5)} accent label="Click rate" text={pct(rate(tN.clicks, tN.delivered))} />
+          <Gauge value={Math.min(1, (rate(tN.bounced, tN.sent) || 0) * 10)} label={`Bounced (${n0(tN.bounced)}, ${n0(tN.hardBounced)} hard)`} text={pct(rate(tN.bounced, tN.sent), 1)} />
           <Gauge value={Math.min(1, (rate(tN.unsubscribed, tN.delivered) || 0) * 50)} label={`Unsubscribed (${n0(tN.unsubscribed)})`} text={pct(rate(tN.unsubscribed, tN.delivered), 2)} />
         </div>
 
@@ -2249,7 +2283,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
           const r = rate(c.clicks, c.delivered) || 0, top = r > 0 && r === bestRate;
           return (
             <div key={`${c.shop}-${c.id}`} className={s.row}>
-              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{c.name}</div><div className={s.rowMeta}>{dShort(c.date)}{pick.length > 1 ? ` · ${c.shop}` : ""} · {n0(c.delivered)} delivered · {pct(rate(c.opens, c.delivered))} opened{c.unsubscribed ? ` · ${n0(c.unsubscribed)} unsubscribed` : ""}</div></div>
+              <div style={{ minWidth: 0 }}><div className={s.rowTitle}>{c.name}</div><div className={s.rowMeta}>{dShort(c.date)}{pick.length > 1 ? ` · ${c.shop}` : ""} · {n0(c.delivered)} delivered · {pct(rate(c.opens, c.delivered))} opened{c.bounced ? ` · ${n0(c.bounced)} bounced` : ""}{c.unsubscribed ? ` · ${n0(c.unsubscribed)} unsubscribed` : ""}</div></div>
               <div style={{ textAlign: "right", flexShrink: 0 }}><span className={`${s.rowNum} ${top ? s.rowNumAccent : ""}`}>{pct(r)}</span><div className={s.rowMeta}>{n0(c.clicks)} clicked</div></div>
               <RowBar value={r} max={bestRate} accent={top} />
             </div>
@@ -2273,7 +2307,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
                 <div className={s.rowTitle} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{a.name}<span className={`${s.pill} ${(ST[a.status] || ST.inactive)[1]}`}>{(ST[a.status] || ST.inactive)[0]}</span></div>
                 <div className={s.rowMeta}>{a.trigger}{pick.length > 1 ? ` · ${a.shop}` : ""}</div>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(a.now.sent)} <Delta now={a.now.sent} before={a.before.sent} /></span><div className={s.rowMeta}>{pct(rate(a.now.opens, a.now.delivered))} opened · {pct(rate(a.now.clicks, a.now.delivered))} clicked</div></div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}><span className={s.rowNum}>{n0(a.now.sent)} <Delta now={a.now.sent} before={a.before.sent} /></span><div className={s.rowMeta}>{pct(rate(a.now.opens, a.now.delivered))} opened · {pct(rate(a.now.clicks, a.now.delivered))} clicked{a.now.bounced ? ` · ${n0(a.now.bounced)} bounced` : ""}</div></div>
               <RowBar value={a.now.sent} max={maxAuto} accent={a.now.sent > 0 && a.now.sent === maxAuto} />
             </div>
             {a.emails.length > 1 && a.now.sent > 0 && (
