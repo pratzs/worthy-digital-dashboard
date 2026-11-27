@@ -2114,7 +2114,7 @@ function EmailTab({ site, start, end, nonce = 0 }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
   const want = `${start}|${end}`;
-  const ck = `cc-email-v3:${want}`;
+  const ck = `cc-email-v4:${want}`;
   useEffect(() => {
     let stop = false;
     const fresh = nonce > 0;
@@ -2253,7 +2253,10 @@ function EmailTab({ site, start, end, nonce = 0 }) {
           <Title icon="zap">Automations</Title>
           <span className={s.tag}><Icon n="mail" size={11} />Emails sent</span>
         </div>
-        {autos.length === 0 && <div className={s.empty}>No automations</div>}
+        {ok.filter((x) => x.automationsBlocked).map((x) => (
+          <div key={`blk-${x.id}`} className={s.row}><div className={s.rowTitle}>{x.name}</div><span className={`${s.pill} ${s.pillGrey}`}>Brevo key cannot read automations</span></div>
+        ))}
+        {autos.length === 0 && !ok.some((x) => x.automationsBlocked) && <div className={s.empty}>No automations</div>}
         {autos.map((a, ai) => (
           <div key={a.key} style={{ padding: "4px 0 14px", borderBottom: ai < autos.length - 1 ? "1px solid var(--line)" : 0 }}>
             <div className={s.row} style={{ borderBottom: 0 }}>
