@@ -73,7 +73,7 @@ Cards side by side share a top, so a negative or equal value between columns is 
   - **Sales**: Sales vs Target, Sales by Rep, sister company sales, month, week and year detail.
   - **Margin** (management only): what sets the margin, customer margin.
   - **Analytics**: products, Fast & Slow Movers (stock cards), customers.
-- **Every card follows the company picked at the top** (Worthy Products North, South / Dutch Rusk, Oceania). Never show another company's figures there; sister company sales are the one deliberate exception and are labelled as such. Company-wide views (all three businesses) belong on the Command Center only.
+- **Every card follows the company picked at the top** (Worthy Products North, South / Dutch Rusk, Oceania). Never show another company's figures there; sister company sales are the one deliberate exception and are labelled as such. Company-wide views (all three businesses) belong on the Command Center only, and there only Ecom and Marketing figures: the Command Center's weekly summary is online sales, gross profit on online orders, shop visits, enquiries, search, social, ads and meeting actions; company sales, salespeople and stock are the management summary on the Overview (Pratham, 27 Nov 2026).
 - Secondary detail folds into an accordion (`Fold` in app/design/ui.js) that is closed by default but clearly visible and easy to open: a full-width header with its icon, title, a one-line count or figure, and a "Show" / "Hide" label with a chevron. The open state is remembered per browser.
 
 ## 8. Buttons
