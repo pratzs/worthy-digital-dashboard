@@ -69,7 +69,7 @@
   .sideClosed .itemLabel { display: inline; }
   .sideClosed .item, .sideClosed .out { justify-content: flex-start; padding: 0 12px; }
   .sideClosed .sideHead { flex-direction: row; }
-  .sideDrawer { transform: none; }
+  .sideDrawer { transform: none; background: rgba(255, 255, 255, .94); }   /* almost solid over the page, so it reads clearly */
   .phoneBar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .side, .skip, .item { transition: none; } }

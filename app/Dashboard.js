@@ -1810,6 +1810,15 @@ export default function EcommerceDashboard({ section = "overview" }) {
   const canSeeStock = me?.role === "mgmt" || me?.role === "purch";
   const [activeStore,  setActiveStore]  = useState(STORES[0]);
   const [stockValue,   setStockValue]   = useState(null);
+  /* Past best-before stock for the Overview's Stock tile (shared 30-minute copy, /api/stock-states), Worthy Products only */
+  const [pastStock,    setPastStock]    = useState(null);
+  useEffect(() => {
+    if (section !== "overview" || activeStore.id !== "worthy" || !(me?.role === "mgmt" || me?.role === "purch")) return;
+    let stop = false;
+    fetch("/api/stock-states", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!stop && j?.north?.states) setPastStock(j.north.states.find((x) => x.key === "expired") || null); }).catch(() => {});
+    return () => { stop = true; };
+  }, [section, activeStore.id, me?.role]);
   const [selectedYear, setSelectedYear] = useState(2026);
 
   const [view,         setView]         = useState("monthly");
@@ -3370,7 +3379,13 @@ export default function EcommerceDashboard({ section = "overview" }) {
           const tiles = [
             { key: "sales", icon: "users", title: "Sales", figure: top ? top.name : "-", sub: top ? `Top seller, ${money0(top.revenue)} · ${reps.length} people selling` : "Who sold what", href: `/reps#${keepQ}`, cta: "See every rep", win: "Find your top performers" },
             ...(isMgmt ? [{ key: "margin", icon: "percent", title: "Margin", figure: t?.marginPct != null ? `${t.marginPct}%` : "-", sub: "What sets it, by kind of sale and by customer", href: `/margin#${keepQ}`, cta: "See what sets the margin", win: "Win back margin" }] : []),
-            ...(canSeeStock && activeStore.id !== "luxe" ? [{ key: "stock", icon: "hourglass", title: "Stock", figure: stockValue != null ? money0(stockValue) : "-", sub: "Clearance, expired and short-dated stock", href: `/movers#${keepQ}`, cta: "See the stock", win: "Turn stock into sales" }] : []),
+            /* Lead with the figure that needs action; the whole warehouse is named as such, never mistaken for clearance (27 Nov 2026) */
+            ...(canSeeStock && activeStore.id !== "luxe" ? [{ key: "stock", icon: "hourglass", title: "Stock",
+              figure: activeStore.id === "worthy" && pastStock ? money0(pastStock.value) : stockValue != null ? money0(stockValue) : "-",
+              sub: activeStore.id === "worthy" && pastStock
+                ? `Past best-before, ${pastStock.lots} lots · ${stockValue != null ? `${money0(stockValue)} stock on hand in all` : ""}`
+                : "Stock on hand, at cost",
+              href: `/movers#${keepQ}`, cta: "See the stock", win: "Turn stock into sales" }] : []),
           ];
           return (
             <div className={st.deeper} style={{ marginBottom: 14 }}>
