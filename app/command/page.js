@@ -2263,14 +2263,14 @@ function SocialTab({ site, start, end, nonce = 0 }) {
 // ── Ecom and Marketing weekly summary (lib/ecomSummary.js): last week against the week before. A draft to copy or open as
 //    an email; nothing is sent from here. Company sales, salespeople and stock are the management summary on the Overview. ──
 function WeeklySummary() {
-  const [d, setD] = useState(() => cache.get("cc-ecom-summary-v3", 10 * 60 * 1000));
+  const [d, setD] = useState(() => cache.get("cc-ecom-summary-v4", 10 * 60 * 1000));
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     let stop = false;
     fetch("/api/summary?kind=ecom", { cache: "no-store" }).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; })
-      .then((j) => { if (!stop) { setD(j); cache.set("cc-ecom-summary-v3", j); } }).catch((e) => { if (!stop) setErr(String(e.message || e)); });
+      .then((j) => { if (!stop) { setD(j); cache.set("cc-ecom-summary-v4", j); } }).catch((e) => { if (!stop) setErr(String(e.message || e)); });
     return () => { stop = true; };
   }, []);
   const pctT = (v) => (v == null ? "-" : `${(v * 100).toFixed(2)}%`);
@@ -2317,7 +2317,7 @@ function WeeklySummary() {
           {d.company && <div className={s.row}><div className={s.rowTitle}>worthy.nz enquiries</div><span className={s.rowNum}>{n0(d.company.enquiries[0])} <Delta now={d.company.enquiries[0]} before={d.company.enquiries[1]} /></span></div>}
           {d.search && <div className={s.row}><div className={s.rowTitle}>Non-branded search clicks</div><span className={s.rowNum}>{n0(d.search[0])} <Delta now={d.search[0]} before={d.search[1]} /></span></div>}
           {d.social && <div className={s.row}><div className={s.rowTitle}>Social views<div className={s.rowMeta}>{n0(d.social.engagements[0])} engagements</div></div><span className={s.rowNum}>{n0(d.social.views[0])} <Delta now={d.social.views[0]} before={d.social.views[1]} /></span></div>}
-          <div className={s.row}><div className={s.rowTitle}>Ads, month to date{d.ads.visits != null && <div className={s.rowMeta}>{n0(d.ads.visits)} visits from ads</div>}</div><span className={s.rowNum}>{money(d.ads.spend)}</span></div>
+          <div className={s.row}><div className={s.rowTitle}>Ads, month to date{d.ads.visits != null && <div className={s.rowMeta}>{n0(d.ads.visits)} visits from ads</div>}</div><span className={s.rowNum}>{d.ads.spend == null ? "None tracked" : money(d.ads.spend)}</span></div>
           <div className={s.row}><div className={s.rowTitle}>Meeting<div className={s.rowMeta}>{d.meeting.sent} {d.meeting.sent === 1 ? "action" : "actions"} sent to Asana</div></div><span className={s.rowNum}>{d.meeting.points} to discuss</span></div>
         </div>
       </div>
