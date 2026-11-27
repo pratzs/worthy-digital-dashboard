@@ -11,7 +11,7 @@ export const maxDuration = 300;
    ?kind=ecom is the Command Center's Ecom and Marketing summary (lib/ecomSummary.js); otherwise the management summary
    for the dashboard Overview (lib/weeklySummary.js). 30 minutes: last week does not change. */
 const cached = unstable_cache(() => weeklySummary(), ['weekly-summary-v3'], { revalidate: 1800 });
-const cachedEcom = unstable_cache(() => ecomSummary(), ['ecom-summary-v3'], { revalidate: 1800 });
+const cachedEcom = unstable_cache(() => ecomSummary(), ['ecom-summary-v4'], { revalidate: 1800 });
 export async function GET(request) {
   setOidcToken(request.headers.get('x-vercel-oidc-token'));   // keyless Google sign-in for Analytics and Search Console (lib/ga4.js)
   const kind = new URL(request.url).searchParams.get('kind');
